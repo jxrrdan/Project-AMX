@@ -11,7 +11,15 @@ from app.models.vhc import VHC
 from app.models.outlet import Outlet
 from app.models.user import User
 from app.models.mqtt_event import MqttEvent
-from app.models.financial import GLAccount, PostingGroup, Invoice, GLEntry, InvoiceTemplate
+from app.models.mqtt_integration import MqttIntegration
+from app.models.financial import GLAccount, PostingGroup, Invoice, GLEntry, InvoiceTemplate, CreditNote
+from app.models.diary import DiarySlot
+from app.models.technician import Technician, TimeEntry
+from app.models.purchase_order import Supplier, PurchaseOrder
+from app.models.notification import NotificationTemplate, NotificationLog
+from app.models.used_vehicle import UsedVehicle, Appraisal
+from app.models.recall import RecallCampaign, RecallVehicle
+from app.models.warranty import WarrantyClaim
 
 _client: AsyncIOMotorClient | None = None
 
@@ -35,11 +43,25 @@ async def connect_db() -> None:
             Outlet,
             User,
             MqttEvent,
+            MqttIntegration,
             GLAccount,
             PostingGroup,
             Invoice,
             GLEntry,
             InvoiceTemplate,
+            CreditNote,
+            DiarySlot,
+            Technician,
+            TimeEntry,
+            Supplier,
+            PurchaseOrder,
+            NotificationTemplate,
+            NotificationLog,
+            UsedVehicle,
+            Appraisal,
+            RecallCampaign,
+            RecallVehicle,
+            WarrantyClaim,
         ],
     )
 

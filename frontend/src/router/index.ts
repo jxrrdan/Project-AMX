@@ -65,6 +65,11 @@ const router = createRouter({
           name: 'vhc-detail',
           component: () => import('@/views/VHCDetailView.vue'),
         },
+        {
+          path: 'integrations/mqtt',
+          name: 'mqtt-integrations',
+          component: () => import('@/views/MqttIntegrationsView.vue'),
+        },
       ],
     },
   ],

@@ -39,6 +39,20 @@ class Settings(BaseSettings):
     MQTT_ENABLED: bool = True
     WEBSOCKET_ENABLED: bool = True
 
+    # Email delivery
+    # "log" = print to logger (dev default), "ses" = AWS SES HTTP API, "smtp" = SMTP relay
+    EMAIL_PROVIDER: str = "log"
+    EMAIL_FROM: str = "noreply@amx.local"
+    AWS_SES_REGION: str = "eu-west-1"
+
+    # SMS delivery
+    # "log" = print to logger (dev default), "sns" = AWS SNS, "twilio" = Twilio REST API
+    SMS_PROVIDER: str = "log"
+    TWILIO_ACCOUNT_SID: str | None = None
+    TWILIO_AUTH_TOKEN: str | None = None
+    TWILIO_FROM_NUMBER: str | None = None
+    AWS_SNS_SMS_REGION: str = "eu-west-1"
+
 
 @lru_cache
 def get_settings() -> Settings:

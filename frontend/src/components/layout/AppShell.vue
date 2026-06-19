@@ -18,6 +18,11 @@
         <NavItem to="/workshop" :icon="WrenchScrewdriverIcon">Workshop</NavItem>
         <NavItem to="/parts" :icon="CubeIcon">Parts &amp; Stock</NavItem>
         <NavItem to="/vhc" :icon="ClipboardDocumentCheckIcon">VHC</NavItem>
+
+        <div class="pt-2 pb-1 px-2">
+          <p class="text-xs text-gray-500 uppercase tracking-wider font-medium">Admin</p>
+        </div>
+        <NavItem to="/integrations/mqtt" :icon="BoltIcon">MQTT Integrations</NavItem>
       </nav>
 
       <!-- User -->
@@ -69,6 +74,7 @@ import {
   CubeIcon,
   ClipboardDocumentCheckIcon,
   ArrowRightOnRectangleIcon,
+  BoltIcon,
 } from '@heroicons/vue/24/outline'
 import NavItem from './NavItem.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -93,6 +99,7 @@ const PAGE_TITLES: Record<string, string> = {
   parts: 'Parts & Stock',
   vhc: 'Vehicle Health Checks',
   'vhc-detail': 'VHC',
+  'mqtt-integrations': 'MQTT Integrations',
 }
 
 const pageTitle = computed(() => PAGE_TITLES[route.name as string] ?? 'AMX')

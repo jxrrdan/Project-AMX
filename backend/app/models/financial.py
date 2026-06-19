@@ -220,3 +220,52 @@ class InvoiceTemplate(Document):
         indexes = [
             IndexModel([("dealer_group_id", ASCENDING), ("template_id", ASCENDING)], unique=True),
         ]
+
+
+# ---------------------------------------------------------------------------
+# Credit Notes — reversals of posted invoices
+# ---------------------------------------------------------------------------
+
+class CreditNote(Document):
+    dealer_group_id: str
+    outlet_id: str
+
+    credit_note_number: str
+
+    original_invoice_id: str
+    original_invoice_number: str
+
+    # "pricing_error" | "warranty_adjustment" | "goodwill" | "return" | "other"
+    reason: str
+    reason_notes: Optional[str] = None
+
+    lines: list[InvoiceLine] = Field(default_factory=list)
+
+    net_total: float = 0.0
+    tax_total: float = 0.0
+    gross_total: float = 0.0
+
+    customer_id: Optional[str] = None
+    customer_name: str
+
+    # "draft" | "posted" | "applied"
+    status: str = "draft"
+
+    gl_posted: bool = False
+    gl_posted_at: Optional[datetime] = None
+
+    created_by: str  # User ID
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "credit_notes"
+        indexes = [
+            IndexModel(
+                [("dealer_group_id", ASCENDING), ("credit_note_number", ASCENDING)],
+                unique=True,
+            ),
+            IndexModel([("dealer_group_id", ASCENDING), ("original_invoice_id", ASCENDING)]),
+            IndexModel([("customer_id", ASCENDING)], sparse=True),
+        ]

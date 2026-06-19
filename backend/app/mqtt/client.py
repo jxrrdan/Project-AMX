@@ -20,6 +20,9 @@ from app.core.config import get_settings
 from app.mqtt.handlers import orders as order_handler
 from app.mqtt.handlers import wips as wip_handler
 from app.mqtt.handlers import customers as customer_handler
+from app.mqtt.handlers import handover as handover_handler
+from app.mqtt.handlers import recalls as recalls_handler
+from app.services import mqtt_integration_service
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,10 @@ async def _dispatch(topic: str, payload: dict, dealer_group_id: str, outlet_code
             await wip_handler.handle(payload, dealer_group_id, outlet_code)
         elif key in ("customers/sync", "vehicles/sync", "c2v/sync"):
             await customer_handler.handle(key, payload, dealer_group_id, outlet_code)
+        elif key == "handover/confirmed":
+            await handover_handler.handle(payload, dealer_group_id, outlet_code)
+        elif key == "recalls/campaign":
+            await recalls_handler.handle(payload, dealer_group_id, outlet_code)
         else:
             logger.debug("Unhandled topic: %s", topic)
     except Exception:
@@ -77,7 +84,12 @@ async def run_mqtt_client() -> None:
                         logger.warning("Non-JSON payload on topic %s", topic)
                         continue
 
+                    # Built-in handler dispatch (hardcoded topic conventions)
                     asyncio.create_task(_dispatch(topic, payload, dealer_group_id, outlet_code))
+                    # Config-driven integration engine (no-code OEM mappings)
+                    asyncio.create_task(
+                        mqtt_integration_service.process_message(topic, payload, dealer_group_id)
+                    )
 
         except aiomqtt.MqttError as exc:
             logger.warning("MQTT disconnected (%s) — reconnecting in 5 s", exc)
