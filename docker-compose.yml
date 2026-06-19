@@ -1,0 +1,50 @@
+version: "3.9"
+
+services:
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: amx
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./infrastructure/mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      MONGODB_URL: mongodb://mongodb:27017
+      MQTT_BROKER_HOST: mqtt
+    depends_on:
+      - mongodb
+      - mqtt
+    volumes:
+      - ./backend/app:/app/app   # Hot reload in dev
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev -- --host"
+    environment:
+      VITE_API_BASE: http://localhost:8000
+
+volumes:
+  mongo_data:
