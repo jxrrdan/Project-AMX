@@ -1,0 +1,13 @@
+export enum StockMovementType {
+  GOODS_RECEIVED = 'GOODS_RECEIVED',
+  ALLOCATED = 'ALLOCATED',
+  RETURNED = 'RETURNED',
+  WRITE_OFF = 'WRITE_OFF',
+}
+
+export enum PurchaseOrderStatus {
+  DRAFT = 'DRAFT',
+  SENT = 'SENT',
+  PARTIALLY_RECEIVED = 'PARTIALLY_RECEIVED',
+  FULLY_RECEIVED = 'FULLY_RECEIVED',
+}

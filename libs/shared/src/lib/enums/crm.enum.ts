@@ -1,0 +1,97 @@
+export enum ContactStatus {
+  PROSPECT = 'PROSPECT',
+  CUSTOMER = 'CUSTOMER',
+}
+
+export enum LeadStage {
+  ENQUIRY = 'ENQUIRY',
+  CONTACTED = 'CONTACTED',
+  TEST_DRIVE = 'TEST_DRIVE',
+  OFFER = 'OFFER',
+  RESERVED = 'RESERVED',
+  SOLD = 'SOLD',
+  LOST = 'LOST',
+}
+
+export const LEAD_PIPELINE_COLUMNS: LeadStage[] = [
+  LeadStage.ENQUIRY,
+  LeadStage.CONTACTED,
+  LeadStage.TEST_DRIVE,
+  LeadStage.OFFER,
+  LeadStage.RESERVED,
+  LeadStage.SOLD,
+  LeadStage.LOST,
+];
+
+export enum LeadSource {
+  WEBSITE_FORM = 'WEBSITE_FORM',
+  BMW_CRM = 'BMW_CRM',
+  EMAIL = 'EMAIL',
+  MANUAL = 'MANUAL',
+  CHATBOT = 'CHATBOT',
+  PHONE = 'PHONE',
+}
+
+export enum CrmActivityType {
+  CALL = 'CALL',
+  MEETING = 'MEETING',
+  NOTE = 'NOTE',
+  EMAIL = 'EMAIL',
+  SMS = 'SMS',
+  STAGE_CHANGE = 'STAGE_CHANGE',
+}
+
+export enum TemplateCategory {
+  INITIAL_ENQUIRY = 'INITIAL_ENQUIRY',
+  FOLLOW_UP = 'FOLLOW_UP',
+  TEST_DRIVE_CONFIRMATION = 'TEST_DRIVE_CONFIRMATION',
+  OFFER_LETTER = 'OFFER_LETTER',
+  LOST_SALE_RECOVERY = 'LOST_SALE_RECOVERY',
+  SERVICE_REMINDER = 'SERVICE_REMINDER',
+  OTHER = 'OTHER',
+}
+
+export enum EmailStatus {
+  QUEUED = 'QUEUED',
+  SENT = 'SENT',
+  OPENED = 'OPENED',
+  CLICKED = 'CLICKED',
+  REPLIED = 'REPLIED',
+  FAILED = 'FAILED',
+}
+
+export enum SmsStatus {
+  QUEUED = 'QUEUED',
+  SENT = 'SENT',
+  DELIVERED = 'DELIVERED',
+  FAILED = 'FAILED',
+  REPLIED = 'REPLIED',
+}
+
+export enum DocumentTemplateType {
+  SALES_INVOICE = 'SALES_INVOICE',
+  PART_EXCHANGE_RECEIPT = 'PART_EXCHANGE_RECEIPT',
+  SERVICE_ESTIMATE = 'SERVICE_ESTIMATE',
+  HANDOVER_DOCUMENT = 'HANDOVER_DOCUMENT',
+}
+
+export enum WorkflowTrigger {
+  MANUAL = 'MANUAL',
+  LEAD_STAGE_ENTERED = 'LEAD_STAGE_ENTERED',
+  CONTACT_CREATED = 'CONTACT_CREATED',
+  NO_ACTIVITY_DAYS = 'NO_ACTIVITY_DAYS',
+}
+
+export enum WorkflowActionType {
+  SEND_EMAIL = 'SEND_EMAIL',
+  SEND_SMS = 'SEND_SMS',
+  CREATE_TASK = 'CREATE_TASK',
+  CHANGE_LEAD_STAGE = 'CHANGE_LEAD_STAGE',
+  ADD_TAG = 'ADD_TAG',
+}
+
+export enum WorkflowEnrollmentStatus {
+  ACTIVE = 'ACTIVE',
+  COMPLETED = 'COMPLETED',
+  UNENROLLED = 'UNENROLLED',
+}
