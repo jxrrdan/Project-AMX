@@ -11,12 +11,15 @@ A **runnable local MVP + full architecture scaffold**, built by Claude Code from
 spec PDF. Concretely:
 
 - **Fully working end-to-end** (real UI + API + database, verified in a browser): Module 7
-  (auth, multi-tenancy, RBAC), Module 2 (Workshop Scheduling, with live WebSocket updates), and
-  Module 1 (New Car Stock & PDI Pipeline, with a drag-and-drop kanban board).
-- **Working API + basic UI for every other module** (3, 4, 5, 6, 8–16): real Prisma-backed CRUD,
+  (auth, multi-tenancy, RBAC), Module 2 (Workshop Scheduling, with live WebSocket updates),
+  Module 1 (New Car Stock & PDI Pipeline, with a drag-and-drop kanban board), Module 4 (Used Car
+  Sales, including DVLA reg lookup, part-exchange appraisal, and an itemised deal sheet), and
+  Module 8 (CRM — public enquiry capture, the lead pipeline board, and a contact detail view with
+  activity timeline, follow-up tasks, and email/SMS sending).
+- **Working API + basic UI for every other module** (3, 5, 6, 9–16): real Prisma-backed CRUD,
   business rules from the spec (e.g. warranty's mandatory 3Cs before submission, FCA disclosure
   logging, VHC's mandatory photo-on-Amber/Red), and a functional Angular page per module — but
-  without the same UI polish as the three modules above.
+  without the same UI polish as the modules above.
 - **A complete Prisma schema** modelling all 16 modules' data (`apps/api/prisma/schema.prisma`),
   which is the actual source of truth for what data this system manages.
 - **A synthesizable AWS CDK scaffold** (`infra/cdk`) mirroring the production architecture —
@@ -124,6 +127,12 @@ Log in with the credentials above. The sidebar shows every module the logged-in 
 `VIEW` permission on (Module 7's RBAC in action — try logging in as `tech@...` to see a much
 shorter menu than `principal@...`).
 
+To see the public, embeddable enquiry form (§8.1) — the thing a dealer's own website would embed
+against — visit `http://localhost:4200/enquiry/<dealerId>` in a private/incognito window (no
+login). Get the demo dealer's ID from `GET /api/dealers/me` while logged in, or from Prisma
+Studio. Submitting it creates a real contact + lead you'll see land in the CRM contacts list and
+lead pipeline.
+
 ## Local vs. production
 
 Every AWS service this system depends on but that a local dev sandbox can't provide is behind an
@@ -140,6 +149,7 @@ locally and in production:
 | Handlebars → Puppeteer → PDF | Handlebars → HTML file (`PdfService`, `PDF_DRIVER=html`) — open in a browser and print-to-PDF to see the real output | Same template, rendered to an actual PDF via Puppeteer |
 | BMW RIS MQTT ingest | A cron job that fabricates a plausible new order every 30 minutes (`RisImportService`) | Always-on MQTT subscriber (`infra/cdk/lib/compute-stack.ts`) → SQS → Lambda |
 | AWP webhook integration | Mocked job references (`AWP-MOCK-...`) generated on PDI scheduling | Real webhook exchange with AWP |
+| DVLA Vehicle Enquiry Service | Deterministic mock spec, seeded from the registration itself (`DvlaService`, `DVLA_DRIVER=mock`) — try the "Look up on DVLA" button on the Used Cars page | Real DVLA API (needs a government-issued API key) |
 
 Every one of these is a small, isolated class — swapping the local branch for a real AWS call is
 a contained change, not a rewrite.

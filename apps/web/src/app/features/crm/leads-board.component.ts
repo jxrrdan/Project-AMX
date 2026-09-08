@@ -1,7 +1,10 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { CdkDragDrop, DragDropModule, transferArrayItem, moveItemInArray } from '@angular/cdk/drag-drop';
 import { MatCardModule } from '@angular/material/card';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
 import { LEAD_PIPELINE_COLUMNS, LeadStage } from '@project-amx/shared';
 import { environment } from '../../../environments/environment';
 
@@ -15,9 +18,15 @@ interface Lead {
 
 @Component({
   selector: 'app-leads-board',
-  imports: [DragDropModule, MatCardModule],
+  imports: [DragDropModule, RouterLink, MatCardModule, MatButtonModule, MatIconModule],
   template: `
-    <h1>CRM Lead Pipeline</h1>
+    <div class="header">
+      <h1>CRM Lead Pipeline</h1>
+      <a mat-stroked-button routerLink="/crm/contacts">
+        <mat-icon>contacts</mat-icon>
+        Contacts
+      </a>
+    </div>
     <div class="board" cdkDropListGroup>
       @for (stage of stages; track stage) {
         <div class="column">
@@ -39,6 +48,12 @@ interface Lead {
   `,
   styles: [
     `
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
       .board {
         display: flex;
         gap: 12px;

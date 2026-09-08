@@ -2,9 +2,17 @@ import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common
 import { LeadStage, ModuleKey, PermissionAction } from '@project-amx/shared';
 import type { AuthUser } from '@project-amx/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CommunicationsService } from './communications.service';
-import { CreateActivityDto, CreateContactDto, CreateLeadDto, CreateTaskDto, UpdateLeadStageDto } from './dto/contact.dto';
+import {
+  CreateActivityDto,
+  CreateContactDto,
+  CreateEnquiryDto,
+  CreateLeadDto,
+  CreateTaskDto,
+  UpdateLeadStageDto,
+} from './dto/contact.dto';
 import { CreateEmailTemplateDto, SendEmailDto, SendSmsDto } from './dto/template.dto';
 import { CreateWorkflowDto, EnrollDto } from './dto/workflow.dto';
 import { CrmService } from './crm.service';
@@ -34,6 +42,17 @@ export class CrmController {
   @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.CREATE })
   createContact(@CurrentUser() user: AuthUser, @Body() dto: CreateContactDto) {
     return this.crmService.createContact(user.dealerId, dto);
+  }
+
+  /**
+   * Public embeddable enquiry form endpoint (Feature Spec §8.1) — the dealer website posts here
+   * directly, no auth. Mirrors the pattern already used for the service-booking widget
+   * (Module 2.5) and the customer chatbot (Module 15).
+   */
+  @Public()
+  @Post('dealers/:dealerId/enquiries')
+  createEnquiry(@Param('dealerId') dealerId: string, @Body() dto: CreateEnquiryDto) {
+    return this.crmService.createEnquiry(dealerId, dto);
   }
 
   @Get('leads')

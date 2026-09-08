@@ -4,6 +4,11 @@ import { authGuard } from './core/auth.guard';
 export const appRoutes: Route[] = [
   { path: 'login', loadComponent: () => import('./features/auth/login.component').then((m) => m.LoginComponent) },
   {
+    // Public, unauthenticated — this is the "embeddable enquiry form" from Feature Spec §8.1.
+    path: 'enquiry/:dealerId',
+    loadComponent: () => import('./features/public/enquiry-form.component').then((m) => m.EnquiryFormComponent),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./layout/shell.component').then((m) => m.ShellComponent),
@@ -30,12 +35,24 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/used-cars/used-cars-list.component').then((m) => m.UsedCarsListComponent),
       },
       {
+        path: 'used-cars/:id',
+        loadComponent: () => import('./features/used-cars/used-car-detail.component').then((m) => m.UsedCarDetailComponent),
+      },
+      {
         path: 'warranty',
         loadComponent: () => import('./features/warranty/warranty-list.component').then((m) => m.WarrantyListComponent),
       },
       {
         path: 'crm',
         loadComponent: () => import('./features/crm/leads-board.component').then((m) => m.LeadsBoardComponent),
+      },
+      {
+        path: 'crm/contacts',
+        loadComponent: () => import('./features/crm/contacts-list.component').then((m) => m.ContactsListComponent),
+      },
+      {
+        path: 'crm/contacts/:id',
+        loadComponent: () => import('./features/crm/contact-detail.component').then((m) => m.ContactDetailComponent),
       },
       {
         path: 'vhc',

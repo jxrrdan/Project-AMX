@@ -723,12 +723,26 @@ model DealSheet {
   sellingPrice      Decimal     @db.Decimal(10, 2)
   partExchangeValue Decimal?    @db.Decimal(10, 2)
   financeContribution Decimal?  @db.Decimal(10, 2)
-  accessoriesTotal  Decimal?    @db.Decimal(10, 2)
+  /// Sum of accessoryLines — kept as a stored column for fast reporting, recomputed whenever lines change.
+  accessoriesTotal  Decimal     @default(0) @db.Decimal(10, 2)
   grossProfit       Decimal?    @db.Decimal(10, 2)
   pdfUrl            String?
   createdAt         DateTime    @default(now())
 
+  accessoryLines    DealAccessoryLine[]
+
   @@map("deal_sheets")
+}
+
+/// Itemised "dealer accessories" line on the deal sheet (Feature Spec §4.5) — e.g. "Mudflaps £50".
+model DealAccessoryLine {
+  id          String    @id @default(uuid())
+  dealSheetId String
+  dealSheet   DealSheet @relation(fields: [dealSheetId], references: [id], onDelete: Cascade)
+  description String
+  price       Decimal   @db.Decimal(10, 2)
+
+  @@map("deal_accessory_lines")
 }
 
 // ---------------------------------------------------------------------------

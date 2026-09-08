@@ -18,7 +18,15 @@ const DEAL_SHEET_TEMPLATE = `
 <p>Selling price: £{{sellingPrice}}</p>
 <p>Part-exchange value: £{{partExchangeValue}}</p>
 <p>Finance contribution: £{{financeContribution}}</p>
-<p>Accessories: £{{accessoriesTotal}}</p>
+{{#if accessories.length}}
+<p>Accessories:</p>
+<ul>
+{{#each accessories}}
+<li>{{description}} — £{{price}}</li>
+{{/each}}
+</ul>
+{{/if}}
+<p>Accessories total: £{{accessoriesTotal}}</p>
 <p><b>Gross profit: £{{grossProfit}}</b></p>
 </body></html>`;
 
@@ -112,16 +120,34 @@ export class UsedCarsService {
     if (!vehicle) {
       throw new NotFoundException('Used vehicle not found');
     }
-    const grossProfit = dto.sellingPrice - Number(vehicle.purchasePrice ?? 0);
+
+    const accessories = dto.accessories ?? [];
+    const accessoriesTotal = accessories.reduce((sum, line) => sum + line.price, 0);
+    // Accessories are sold on top of the vehicle price, so they add to gross profit; part-exchange
+    // value is a cost already reflected in the vehicle's own purchasePrice once it's taken in, so
+    // it isn't subtracted again here.
+    const grossProfit = dto.sellingPrice - Number(vehicle.purchasePrice ?? 0) + accessoriesTotal;
 
     const pdfUrl = await this.pdf.renderAndStore(dealerId, 'deal-sheets', `deal-${usedVehicleId}`, DEAL_SHEET_TEMPLATE, {
       vehicle,
       ...dto,
+      accessories,
+      accessoriesTotal: accessoriesTotal.toFixed(2),
       grossProfit: grossProfit.toFixed(2),
     });
 
     return this.prisma.dealSheet.create({
-      data: { usedVehicleId, ...dto, grossProfit, pdfUrl },
+      data: {
+        usedVehicleId,
+        sellingPrice: dto.sellingPrice,
+        partExchangeValue: dto.partExchangeValue,
+        financeContribution: dto.financeContribution,
+        accessoriesTotal,
+        grossProfit,
+        pdfUrl,
+        accessoryLines: { create: accessories },
+      },
+      include: { accessoryLines: true },
     });
   }
 

@@ -1,7 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { LeadStage } from '@project-amx/shared';
+import { CrmActivityType, LeadSource, LeadStage } from '@project-amx/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { CreateActivityDto, CreateContactDto, CreateLeadDto, CreateTaskDto, UpdateLeadStageDto } from './dto/contact.dto';
+import {
+  CreateActivityDto,
+  CreateContactDto,
+  CreateEnquiryDto,
+  CreateLeadDto,
+  CreateTaskDto,
+  UpdateLeadStageDto,
+} from './dto/contact.dto';
 
 /** Module 8 — contacts, leads, activities and follow-up tasks (§8.1-8.4). */
 @Injectable()
@@ -36,20 +43,68 @@ export class CrmService {
 
   /** Duplicate detection on email/phone before creating a new lead/contact (§8.1). */
   async createContact(dealerId: string, dto: CreateContactDto) {
-    if (dto.email || dto.phone) {
-      const duplicate = await this.prisma.contact.findFirst({
-        where: {
-          dealerId,
-          OR: [dto.email ? { email: dto.email } : undefined, dto.phone ? { phone: dto.phone } : undefined].filter(
-            Boolean,
-          ) as object[],
-        },
-      });
-      if (duplicate) {
-        throw new BadRequestException('A contact with this email or phone already exists');
-      }
+    const duplicate = await this.findDuplicateContact(dealerId, dto.email, dto.phone);
+    if (duplicate) {
+      throw new BadRequestException('A contact with this email or phone already exists');
     }
     return this.prisma.contact.create({ data: { dealerId, ...dto } });
+  }
+
+  private findDuplicateContact(dealerId: string, email?: string, phone?: string) {
+    if (!email && !phone) {
+      return null;
+    }
+    return this.prisma.contact.findFirst({
+      where: {
+        dealerId,
+        OR: [email ? { email } : undefined, phone ? { phone } : undefined].filter(Boolean) as object[],
+      },
+    });
+  }
+
+  /**
+   * Public, unauthenticated enquiry capture (Feature Spec §8.1 "Embedded enquiry form (hosted
+   * by AMS, embeddable on dealer website)"). Unlike createContact above, a returning customer is
+   * never rejected as a duplicate — their enquiry is attached to their existing contact record
+   * instead, which is what "duplicate detection ... before creating a new lead" actually means
+   * for a form real visitors submit more than once.
+   */
+  async createEnquiry(dealerId: string, dto: CreateEnquiryDto) {
+    const existing = await this.findDuplicateContact(dealerId, dto.email, dto.phone);
+
+    const contact = existing
+      ? await this.prisma.contact.update({
+          where: { id: existing.id },
+          data: { gdprConsent: existing.gdprConsent || dto.gdprConsent },
+        })
+      : await this.prisma.contact.create({
+          data: {
+            dealerId,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            email: dto.email,
+            phone: dto.phone,
+            gdprConsent: dto.gdprConsent,
+          },
+        });
+
+    const lead = await this.prisma.lead.create({
+      data: {
+        dealerId,
+        contactId: contact.id,
+        usedVehicleId: dto.usedVehicleId,
+        source: dto.source ?? LeadSource.WEBSITE_FORM,
+        stage: LeadStage.ENQUIRY,
+      },
+    });
+
+    if (dto.message) {
+      await this.prisma.crmActivity.create({
+        data: { leadId: lead.id, contactId: contact.id, type: CrmActivityType.NOTE, notes: dto.message },
+      });
+    }
+
+    return { contactId: contact.id, leadId: lead.id };
   }
 
   // --- Leads (§8.2) ---------------------------------------------------------

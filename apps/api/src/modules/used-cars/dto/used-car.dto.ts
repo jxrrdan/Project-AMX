@@ -1,5 +1,6 @@
 import { UsedVehicleStatus, VehicleSource } from '@project-amx/shared';
-import { IsArray, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 
 export class CreateUsedVehicleDto {
   @IsString()
@@ -87,6 +88,15 @@ export class CreateAppraisalDto {
   agreedValue!: number;
 }
 
+export class DealAccessoryLineDto {
+  @IsString()
+  description!: string;
+
+  @IsNumber()
+  @Min(0)
+  price!: number;
+}
+
 export class CreateDealSheetDto {
   @IsNumber()
   @Min(0)
@@ -100,7 +110,10 @@ export class CreateDealSheetDto {
   @IsNumber()
   financeContribution?: number;
 
+  /** Itemised dealer accessories (Feature Spec §4.5) — e.g. mudflaps, tow bar. Total is computed server-side. */
   @IsOptional()
-  @IsNumber()
-  accessoriesTotal?: number;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DealAccessoryLineDto)
+  accessories?: DealAccessoryLineDto[];
 }

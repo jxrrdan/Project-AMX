@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common
 import { ModuleKey, PermissionAction, UsedVehicleStatus } from '@project-amx/shared';
 import type { AuthUser } from '@project-amx/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { DvlaService } from '../../common/dvla/dvla.service';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import {
   AddPhotosDto,
@@ -15,7 +16,10 @@ import { UsedCarsService } from './used-cars.service';
 
 @Controller('used-vehicles')
 export class UsedCarsController {
-  constructor(private readonly usedCarsService: UsedCarsService) {}
+  constructor(
+    private readonly usedCarsService: UsedCarsService,
+    private readonly dvlaService: DvlaService,
+  ) {}
 
   @Get()
   @RequirePermissions({ module: ModuleKey.USED_CARS, action: PermissionAction.VIEW })
@@ -33,6 +37,13 @@ export class UsedCarsController {
   @RequirePermissions({ module: ModuleKey.USED_CARS, action: PermissionAction.VIEW })
   stockAgeing(@CurrentUser() user: AuthUser) {
     return this.usedCarsService.stockAgeingReport(user.dealerId);
+  }
+
+  /** Module 4.1 "DVLA API integration — automatic spec lookup by registration number". */
+  @Get('dvla-lookup/:reg')
+  @RequirePermissions({ module: ModuleKey.USED_CARS, action: PermissionAction.VIEW })
+  dvlaLookup(@Param('reg') reg: string) {
+    return this.dvlaService.lookup(reg);
   }
 
   @Get(':id')
