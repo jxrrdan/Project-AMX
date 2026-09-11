@@ -28,6 +28,16 @@ export class PartsService {
     return this.prisma.part.create({ data: { dealerId, ...dto } });
   }
 
+  findOne(dealerId: string, id: string) {
+    return this.prisma.part.findFirst({
+      where: { id, dealerId },
+      include: {
+        movements: { orderBy: { createdAt: 'desc' } },
+        allocations: { include: { jobCard: true }, orderBy: { createdAt: 'desc' } },
+      },
+    });
+  }
+
   /** Auto-flag parts below reorder level (§3.3). */
   belowReorderLevel(dealerId: string) {
     return this.prisma.$queryRaw`

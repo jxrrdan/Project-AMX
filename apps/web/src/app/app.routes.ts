@@ -9,6 +9,11 @@ export const appRoutes: Route[] = [
     loadComponent: () => import('./features/public/enquiry-form.component').then((m) => m.EnquiryFormComponent),
   },
   {
+    // Public, unauthenticated — the customer VHC approval report from Feature Spec §9.2-9.3.
+    path: 'vhc-report/:id',
+    loadComponent: () => import('./features/public/vhc-report.component').then((m) => m.VhcReportComponent),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./layout/shell.component').then((m) => m.ShellComponent),
@@ -31,6 +36,14 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/parts/parts-list.component').then((m) => m.PartsListComponent),
       },
       {
+        path: 'parts/purchase-orders',
+        loadComponent: () => import('./features/parts/purchase-orders.component').then((m) => m.PurchaseOrdersComponent),
+      },
+      {
+        path: 'parts/:id',
+        loadComponent: () => import('./features/parts/part-detail.component').then((m) => m.PartDetailComponent),
+      },
+      {
         path: 'used-cars',
         loadComponent: () => import('./features/used-cars/used-cars-list.component').then((m) => m.UsedCarsListComponent),
       },
@@ -41,6 +54,11 @@ export const appRoutes: Route[] = [
       {
         path: 'warranty',
         loadComponent: () => import('./features/warranty/warranty-list.component').then((m) => m.WarrantyListComponent),
+      },
+      {
+        path: 'warranty/:id',
+        loadComponent: () =>
+          import('./features/warranty/warranty-claim-detail.component').then((m) => m.WarrantyClaimDetailComponent),
       },
       {
         path: 'crm',
@@ -57,6 +75,11 @@ export const appRoutes: Route[] = [
       {
         path: 'vhc',
         loadComponent: () => import('./features/vhc/vhc-list.component').then((m) => m.VhcListComponent),
+      },
+      {
+        path: 'vhc/:id',
+        loadComponent: () =>
+          import('./features/vhc/vhc-inspection-detail.component').then((m) => m.VhcInspectionDetailComponent),
       },
       {
         path: 'listings',

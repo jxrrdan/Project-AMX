@@ -69,4 +69,10 @@ export class PartsController {
   stockValuation(@CurrentUser() user: AuthUser) {
     return this.partsService.stockValuation(user.dealerId);
   }
+
+  @Get('parts/:id')
+  @RequirePermissions({ module: ModuleKey.PARTS, action: PermissionAction.VIEW })
+  findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.partsService.findOne(user.dealerId, id);
+  }
 }

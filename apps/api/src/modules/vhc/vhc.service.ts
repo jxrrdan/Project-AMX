@@ -18,6 +18,14 @@ export class VhcService {
     });
   }
 
+  listInspections(dealerId: string) {
+    return this.prisma.vhcInspection.findMany({
+      where: { dealerId },
+      include: { items: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   /** Photo capture is mandatory for Amber/Red items (§9.1) — enforced here rather than only in the UI. */
   addItem(inspectionId: string, dto: AddVhcItemDto) {
     if (dto.rating !== VhcRating.GREEN && (!dto.photoUrls || dto.photoUrls.length === 0)) {
@@ -28,6 +36,18 @@ export class VhcService {
 
   findOne(dealerId: string, id: string) {
     return this.prisma.vhcInspection.findFirst({ where: { id, dealerId }, include: { items: true } });
+  }
+
+  /**
+   * The customer-facing report (§9.2) — "no login required", so this is deliberately not
+   * dealer-scoped by the caller's session; the inspection's UUID is its own access token, the
+   * same pattern as the workshop TV board's token-based read-only URL.
+   */
+  findPublic(id: string) {
+    return this.prisma.vhcInspection.findUnique({
+      where: { id },
+      include: { items: true },
+    });
   }
 
   /** Sends the customer-facing report link (§9.2) — the resulting web page hosts the approve/decline buttons. */

@@ -10,16 +10,15 @@ and AI insights.
 A **runnable local MVP + full architecture scaffold**, built by Claude Code from the feature
 spec PDF. Concretely:
 
-- **Fully working end-to-end** (real UI + API + database, verified in a browser): Module 7
-  (auth, multi-tenancy, RBAC), Module 2 (Workshop Scheduling, with live WebSocket updates),
-  Module 1 (New Car Stock & PDI Pipeline, with a drag-and-drop kanban board), Module 4 (Used Car
-  Sales, including DVLA reg lookup, part-exchange appraisal, and an itemised deal sheet), and
-  Module 8 (CRM — public enquiry capture, the lead pipeline board, and a contact detail view with
-  activity timeline, follow-up tasks, and email/SMS sending).
-- **Working API + basic UI for every other module** (3, 5, 6, 9–16): real Prisma-backed CRUD,
-  business rules from the spec (e.g. warranty's mandatory 3Cs before submission, FCA disclosure
-  logging, VHC's mandatory photo-on-Amber/Red), and a functional Angular page per module — but
-  without the same UI polish as the modules above.
+- **Fully working end-to-end** (real UI + API + database, verified in a browser) for every one of
+  the 16 modules — not just read-only lists, but the actual create/edit/detail workflows the spec
+  describes: drag-and-drop kanban boards (workshop diary, vehicle pipeline, lead pipeline), a
+  DVLA reg lookup and itemised deal sheet for used cars, a public enquiry form and a contact
+  detail view with activity timeline for CRM, warranty operation lines with the mandatory 3Cs and
+  technician clocking, VHC inspections with a public customer approval report, parts movements
+  and purchase orders, courtesy fleet bookings, F&I disclosure capture, and accounting
+  reconciliation. Two public, unauthenticated pages exist purely because the spec calls for
+  them: `/enquiry/:dealerId` (§8.1) and `/vhc-report/:id` (§9.2-9.3).
 - **A complete Prisma schema** modelling all 16 modules' data (`apps/api/prisma/schema.prisma`),
   which is the actual source of truth for what data this system manages.
 - **A synthesizable AWS CDK scaffold** (`infra/cdk`) mirroring the production architecture —

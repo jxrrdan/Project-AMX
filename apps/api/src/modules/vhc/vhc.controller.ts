@@ -11,10 +11,23 @@ import { VhcService } from './vhc.service';
 export class VhcController {
   constructor(private readonly vhcService: VhcService) {}
 
+  @Get('inspections')
+  @RequirePermissions({ module: ModuleKey.VHC, action: PermissionAction.VIEW })
+  listInspections(@CurrentUser() user: AuthUser) {
+    return this.vhcService.listInspections(user.dealerId);
+  }
+
   @Post('inspections')
   @RequirePermissions({ module: ModuleKey.VHC, action: PermissionAction.CREATE })
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateVhcInspectionDto) {
     return this.vhcService.createInspection(user.dealerId, user.id, dto);
+  }
+
+  /** Public customer-facing report page (§9.2) — no login required. */
+  @Public()
+  @Get('inspections/:id/report')
+  findPublic(@Param('id') id: string) {
+    return this.vhcService.findPublic(id);
   }
 
   @Get('inspections/:id')
