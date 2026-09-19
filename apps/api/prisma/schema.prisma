@@ -1,0 +1,1408 @@
+// AMS — Agent Management System
+// Prisma schema modelling all 16 functional modules of the AMS Feature Specification v3.1.
+// Every business table carries dealerId for multi-tenancy; PostgreSQL row-level security
+// (see infra/cdk) enforces isolation at the DB layer in production. Locally, application-level
+// scoping (TenantGuard + Prisma middleware) is the enforcement path — see apps/api/src/common.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Module 7 — Admin, User Management & RBAC, and core tenancy
+// ---------------------------------------------------------------------------
+
+model Dealer {
+  id             String   @id @default(uuid())
+  name           String
+  franchiseCode  String?
+  address        String?
+  timeZone       String   @default("Europe/London")
+  locale         String   @default("en-GB")
+  subdomain      String   @unique
+  risDealerId    String?
+  awpWebhookUrl  String?
+  logoUrl        String?
+  primaryColour  String?  @default("#0066B1")
+  /// Unguessable, revocable access token for the public workshop TV board (§2.3) — deliberately
+  /// NOT the dealer's own id, since that id is published elsewhere (embeddable widget URLs).
+  workshopBoardToken String @unique @default(uuid())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  users               User[]
+  roles               Role[]
+  moduleLicenses      ModuleLicense[]
+  vehicles            Vehicle[]
+  pdiJobs             PdiJob[]
+  handoverAppointments HandoverAppointment[]
+  bays                Bay[]
+  jobCards            JobCard[]
+  capacityBlocks      CapacityBlock[]
+  serviceBookings     ServiceBooking[]
+  parts               Part[]
+  stockMovements      StockMovement[]
+  purchaseOrders      PurchaseOrder[]
+  usedVehicles        UsedVehicle[]
+  warrantyClaims      WarrantyClaim[]
+  contacts            Contact[]
+  leads               Lead[]
+  emailTemplates      EmailTemplate[]
+  documentTemplates   DocumentTemplate[]
+  workflows           Workflow[]
+  vhcInspections      VhcInspection[]
+  listingPlatforms    ListingPlatform[]
+  accountingIntegrations AccountingIntegration[]
+  courtesyVehicles    CourtesyVehicle[]
+  financeProducts     FinanceProduct[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  aiConversations     AiConversation[]
+  documentSequences   DocumentSequence[]
+  invitations         Invitation[]
+
+  @@map("dealers")
+}
+
+enum SystemRole {
+  DEALER_PRINCIPAL
+  GENERAL_MANAGER
+  SALES_MANAGER
+  SALES_EXECUTIVE
+  WORKSHOP_CONTROLLER
+  SERVICE_ADVISOR
+  TECHNICIAN
+  PARTS_MANAGER
+  ACCOUNTS
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  dealerId    String
+  dealer      Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  name        String
+  systemRole  SystemRole?
+  isCustom    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@unique([dealerId, name])
+  @@map("roles")
+}
+
+enum ModuleKey {
+  NEW_CAR_PDI
+  WORKSHOP
+  PARTS
+  USED_CARS
+  WARRANTY
+  DASHBOARD
+  ADMIN
+  CRM
+  VHC
+  LISTINGS
+  ACCOUNTING
+  COURTESY_FLEET
+  FI
+  AI_INSIGHTS
+  AI_CHATBOT
+  GENERAL_LEDGER
+}
+
+enum PermissionAction {
+  VIEW
+  CREATE
+  EDIT
+  DELETE
+  EXPORT
+  APPROVE
+}
+
+model RolePermission {
+  id       String            @id @default(uuid())
+  roleId   String
+  role     Role              @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  module   ModuleKey
+  action   PermissionAction
+
+  @@unique([roleId, module, action])
+  @@map("role_permissions")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  dealerId          String
+  dealer            Dealer    @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  email             String
+  firstName         String
+  lastName          String
+  passwordHash      String
+  mfaEnabled        Boolean   @default(false)
+  mfaSecret         String?
+  active            Boolean   @default(true)
+  lastLoginAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  roles                 UserRole[]
+  moduleOverrides       UserModuleOverride[]
+  sessions              UserSession[]
+  loginAudits           LoginAudit[]
+  auditLogs             AuditLog[]
+  notifications         Notification[]
+  assignedVehicles      Vehicle[]              @relation("AllocatedAdvisor")
+  technicianJobCards    JobCard[]              @relation("AssignedTechnician")
+  advisorJobCards       JobCard[]              @relation("ServiceAdvisor")
+  timeEntries           JobCardTimeEntry[]
+  assignedLeads         Lead[]                 @relation("AssignedSalesperson")
+  tasks                 CrmTask[]              @relation("TaskAssignee")
+  warrantyClockEntries  WarrantyClockEntry[]
+
+  @@unique([dealerId, email])
+  @@map("users")
+}
+
+model UserRole {
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model UserModuleOverride {
+  id       String            @id @default(uuid())
+  userId   String
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module   ModuleKey
+  action   PermissionAction
+  allowed  Boolean
+
+  @@unique([userId, module, action])
+  @@map("user_module_overrides")
+}
+
+model UserSession {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String    @unique
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+
+  @@map("user_sessions")
+}
+
+model LoginAudit {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email     String
+  success   Boolean
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@map("login_audits")
+}
+
+model Invitation {
+  id        String   @id @default(uuid())
+  dealerId  String
+  dealer    Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  email     String
+  roleIds   String[]
+  token     String   @unique
+  expiresAt DateTime
+  acceptedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@map("invitations")
+}
+
+model ModuleLicense {
+  id        String    @id @default(uuid())
+  dealerId  String
+  dealer    Dealer    @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  module    ModuleKey
+  enabled   Boolean   @default(true)
+  stripeSubscriptionItemId String?
+  activatedAt DateTime @default(now())
+
+  @@unique([dealerId, module])
+  @@map("module_licenses")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  dealerId   String
+  dealer     Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  module     ModuleKey
+  action     String
+  recordType String
+  recordId   String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([dealerId, module, createdAt])
+  @@map("audit_logs")
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+}
+
+model Notification {
+  id        String              @id @default(uuid())
+  dealerId  String
+  dealer    Dealer              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel   NotificationChannel
+  eventType String
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  @@map("notifications")
+}
+
+model DocumentSequence {
+  id       String @id @default(uuid())
+  dealerId String
+  dealer   Dealer @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  docType  String
+  prefix   String
+  year     Int
+  nextNumber Int  @default(1)
+
+  @@unique([dealerId, docType, year])
+  @@map("document_sequences")
+}
+
+// ---------------------------------------------------------------------------
+// Module 1 — New Car Stock & PDI Pipeline
+// ---------------------------------------------------------------------------
+
+enum VehiclePipelineStatus {
+  ORDERED
+  IN_PRODUCTION
+  IN_TRANSIT
+  ARRIVED
+  PDI_SCHEDULED
+  PDI_COMPLETE
+  READY_FOR_HANDOVER
+  DELIVERED
+}
+
+model Vehicle {
+  id                String                @id @default(uuid())
+  dealerId          String
+  dealer            Dealer                @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  vin               String
+  model             String
+  colour            String?
+  customerName      String?
+  eta               DateTime?
+  status            VehiclePipelineStatus @default(ORDERED)
+  allocatedAdvisorId String?
+  allocatedAdvisor  User?                 @relation("AllocatedAdvisor", fields: [allocatedAdvisorId], references: [id], onDelete: SetNull)
+  risOrderRef       String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  pdiJobs               PdiJob[]
+  handoverAppointments  HandoverAppointment[]
+  jobCards              JobCard[]
+  warrantyClaims        WarrantyClaim[]
+  financeProducts       DealFinanceProduct[]
+
+  @@unique([dealerId, vin])
+  @@map("vehicles")
+}
+
+enum PdiStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETE
+}
+
+model PdiJob {
+  id              String    @id @default(uuid())
+  dealerId        String
+  dealer          Dealer    @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  vehicleId       String
+  vehicle         Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  scheduledDate   DateTime
+  bayId           String?
+  bay             Bay?      @relation(fields: [bayId], references: [id], onDelete: SetNull)
+  technicianId    String?
+  estimatedMinutes Int      @default(60)
+  status          PdiStatus @default(SCHEDULED)
+  awpJobRef       String?
+  jobCardId       String?   @unique
+  jobCard         JobCard?  @relation(fields: [jobCardId], references: [id], onDelete: SetNull)
+  signedOffAt     DateTime?
+  signedOffBy     String?
+  checklistPdfUrl String?
+  createdAt       DateTime  @default(now())
+
+  checklistItems  PdiChecklistItem[]
+
+  @@map("pdi_jobs")
+}
+
+enum PdiItemRating {
+  PASS
+  ADVISORY
+  FAIL
+}
+
+model PdiChecklistItem {
+  id          String        @id @default(uuid())
+  pdiJobId    String
+  pdiJob      PdiJob        @relation(fields: [pdiJobId], references: [id], onDelete: Cascade)
+  category    String
+  label       String
+  rating      PdiItemRating?
+  notes       String?
+  photoUrls   String[]
+  sortOrder   Int           @default(0)
+
+  @@map("pdi_checklist_items")
+}
+
+enum HandoverType {
+  NEW_CAR
+  USED_CAR
+}
+
+model HandoverAppointment {
+  id              String       @id @default(uuid())
+  dealerId        String
+  dealer          Dealer       @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  type            HandoverType
+  vehicleId       String?
+  vehicle         Vehicle?     @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  usedVehicleId   String?
+  usedVehicle     UsedVehicle? @relation(fields: [usedVehicleId], references: [id], onDelete: SetNull)
+  scheduledAt     DateTime
+  advisorId       String?
+  checklistJson   Json?
+  signatureUrl    String?
+  completedAt     DateTime?
+  confirmationEmailSentAt DateTime?
+  createdAt       DateTime     @default(now())
+
+  @@map("handover_appointments")
+}
+
+// ---------------------------------------------------------------------------
+// Module 2 — Workshop Scheduling
+// ---------------------------------------------------------------------------
+
+model Bay {
+  id       String @id @default(uuid())
+  dealerId String
+  dealer   Dealer @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  name     String
+  active   Boolean @default(true)
+
+  jobCards       JobCard[]
+  pdiJobs        PdiJob[]
+  capacityBlocks CapacityBlock[]
+
+  @@unique([dealerId, name])
+  @@map("bays")
+}
+
+enum JobType {
+  PDI
+  SERVICE
+  REPAIR
+  WARRANTY
+  MOT
+}
+
+enum JobCardStatus {
+  CREATED
+  SCHEDULED
+  IN_PROGRESS
+  AWAITING_PARTS
+  COMPLETE
+  INVOICED
+}
+
+model JobCard {
+  id               String        @id @default(uuid())
+  dealerId         String
+  dealer           Dealer        @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  customerName     String
+  contactId        String?
+  contact          Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  vehicleId        String?
+  vehicle          Vehicle?      @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  vehicleReg       String?
+  jobType          JobType
+  description      String?
+  estimatedHours    Decimal      @default(0) @db.Decimal(6, 2)
+  status           JobCardStatus @default(CREATED)
+  bayId            String?
+  bay              Bay?          @relation(fields: [bayId], references: [id], onDelete: SetNull)
+  assignedTechnicianId String?
+  assignedTechnician   User?     @relation("AssignedTechnician", fields: [assignedTechnicianId], references: [id], onDelete: SetNull)
+  serviceAdvisorId String?
+  serviceAdvisor   User?         @relation("ServiceAdvisor", fields: [serviceAdvisorId], references: [id], onDelete: SetNull)
+  scheduledStart   DateTime?
+  scheduledEnd     DateTime?
+  awpJobRef        String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  timeEntries      JobCardTimeEntry[]
+  partAllocations  PartAllocation[]
+  pdiJob           PdiJob?
+  warrantyClaim    WarrantyClaim?
+  vhcInspections   VhcInspection[]
+
+  @@map("job_cards")
+}
+
+model JobCardTimeEntry {
+  id            String    @id @default(uuid())
+  jobCardId     String
+  jobCard       JobCard   @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  technicianId  String
+  technician    User      @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  clockOn       DateTime
+  clockOff      DateTime?
+
+  @@map("job_card_time_entries")
+}
+
+model CapacityBlock {
+  id        String   @id @default(uuid())
+  dealerId  String
+  dealer    Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  bayId     String
+  bay       Bay      @relation(fields: [bayId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  availableMinutes Int @default(480)
+  reason    String?
+
+  @@unique([bayId, date])
+  @@map("capacity_blocks")
+}
+
+enum ServiceBookingStatus {
+  REQUESTED
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model ServiceBooking {
+  id            String               @id @default(uuid())
+  dealerId      String
+  dealer        Dealer               @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  customerName  String
+  contactEmail  String?
+  contactPhone  String?
+  vehicleReg    String
+  serviceType   String
+  requestedSlot DateTime
+  status        ServiceBookingStatus @default(REQUESTED)
+  reminderSentAt DateTime?
+  createdAt     DateTime             @default(now())
+
+  @@map("service_bookings")
+}
+
+// ---------------------------------------------------------------------------
+// Module 3 — Parts Stock Management
+// ---------------------------------------------------------------------------
+
+model Part {
+  id            String   @id @default(uuid())
+  dealerId      String
+  dealer        Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  partNumber    String
+  description   String
+  binLocation   String?
+  quantityOnHand Int     @default(0)
+  reorderLevel  Int      @default(0)
+  costPrice     Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+
+  movements     StockMovement[]
+  allocations   PartAllocation[]
+  poLines       PurchaseOrderLine[]
+
+  @@unique([dealerId, partNumber])
+  @@map("parts")
+}
+
+enum StockMovementType {
+  GOODS_RECEIVED
+  ALLOCATED
+  RETURNED
+  WRITE_OFF
+}
+
+model StockMovement {
+  id         String            @id @default(uuid())
+  dealerId   String
+  dealer     Dealer            @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  partId     String
+  part       Part              @relation(fields: [partId], references: [id], onDelete: Cascade)
+  type       StockMovementType
+  quantity   Int
+  reasonCode String?
+  reference  String?
+  createdAt  DateTime          @default(now())
+
+  @@map("stock_movements")
+}
+
+model PartAllocation {
+  id         String   @id @default(uuid())
+  partId     String
+  part       Part     @relation(fields: [partId], references: [id], onDelete: Cascade)
+  jobCardId  String
+  jobCard    JobCard  @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  quantity   Int
+  createdAt  DateTime @default(now())
+
+  @@map("part_allocations")
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SENT
+  PARTIALLY_RECEIVED
+  FULLY_RECEIVED
+}
+
+model PurchaseOrder {
+  id        String              @id @default(uuid())
+  dealerId  String
+  dealer    Dealer              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  supplier  String
+  status    PurchaseOrderStatus @default(DRAFT)
+  sentAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  lines     PurchaseOrderLine[]
+
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  partId          String
+  part            Part          @relation(fields: [partId], references: [id], onDelete: Cascade)
+  quantityOrdered Int
+  quantityReceived Int          @default(0)
+  unitCost        Decimal       @db.Decimal(10, 2)
+
+  @@map("purchase_order_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Module 4 — Used Car Sales
+// ---------------------------------------------------------------------------
+
+enum UsedVehicleStatus {
+  IN_STOCK
+  LISTED
+  RESERVED
+  SOLD
+  DELIVERED
+}
+
+enum VehicleSource {
+  PART_EX
+  TRADE_BUY
+  AUCTION
+  OTHER
+}
+
+model UsedVehicle {
+  id             String            @id @default(uuid())
+  dealerId       String
+  dealer         Dealer            @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  reg            String
+  vin            String?
+  make           String
+  model          String
+  colour         String?
+  mileage        Int?
+  fuel           String?
+  transmission   String?
+  purchasePrice  Decimal?          @db.Decimal(10, 2)
+  askingPrice    Decimal?          @db.Decimal(10, 2)
+  source         VehicleSource     @default(OTHER)
+  status         UsedVehicleStatus @default(IN_STOCK)
+  listedAt       DateTime?
+  soldAt         DateTime?
+  v5cDocumentUrl String?
+  serviceHistoryUrl String?
+  hpiReportUrl   String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  photos            VehiclePhoto[]
+  priceHistory      PriceHistoryEntry[]
+  leads             Lead[]
+  appraisal         PartExchangeAppraisal?
+  dealSheet         DealSheet?
+  handoverAppointments HandoverAppointment[]
+  listings          VehicleListing[]
+  financeProducts   DealFinanceProduct[]
+
+  @@unique([dealerId, reg])
+  @@map("used_vehicles")
+}
+
+model VehiclePhoto {
+  id            String      @id @default(uuid())
+  usedVehicleId String
+  usedVehicle   UsedVehicle @relation(fields: [usedVehicleId], references: [id], onDelete: Cascade)
+  url           String
+  sortOrder     Int         @default(0)
+
+  @@map("vehicle_photos")
+}
+
+model PriceHistoryEntry {
+  id            String      @id @default(uuid())
+  usedVehicleId String
+  usedVehicle   UsedVehicle @relation(fields: [usedVehicleId], references: [id], onDelete: Cascade)
+  price         Decimal     @db.Decimal(10, 2)
+  changedAt     DateTime    @default(now())
+
+  @@map("price_history_entries")
+}
+
+model PartExchangeAppraisal {
+  id              String      @id @default(uuid())
+  usedVehicleId   String      @unique
+  usedVehicle     UsedVehicle @relation(fields: [usedVehicleId], references: [id], onDelete: Cascade)
+  dealId          String?
+  condition       String?
+  mileage         Int?
+  damageNotes     String?
+  photoUrls       String[]
+  agreedValue     Decimal     @db.Decimal(10, 2)
+  createdAt       DateTime    @default(now())
+
+  @@map("part_exchange_appraisals")
+}
+
+model DealSheet {
+  id                String      @id @default(uuid())
+  usedVehicleId     String      @unique
+  usedVehicle       UsedVehicle @relation(fields: [usedVehicleId], references: [id], onDelete: Cascade)
+  sellingPrice      Decimal     @db.Decimal(10, 2)
+  partExchangeValue Decimal?    @db.Decimal(10, 2)
+  financeContribution Decimal?  @db.Decimal(10, 2)
+  /// Sum of accessoryLines — kept as a stored column for fast reporting, recomputed whenever lines change.
+  accessoriesTotal  Decimal     @default(0) @db.Decimal(10, 2)
+  grossProfit       Decimal?    @db.Decimal(10, 2)
+  pdfUrl            String?
+  createdAt         DateTime    @default(now())
+
+  accessoryLines    DealAccessoryLine[]
+
+  @@map("deal_sheets")
+}
+
+/// Itemised "dealer accessories" line on the deal sheet (Feature Spec §4.5) — e.g. "Mudflaps £50".
+model DealAccessoryLine {
+  id          String    @id @default(uuid())
+  dealSheetId String
+  dealSheet   DealSheet @relation(fields: [dealSheetId], references: [id], onDelete: Cascade)
+  description String
+  price       Decimal   @db.Decimal(10, 2)
+
+  @@map("deal_accessory_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Module 5 — Warranty
+// ---------------------------------------------------------------------------
+
+enum WarrantyClaimStatus {
+  DRAFT
+  SUBMITTED
+  AUTHORISED
+  REJECTED
+  PAID
+}
+
+model WarrantyClaim {
+  id                  String              @id @default(uuid())
+  dealerId            String
+  dealer              Dealer              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  vehicleId           String
+  vehicle             Vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  jobCardId           String?             @unique
+  jobCard             JobCard?            @relation(fields: [jobCardId], references: [id], onDelete: SetNull)
+  customerName        String
+  faultDescription    String
+  symptomCode         String?
+  status              WarrantyClaimStatus @default(DRAFT)
+  awpAuthorisationRef String?
+  rejectionReason     String?
+  expectedPayment     Decimal?            @db.Decimal(10, 2)
+  actualPayment       Decimal?            @db.Decimal(10, 2)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  operationLines      WarrantyOperationLine[]
+
+  @@map("warranty_claims")
+}
+
+model WarrantyOperationLine {
+  id                String        @id @default(uuid())
+  warrantyClaimId   String
+  warrantyClaim     WarrantyClaim @relation(fields: [warrantyClaimId], references: [id], onDelete: Cascade)
+  operationCode     String
+  description       String
+  standardMinutes   Int
+  cause             String?
+  correction        String?
+  complaint         String?
+  labourWriteUp     String?
+  approvedAt        DateTime?
+  approvedBy        String?
+  createdAt         DateTime      @default(now())
+
+  clockEntries      WarrantyClockEntry[]
+
+  @@map("warranty_operation_lines")
+}
+
+model WarrantyClockEntry {
+  id          String                @id @default(uuid())
+  lineId      String
+  line        WarrantyOperationLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  technicianId String
+  technician  User                  @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  clockOn     DateTime
+  clockOff    DateTime?
+
+  @@map("warranty_clock_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Module 8 — CRM & Customer Communications
+// ---------------------------------------------------------------------------
+
+enum ContactStatus {
+  PROSPECT
+  CUSTOMER
+}
+
+model Contact {
+  id             String        @id @default(uuid())
+  dealerId       String
+  dealer         Dealer        @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  status         ContactStatus @default(PROSPECT)
+  gdprConsent    Boolean       @default(false)
+  emailOptIn     Boolean       @default(true)
+  smsOptIn       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  leads          Lead[]
+  activities     CrmActivity[]
+  tasks          CrmTask[]
+  emails         EmailMessage[]
+  smsMessages    SmsMessage[]
+  jobCards       JobCard[]
+  workflowEnrollments WorkflowEnrollment[]
+
+  @@map("contacts")
+}
+
+enum LeadStage {
+  ENQUIRY
+  CONTACTED
+  TEST_DRIVE
+  OFFER
+  RESERVED
+  SOLD
+  LOST
+}
+
+enum LeadSource {
+  WEBSITE_FORM
+  BMW_CRM
+  EMAIL
+  MANUAL
+  CHATBOT
+  PHONE
+}
+
+model Lead {
+  id                String      @id @default(uuid())
+  dealerId          String
+  dealer            Dealer      @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  contactId         String
+  contact           Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  usedVehicleId     String?
+  usedVehicle       UsedVehicle? @relation(fields: [usedVehicleId], references: [id], onDelete: SetNull)
+  stage             LeadStage   @default(ENQUIRY)
+  source            LeadSource  @default(MANUAL)
+  assignedSalespersonId String?
+  assignedSalesperson   User?   @relation("AssignedSalesperson", fields: [assignedSalespersonId], references: [id], onDelete: SetNull)
+  lostReason        String?
+  score             Int?        @default(0)
+  scoreReasons      String[]
+  lastActivityAt    DateTime?   @default(now())
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  activities        CrmActivity[]
+  tasks             CrmTask[]
+  workflowEnrollments WorkflowEnrollment[]
+
+  @@map("leads")
+}
+
+enum CrmActivityType {
+  CALL
+  MEETING
+  NOTE
+  EMAIL
+  SMS
+  STAGE_CHANGE
+}
+
+model CrmActivity {
+  id        String          @id @default(uuid())
+  contactId String?
+  contact   Contact?        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  leadId    String?
+  lead      Lead?           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type      CrmActivityType
+  notes     String?
+  createdAt DateTime        @default(now())
+
+  @@map("crm_activities")
+}
+
+model CrmTask {
+  id          String    @id @default(uuid())
+  contactId   String?
+  contact     Contact?  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  leadId      String?
+  lead        Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assigneeId  String
+  assignee    User      @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Cascade)
+  title       String
+  dueDate     DateTime
+  completedAt DateTime?
+  overdueAlertSentAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("crm_tasks")
+}
+
+enum TemplateCategory {
+  INITIAL_ENQUIRY
+  FOLLOW_UP
+  TEST_DRIVE_CONFIRMATION
+  OFFER_LETTER
+  LOST_SALE_RECOVERY
+  SERVICE_REMINDER
+  OTHER
+}
+
+model EmailTemplate {
+  id        String           @id @default(uuid())
+  dealerId  String
+  dealer    Dealer           @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  name      String
+  category  TemplateCategory @default(OTHER)
+  subject   String
+  bodyHtml  String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  emails    EmailMessage[]
+
+  @@map("email_templates")
+}
+
+enum EmailStatus {
+  QUEUED
+  SENT
+  OPENED
+  CLICKED
+  REPLIED
+  FAILED
+}
+
+model EmailMessage {
+  id          String        @id @default(uuid())
+  contactId   String
+  contact     Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  templateId  String?
+  template    EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  subject     String
+  bodyHtml    String
+  status      EmailStatus   @default(QUEUED)
+  sentAt      DateTime?
+  openedAt    DateTime?
+  clickedAt   DateTime?
+  repliedAt   DateTime?
+  createdAt   DateTime      @default(now())
+
+  @@map("email_messages")
+}
+
+enum SmsStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  REPLIED
+}
+
+model SmsTemplate {
+  id        String   @id @default(uuid())
+  dealerId  String
+  name      String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@map("sms_templates")
+}
+
+model SmsMessage {
+  id        String    @id @default(uuid())
+  contactId String
+  contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  body      String
+  status    SmsStatus @default(QUEUED)
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@map("sms_messages")
+}
+
+enum DocumentTemplateType {
+  SALES_INVOICE
+  PART_EXCHANGE_RECEIPT
+  SERVICE_ESTIMATE
+  HANDOVER_DOCUMENT
+}
+
+model DocumentTemplate {
+  id        String               @id @default(uuid())
+  dealerId  String
+  dealer    Dealer               @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  type      DocumentTemplateType
+  name      String
+  bodyHtml  String
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@map("document_templates")
+}
+
+enum WorkflowTrigger {
+  MANUAL
+  LEAD_STAGE_ENTERED
+  CONTACT_CREATED
+  NO_ACTIVITY_DAYS
+}
+
+model Workflow {
+  id        String          @id @default(uuid())
+  dealerId  String
+  dealer    Dealer          @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  name      String
+  trigger   WorkflowTrigger @default(MANUAL)
+  active    Boolean         @default(true)
+  createdAt DateTime        @default(now())
+
+  steps       WorkflowStep[]
+  enrollments WorkflowEnrollment[]
+
+  @@map("workflows")
+}
+
+enum WorkflowActionType {
+  SEND_EMAIL
+  SEND_SMS
+  CREATE_TASK
+  CHANGE_LEAD_STAGE
+  ADD_TAG
+  /// Branches the workflow to a different step rather than performing an action of its own.
+  CONDITION
+}
+
+model WorkflowStep {
+  id           String             @id @default(uuid())
+  workflowId   String
+  workflow     Workflow           @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  sortOrder    Int
+  delayHours   Int                @default(0)
+  actionType   WorkflowActionType
+  actionConfig Json
+
+  @@map("workflow_steps")
+}
+
+enum WorkflowEnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  UNENROLLED
+}
+
+model WorkflowEnrollment {
+  id          String                   @id @default(uuid())
+  workflowId  String
+  workflow    Workflow                 @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  contactId   String?
+  contact     Contact?                 @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  leadId      String?
+  lead        Lead?                    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  currentStep Int                      @default(0)
+  status      WorkflowEnrollmentStatus @default(ACTIVE)
+  enrolledAt  DateTime                 @default(now())
+  nextRunAt   DateTime?
+
+  @@map("workflow_enrollments")
+}
+
+// ---------------------------------------------------------------------------
+// Module 9 — Digital Vehicle Health Check (VHC)
+// ---------------------------------------------------------------------------
+
+model VhcInspection {
+  id           String    @id @default(uuid())
+  dealerId     String
+  dealer       Dealer    @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  jobCardId    String
+  jobCard      JobCard   @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  technicianId String
+  vehicleReg   String
+  mileage      Int?
+  reportUrl    String?
+  sentAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  items VhcItem[]
+
+  @@map("vhc_inspections")
+}
+
+enum VhcRating {
+  GREEN
+  AMBER
+  RED
+}
+
+model VhcItem {
+  id              String        @id @default(uuid())
+  inspectionId    String
+  inspection      VhcInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  category        String
+  label           String
+  rating          VhcRating
+  description     String?
+  photoUrls       String[]
+  estimatedLabourMinutes Int?
+  estimatedPartsCost Decimal?   @db.Decimal(10, 2)
+  approved        Boolean?
+  respondedAt     DateTime?
+
+  @@map("vhc_items")
+}
+
+// ---------------------------------------------------------------------------
+// Module 10 — Third-party Stock Listing Integration
+// ---------------------------------------------------------------------------
+
+enum ListingPlatformType {
+  AUTOTRADER
+  MOTORS
+  DEALER_WEBSITE
+}
+
+model ListingPlatform {
+  id        String              @id @default(uuid())
+  dealerId  String
+  dealer    Dealer              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  type      ListingPlatformType
+  enabled   Boolean             @default(false)
+  credentialsSecretRef String?
+
+  listings  VehicleListing[]
+
+  @@unique([dealerId, type])
+  @@map("listing_platforms")
+}
+
+enum ListingStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+  REMOVED
+}
+
+model VehicleListing {
+  id            String          @id @default(uuid())
+  usedVehicleId String
+  usedVehicle   UsedVehicle     @relation(fields: [usedVehicleId], references: [id], onDelete: Cascade)
+  platformId    String
+  platform      ListingPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  status        ListingStatus   @default(PENDING)
+  errorDetail   String?
+  viewCount     Int?
+  enquiryCount  Int?
+  lastSyncedAt  DateTime?
+
+  @@unique([usedVehicleId, platformId])
+  @@map("vehicle_listings")
+}
+
+// ---------------------------------------------------------------------------
+// Module 11 — Accounting Integration
+// ---------------------------------------------------------------------------
+
+enum AccountingProvider {
+  XERO
+  SAGE
+  QUICKBOOKS
+  CSV
+}
+
+model AccountingIntegration {
+  id        String              @id @default(uuid())
+  dealerId  String
+  dealer    Dealer              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  provider  AccountingProvider
+  credentialsSecretRef String?
+  accountMappings Json?
+  createdAt DateTime            @default(now())
+
+  transactions AccountingTransaction[]
+
+  @@unique([dealerId, provider])
+  @@map("accounting_integrations")
+}
+
+enum AccountingTxnType {
+  SALES_INVOICE
+  CREDIT_NOTE
+  PURCHASE_ORDER
+  PAYMENT
+  FI_COMMISSION
+}
+
+enum AccountingSyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+}
+
+model AccountingTransaction {
+  id            String                @id @default(uuid())
+  integrationId String
+  integration   AccountingIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  type          AccountingTxnType
+  amount        Decimal               @db.Decimal(10, 2)
+  nominalCode   String?
+  sourceRecordId String?
+  status        AccountingSyncStatus  @default(PENDING)
+  errorDetail   String?
+  syncedAt      DateTime?
+  createdAt     DateTime              @default(now())
+
+  @@map("accounting_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// Module 12 — Courtesy & Loan Car Fleet
+// ---------------------------------------------------------------------------
+
+enum CourtesyVehicleStatus {
+  AVAILABLE
+  ON_LOAN
+  OFF_ROAD
+  IN_FOR_SERVICE
+}
+
+model CourtesyVehicle {
+  id              String                @id @default(uuid())
+  dealerId        String
+  dealer          Dealer                @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  reg             String
+  make            String
+  model           String
+  colour          String?
+  mileage         Int?
+  insuranceExpiry DateTime?
+  motExpiry       DateTime?
+  taxExpiry       DateTime?
+  status          CourtesyVehicleStatus @default(AVAILABLE)
+
+  bookings        CourtesyBooking[]
+
+  @@unique([dealerId, reg])
+  @@map("courtesy_vehicles")
+}
+
+model CourtesyBooking {
+  id                  String          @id @default(uuid())
+  courtesyVehicleId   String
+  courtesyVehicle     CourtesyVehicle @relation(fields: [courtesyVehicleId], references: [id], onDelete: Cascade)
+  customerName        String
+  linkedJobCardId     String?
+  outDate             DateTime
+  expectedReturnDate  DateTime
+  outMileage          Int?
+  returnMileage       Int?
+  actualReturnDate    DateTime?
+  handoverConditionUrl String?
+  returnConditionUrl  String?
+  handoverSignatureUrl String?
+  returnSignatureUrl  String?
+  newDamageNotes      String?
+  createdAt           DateTime        @default(now())
+
+  @@map("courtesy_bookings")
+}
+
+// ---------------------------------------------------------------------------
+// Module 13 — Finance & Insurance (F&I)
+// ---------------------------------------------------------------------------
+
+enum FiProductType {
+  FINANCE
+  INSURANCE
+}
+
+model FinanceProduct {
+  id             String        @id @default(uuid())
+  dealerId       String
+  dealer         Dealer        @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  type           FiProductType
+  name           String
+  providerName   String
+  productCode    String?
+  commissionRate Decimal?      @db.Decimal(6, 3)
+  commissionFixed Decimal?     @db.Decimal(10, 2)
+  fcaProductRef  String?
+  active         Boolean       @default(true)
+
+  dealProducts   DealFinanceProduct[]
+
+  @@map("finance_products")
+}
+
+model DealFinanceProduct {
+  id                 String          @id @default(uuid())
+  vehicleId          String?
+  vehicle            Vehicle?        @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  usedVehicleId      String?
+  usedVehicle        UsedVehicle?    @relation(fields: [usedVehicleId], references: [id], onDelete: SetNull)
+  productId          String
+  product            FinanceProduct  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  term               Int?
+  monthlyPayment     Decimal?        @db.Decimal(10, 2)
+  totalPremium       Decimal?        @db.Decimal(10, 2)
+  commissionAmount   Decimal?        @db.Decimal(10, 2)
+  lenderName         String?
+  agreementNumber    String?
+  amountFinanced     Decimal?        @db.Decimal(10, 2)
+  apr                Decimal?        @db.Decimal(6, 3)
+  createdAt          DateTime        @default(now())
+
+  disclosure         FcaDisclosure?
+
+  @@map("deal_finance_products")
+}
+
+model FcaDisclosure {
+  id                    String              @id @default(uuid())
+  dealFinanceProductId  String              @unique
+  dealFinanceProduct    DealFinanceProduct  @relation(fields: [dealFinanceProductId], references: [id], onDelete: Cascade)
+  commissionDisclosed   Boolean             @default(false)
+  customerConsentAt     DateTime?
+  customerSignatureUrl  String?
+  vulnerableCustomerFlag Boolean            @default(false)
+  createdAt             DateTime            @default(now())
+
+  @@map("fca_disclosures")
+}
+
+// ---------------------------------------------------------------------------
+// Modules 14/15 — AI Insights & Customer Chatbot
+// ---------------------------------------------------------------------------
+
+enum AiConversationChannel {
+  INTERNAL_ASSISTANT
+  CUSTOMER_CHATBOT
+}
+
+model AiConversation {
+  id        String                 @id @default(uuid())
+  dealerId  String
+  dealer    Dealer                 @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  channel   AiConversationChannel
+  userId    String?
+  contactId String?
+  createdAt DateTime               @default(now())
+
+  messages  AiMessage[]
+
+  @@map("ai_conversations")
+}
+
+enum AiMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model AiMessage {
+  id             String         @id @default(uuid())
+  conversationId String
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           AiMessageRole
+  content        String
+  createdAt      DateTime       @default(now())
+
+  @@map("ai_messages")
+}
