@@ -13,3 +13,4 @@ export * from './accounting.enum';
 export * from './courtesy.enum';
 export * from './fi.enum';
 export * from './ai.enum';
+export * from './integration.enum';

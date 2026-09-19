@@ -65,6 +65,9 @@ model Dealer {
   aiConversations     AiConversation[]
   documentSequences   DocumentSequence[]
   invitations         Invitation[]
+  integrationConnectors  IntegrationConnector[]
+  customFieldDefinitions CustomFieldDefinition[]
+  uiScreenDefinitions    UiScreenDefinition[]
 
   @@map("dealers")
 }
@@ -114,6 +117,7 @@ enum ModuleKey {
   AI_INSIGHTS
   AI_CHATBOT
   GENERAL_LEDGER
+  OEM_INTEGRATIONS
 }
 
 enum PermissionAction {
@@ -326,6 +330,9 @@ model Vehicle {
   allocatedAdvisorId String?
   allocatedAdvisor  User?                 @relation("AllocatedAdvisor", fields: [allocatedAdvisorId], references: [id], onDelete: SetNull)
   risOrderRef       String?
+  /// Values for CustomFieldDefinition(entity: VEHICLE) — written by the OEM Integration Hub's
+  /// field-mapping engine; keyed by CustomFieldDefinition.key.
+  customFields      Json                  @default("{}")
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
 
@@ -550,6 +557,8 @@ model Part {
   quantityOnHand Int     @default(0)
   reorderLevel  Int      @default(0)
   costPrice     Decimal  @default(0) @db.Decimal(10, 2)
+  /// Values for CustomFieldDefinition(entity: PART) — see Vehicle.customFields.
+  customFields  Json     @default("{}")
   createdAt     DateTime @default(now())
 
   movements     StockMovement[]
@@ -668,6 +677,8 @@ model UsedVehicle {
   v5cDocumentUrl String?
   serviceHistoryUrl String?
   hpiReportUrl   String?
+  /// Values for CustomFieldDefinition(entity: USED_VEHICLE) — see Vehicle.customFields.
+  customFields   Json              @default("{}")
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -837,6 +848,8 @@ model Contact {
   gdprConsent    Boolean       @default(false)
   emailOptIn     Boolean       @default(true)
   smsOptIn       Boolean       @default(true)
+  /// Values for CustomFieldDefinition(entity: CONTACT) — see Vehicle.customFields.
+  customFields   Json          @default("{}")
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -1405,4 +1418,139 @@ model AiMessage {
   createdAt      DateTime       @default(now())
 
   @@map("ai_messages")
+}
+
+// ---------------------------------------------------------------------------
+// OEM Integration Hub — no-code data connectors (REST pull/push, MQTT) with a
+// drag-and-drop field mapper and dealer-defined custom fields. Lets a business
+// systems manager wire up a manufacturer/DMS feed without writing code.
+// ---------------------------------------------------------------------------
+
+enum IntegrationType {
+  REST_PULL
+  REST_PUSH
+  MQTT
+}
+
+enum IntegrationStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+/// The AMX entity a connector's inbound records get written into. Deliberately a short,
+/// explicit allowlist rather than "any table" — see IntegrationsService's per-entity field
+/// allowlist, which this enum also indexes.
+enum IntegrationTargetEntity {
+  VEHICLE
+  USED_VEHICLE
+  PART
+  CONTACT
+}
+
+enum CustomFieldDataType {
+  STRING
+  NUMBER
+  BOOLEAN
+  DATE
+}
+
+enum IntegrationRunStatus {
+  SUCCESS
+  ERROR
+}
+
+model IntegrationConnector {
+  id           String                   @id @default(uuid())
+  dealerId     String
+  dealer       Dealer                   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  name         String
+  type         IntegrationType
+  targetEntity IntegrationTargetEntity
+  status       IntegrationStatus        @default(DRAFT)
+  /// Type-specific connection config — REST_PULL: {url, method, headers, pollIntervalMinutes,
+  /// resultsPath}; REST_PUSH: {resultsPath}; MQTT: {brokerUrl, topic, username, password}.
+  config       Json                     @default("{}")
+  /// Unguessable, revocable inbound-webhook token for REST_PUSH connectors — the same
+  /// "dedicated token, never a plain id" pattern used for the workshop TV board.
+  webhookToken String                   @unique @default(uuid())
+  /// Target column (or custom field key) used to decide create-vs-update per inbound record,
+  /// e.g. "vin" for VEHICLE. Records without a resolvable match value are always created.
+  matchField   String?
+  lastRunAt    DateTime?
+  lastError    String?
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  mappings IntegrationFieldMapping[]
+  runLogs  IntegrationRunLog[]
+
+  @@map("integration_connectors")
+}
+
+model IntegrationFieldMapping {
+  id            String               @id @default(uuid())
+  connectorId   String
+  connector     IntegrationConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  /// Dot-path into the inbound payload, e.g. "vehicle.vin" or "items[0].sku".
+  sourcePath    String
+  /// An allowlisted AMX column name for the connector's targetEntity, or a CustomFieldDefinition
+  /// key when isCustomField is true.
+  targetField   String
+  isCustomField Boolean              @default(false)
+  /// Optional value transform applied before writing: UPPERCASE | LOWERCASE | TRIM |
+  /// PARSE_NUMBER | PARSE_DATE. Null/unrecognised = copied as-is.
+  transform     String?
+  sortOrder     Int                  @default(0)
+
+  @@map("integration_field_mappings")
+}
+
+model CustomFieldDefinition {
+  id        String                   @id @default(uuid())
+  dealerId  String
+  dealer    Dealer                   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  entity    IntegrationTargetEntity
+  /// Machine key stored inside the target row's customFields JSON, e.g. "oemDealerNetCode".
+  key       String
+  label     String
+  dataType  CustomFieldDataType      @default(STRING)
+  createdAt DateTime                 @default(now())
+
+  @@unique([dealerId, entity, key])
+  @@map("custom_field_definitions")
+}
+
+model IntegrationRunLog {
+  id               String                @id @default(uuid())
+  connectorId      String
+  connector        IntegrationConnector  @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  status           IntegrationRunStatus
+  recordsIn        Int                   @default(0)
+  recordsMapped    Int                   @default(0)
+  errorMessage     String?
+  rawPayloadSample Json?
+  createdAt        DateTime              @default(now())
+
+  @@map("integration_run_logs")
+}
+
+/**
+ * One editable "screen" per dealer+entity, built by a business systems manager in the Screen
+ * Designer, so custom fields brought in by an integration are actually visible somewhere in the
+ * app — not just in raw JSON. `fields` is an ordered array of
+ * `{ field: string; label: string; isCustomField: boolean }`, validated the same way a field
+ * mapping's targetField is (see IntegrationsService.saveScreen).
+ */
+model UiScreenDefinition {
+  id        String                   @id @default(uuid())
+  dealerId  String
+  dealer    Dealer                   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  entity    IntegrationTargetEntity
+  fields    Json                     @default("[]")
+  updatedAt DateTime                 @updatedAt
+
+  @@unique([dealerId, entity])
+  @@map("ui_screen_definitions")
 }

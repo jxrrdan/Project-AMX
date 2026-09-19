@@ -105,6 +105,22 @@ export const appRoutes: Route[] = [
         path: 'admin/users',
         loadComponent: () => import('./features/admin/users-list.component').then((m) => m.UsersListComponent),
       },
+      {
+        path: 'integrations',
+        loadComponent: () =>
+          import('./features/integrations/integrations-list.component').then((m) => m.IntegrationsListComponent),
+      },
+      {
+        // Literal segment — must come before the ':id' wildcard route below.
+        path: 'integrations/screens',
+        loadComponent: () =>
+          import('./features/integrations/screen-designer.component').then((m) => m.ScreenDesignerComponent),
+      },
+      {
+        path: 'integrations/:id',
+        loadComponent: () =>
+          import('./features/integrations/connector-detail.component').then((m) => m.ConnectorDetailComponent),
+      },
     ],
   },
   { path: '**', redirectTo: 'dashboard' },

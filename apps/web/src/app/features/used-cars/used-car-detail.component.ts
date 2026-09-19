@@ -11,7 +11,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { UsedVehicleStatus } from '@project-amx/shared';
+import { IntegrationTargetEntity, UsedVehicleStatus } from '@project-amx/shared';
+import { CustomFieldsPanelComponent } from '../integrations/custom-fields-panel.component';
 import { environment } from '../../../environments/environment';
 
 interface AccessoryLine {
@@ -54,6 +55,7 @@ interface UsedVehicleDetail {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    CustomFieldsPanelComponent,
   ],
   template: `
     @if (vehicle(); as v) {
@@ -189,6 +191,8 @@ interface UsedVehicleDetail {
           </mat-card>
         </div>
       </div>
+
+      <app-custom-fields-panel [entity]="usedVehicleEntity" [recordId]="v.id" />
     }
   `,
   styles: [
@@ -243,6 +247,7 @@ interface UsedVehicleDetail {
 export class UsedCarDetailComponent implements OnInit {
   readonly vehicle = signal<UsedVehicleDetail | null>(null);
   readonly statuses = Object.values(UsedVehicleStatus);
+  readonly usedVehicleEntity = IntegrationTargetEntity.USED_VEHICLE;
   readonly accessoryLines = signal<AccessoryLine[]>([{ description: '', price: null }]);
 
   statusValue: UsedVehicleStatus = UsedVehicleStatus.IN_STOCK;

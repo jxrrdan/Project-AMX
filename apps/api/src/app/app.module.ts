@@ -24,6 +24,7 @@ import { FiModule } from '../modules/fi/fi.module';
 import { AccountingModule } from '../modules/accounting/accounting.module';
 import { DashboardModule } from '../modules/dashboard/dashboard.module';
 import { AiInsightsModule } from '../modules/ai-insights/ai-insights.module';
+import { IntegrationsModule } from '../modules/integrations/integrations.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { AiInsightsModule } from '../modules/ai-insights/ai-insights.module';
     AccountingModule,
     DashboardModule,
     AiInsightsModule,
+    IntegrationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

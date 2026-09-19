@@ -11,7 +11,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { CrmActivityType } from '@project-amx/shared';
+import { CrmActivityType, IntegrationTargetEntity } from '@project-amx/shared';
+import { CustomFieldsPanelComponent } from '../integrations/custom-fields-panel.component';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/auth.service';
 
@@ -46,6 +47,7 @@ interface EmailTemplate {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    CustomFieldsPanelComponent,
   ],
   template: `
     @if (contact(); as c) {
@@ -160,6 +162,8 @@ interface EmailTemplate {
           </mat-card>
         </div>
       </div>
+
+      <app-custom-fields-panel [entity]="contactEntity" [recordId]="c.id" />
     }
   `,
   styles: [
@@ -222,6 +226,7 @@ interface EmailTemplate {
 export class ContactDetailComponent implements OnInit {
   readonly contact = signal<ContactDetail | null>(null);
   readonly templates = signal<EmailTemplate[]>([]);
+  readonly contactEntity = IntegrationTargetEntity.CONTACT;
 
   selectedTemplateId = '';
   smsBody = '';

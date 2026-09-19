@@ -31,6 +31,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: 'fi', label: 'Finance & Insurance', icon: 'account_balance', module: ModuleKey.FI },
   { path: 'ai', label: 'AI Assistant', icon: 'auto_awesome', module: ModuleKey.AI_INSIGHTS },
   { path: 'admin/users', label: 'Users & Roles', icon: 'admin_panel_settings', module: ModuleKey.ADMIN },
+  { path: 'integrations', label: 'OEM Integration Hub', icon: 'hub', module: ModuleKey.OEM_INTEGRATIONS },
 ];
 
 @Component({

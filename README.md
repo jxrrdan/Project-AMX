@@ -153,6 +153,30 @@ locally and in production:
 Every one of these is a small, isolated class — swapping the local branch for a real AWS call is
 a contained change, not a rewrite.
 
+## OEM Integration Hub (beyond the original spec)
+
+A no-code data-connector layer, added on top of the 16 spec modules so a business systems manager
+can wire up a manufacturer/DMS feed without writing code — `/integrations`:
+
+- **Connectors** — REST pull (poll a URL on a schedule), REST push (an inbound webhook gated on an
+  unguessable token), or MQTT streaming, each targeting one AMX entity (new car stock, used car
+  stock, parts, or CRM contacts).
+- **Authentication & headers** — Basic, Bearer, or API-key auth plus arbitrary custom headers per
+  connector; a shared-secret header for inbound webhooks. Saved credentials are never round-tripped
+  back to the browser (redact-on-read, merge-preserve-on-write, in `rest-auth.util.ts`).
+- **Drag-and-drop field mapping** — paste a sample payload, discover its fields, then drag each one
+  onto an AMX column or a dealer-defined **custom field** (stored per-record in a `customFields`
+  JSON column), with optional transforms (uppercase/lowercase/trim/parse number/parse date) and a
+  "match on" column to decide create-vs-update.
+- **Screen Designer** (`/integrations/screens`) — lets a business systems manager choose which
+  fields (standard or custom) appear on a record's detail page and in what order, per entity. A
+  reusable `CustomFieldsPanelComponent` renders that layout and is embedded on the Used Cars, Parts,
+  and Contact detail pages.
+- **Run history and a "send test data" action** exercise the same mapping engine as a live
+  webhook/poll/MQTT message would, without needing a real external system to talk to — no aedes/MQTT
+  broker is embedded locally (it's ESM-only and would hit the same Jest/CJS problem noted above);
+  "send test data" covers the same code path.
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks
