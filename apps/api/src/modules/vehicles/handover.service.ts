@@ -22,6 +22,10 @@ export class HandoverService {
 
   async create(dealerId: string, dto: CreateHandoverDto) {
     if (dto.type === HandoverType.NEW_CAR && dto.vehicleId) {
+      const vehicle = await this.prisma.vehicle.findFirst({ where: { id: dto.vehicleId, dealerId } });
+      if (!vehicle) {
+        throw new NotFoundException('Vehicle not found');
+      }
       await this.prisma.vehicle.update({
         where: { id: dto.vehicleId },
         data: { status: VehiclePipelineStatus.READY_FOR_HANDOVER },

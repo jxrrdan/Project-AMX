@@ -32,20 +32,42 @@ export class WarrantyService {
     return this.prisma.warrantyClaim.create({ data: { dealerId, ...dto } });
   }
 
-  addOperationLine(warrantyClaimId: string, dto: CreateOperationLineDto) {
+  async addOperationLine(dealerId: string, warrantyClaimId: string, dto: CreateOperationLineDto) {
+    const claim = await this.prisma.warrantyClaim.findFirst({ where: { id: warrantyClaimId, dealerId } });
+    if (!claim) {
+      throw new NotFoundException('Warranty claim not found');
+    }
     return this.prisma.warrantyOperationLine.create({ data: { warrantyClaimId, ...dto } });
   }
 
-  updateOperationLine(lineId: string, dto: UpdateOperationLineDto) {
+  async updateOperationLine(dealerId: string, lineId: string, dto: UpdateOperationLineDto) {
+    const line = await this.prisma.warrantyOperationLine.findFirst({
+      where: { id: lineId, warrantyClaim: { dealerId } },
+    });
+    if (!line) {
+      throw new NotFoundException('Operation line not found');
+    }
     return this.prisma.warrantyOperationLine.update({ where: { id: lineId }, data: dto });
   }
 
   /** Technician clocks on/off per line independently; multiple cycles supported (§5.2). */
-  async clockOn(lineId: string, technicianId: string) {
+  async clockOn(dealerId: string, lineId: string, technicianId: string) {
+    const line = await this.prisma.warrantyOperationLine.findFirst({
+      where: { id: lineId, warrantyClaim: { dealerId } },
+    });
+    if (!line) {
+      throw new NotFoundException('Operation line not found');
+    }
     return this.prisma.warrantyClockEntry.create({ data: { lineId, technicianId, clockOn: new Date() } });
   }
 
-  async clockOff(lineId: string, technicianId: string) {
+  async clockOff(dealerId: string, lineId: string, technicianId: string) {
+    const line = await this.prisma.warrantyOperationLine.findFirst({
+      where: { id: lineId, warrantyClaim: { dealerId } },
+    });
+    if (!line) {
+      throw new NotFoundException('Operation line not found');
+    }
     const open = await this.prisma.warrantyClockEntry.findFirst({
       where: { lineId, technicianId, clockOff: null },
       orderBy: { clockOn: 'desc' },
@@ -57,7 +79,13 @@ export class WarrantyService {
   }
 
   /** Supervisor reviews and approves each line before the claim can be submitted (§5.2). */
-  async approveLine(lineId: string, approvedBy: string) {
+  async approveLine(dealerId: string, lineId: string, approvedBy: string) {
+    const line = await this.prisma.warrantyOperationLine.findFirst({
+      where: { id: lineId, warrantyClaim: { dealerId } },
+    });
+    if (!line) {
+      throw new NotFoundException('Operation line not found');
+    }
     return this.prisma.warrantyOperationLine.update({
       where: { id: lineId },
       data: { approvedAt: new Date(), approvedBy },

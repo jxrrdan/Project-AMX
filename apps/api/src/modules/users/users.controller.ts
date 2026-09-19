@@ -32,7 +32,7 @@ export class UsersController {
   @Patch(':id')
   @RequirePermissions({ module: ModuleKey.ADMIN, action: PermissionAction.EDIT })
   update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateUserDto) {
-    return this.usersService.update(user.dealerId, id, dto, user.id);
+    return this.usersService.update(user.dealerId, id, dto, user.id, user.permissions);
   }
 
   @Post(':id/force-logout')

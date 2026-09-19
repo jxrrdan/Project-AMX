@@ -30,13 +30,17 @@ export class ListingsController {
 
   @Get('vehicles/:usedVehicleId')
   @RequirePermissions({ module: ModuleKey.LISTINGS, action: PermissionAction.VIEW })
-  listForVehicle(@Param('usedVehicleId') usedVehicleId: string) {
-    return this.listingsService.listForVehicle(usedVehicleId);
+  listForVehicle(@CurrentUser() user: AuthUser, @Param('usedVehicleId') usedVehicleId: string) {
+    return this.listingsService.listForVehicle(user.dealerId, usedVehicleId);
   }
 
   @Post('vehicles/:usedVehicleId/platforms/:platformId/resync')
   @RequirePermissions({ module: ModuleKey.LISTINGS, action: PermissionAction.EDIT })
-  resync(@Param('usedVehicleId') usedVehicleId: string, @Param('platformId') platformId: string) {
-    return this.listingsService.resync(usedVehicleId, platformId);
+  resync(
+    @CurrentUser() user: AuthUser,
+    @Param('usedVehicleId') usedVehicleId: string,
+    @Param('platformId') platformId: string,
+  ) {
+    return this.listingsService.resync(user.dealerId, usedVehicleId, platformId);
   }
 }

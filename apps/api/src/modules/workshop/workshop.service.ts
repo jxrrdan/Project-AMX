@@ -26,6 +26,20 @@ export class WorkshopService {
 
   // --- Job cards (diary) --------------------------------------------------
 
+  /**
+   * The workshop TV board (§2.3) is gated on a dedicated unguessable token, not the dealer's own
+   * id — the dealerId is not a secret in this app (it appears in the URL of the public enquiry
+   * form, service-booking widget, and chatbot widget), so it must never double as an access
+   * control value on its own.
+   */
+  async getPublicBoard(boardToken: string) {
+    const dealer = await this.prisma.dealer.findUnique({ where: { workshopBoardToken: boardToken } });
+    if (!dealer) {
+      throw new NotFoundException('Board not found');
+    }
+    return this.listJobCards(dealer.id);
+  }
+
   async listJobCards(dealerId: string, from?: string, to?: string, bayId?: string, technicianId?: string) {
     return this.prisma.jobCard.findMany({
       where: {

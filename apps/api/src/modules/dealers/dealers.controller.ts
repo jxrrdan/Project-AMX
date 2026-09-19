@@ -26,4 +26,11 @@ export class DealersController {
   setModuleLicense(@CurrentUser() user: AuthUser, @Body() dto: SetModuleLicenseDto) {
     return this.dealersService.setModuleLicense(user.dealerId, dto);
   }
+
+  /** Revokes the current workshop TV board link (e.g. if it was shared inappropriately) and issues a new one. */
+  @Post('workshop-board-token/regenerate')
+  @RequirePermissions({ module: ModuleKey.ADMIN, action: PermissionAction.EDIT })
+  regenerateBoardToken(@CurrentUser() user: AuthUser) {
+    return this.dealersService.regenerateBoardToken(user.dealerId);
+  }
 }

@@ -63,8 +63,25 @@ describe('PartsService.allocateToJob', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
+  it('refuses to allocate to a job card belonging to another dealer', async () => {
+    const createAllocation = jest.fn();
+    const prisma = {
+      part: { findFirst: jest.fn().mockResolvedValue(makePart({ quantityOnHand: 10 })) },
+      jobCard: { findFirst: jest.fn().mockResolvedValue(null) },
+      partAllocation: { create: createAllocation },
+    };
+    const service = new PartsService(prisma as never);
+    await expect(
+      service.allocateToJob('dealer-1', { partId: 'part-1', quantity: 3, jobCardId: 'other-dealer-job' } as never),
+    ).rejects.toThrow(NotFoundException);
+    expect(createAllocation).not.toHaveBeenCalled();
+  });
+
   it('rejects allocating more than is on hand', async () => {
-    const prisma = { part: { findFirst: jest.fn().mockResolvedValue(makePart({ quantityOnHand: 2 })) } };
+    const prisma = {
+      part: { findFirst: jest.fn().mockResolvedValue(makePart({ quantityOnHand: 2 })) },
+      jobCard: { findFirst: jest.fn().mockResolvedValue({ id: 'job-1' }) },
+    };
     const service = new PartsService(prisma as never);
     await expect(
       service.allocateToJob('dealer-1', { partId: 'part-1', quantity: 5, jobCardId: 'job-1' } as never),
@@ -77,6 +94,7 @@ describe('PartsService.allocateToJob', () => {
     const createMovement = jest.fn();
     const prisma = {
       part: { findFirst: jest.fn().mockResolvedValue(makePart({ quantityOnHand: 10 })), update: updatePart },
+      jobCard: { findFirst: jest.fn().mockResolvedValue({ id: 'job-1' }) },
       partAllocation: { create: createAllocation },
       stockMovement: { create: createMovement },
       $transaction: jest.fn((ops) => Promise.all(ops)),

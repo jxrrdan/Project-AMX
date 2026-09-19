@@ -23,11 +23,21 @@ export class AccountingService {
   }
 
   /** Chart of accounts mapping — AMS transaction types to the dealer's nominal codes (§11.3). */
-  updateMapping(integrationId: string, accountMappings: Record<string, string>) {
+  async updateMapping(dealerId: string, integrationId: string, accountMappings: Record<string, string>) {
+    const integration = await this.prisma.accountingIntegration.findFirst({ where: { id: integrationId, dealerId } });
+    if (!integration) {
+      throw new NotFoundException('Integration not found');
+    }
     return this.prisma.accountingIntegration.update({ where: { id: integrationId }, data: { accountMappings } });
   }
 
-  createTransaction(dto: CreateTransactionDto) {
+  async createTransaction(dealerId: string, dto: CreateTransactionDto) {
+    const integration = await this.prisma.accountingIntegration.findFirst({
+      where: { id: dto.integrationId, dealerId },
+    });
+    if (!integration) {
+      throw new NotFoundException('Integration not found');
+    }
     return this.prisma.accountingTransaction.create({ data: dto });
   }
 
@@ -40,8 +50,8 @@ export class AccountingService {
   }
 
   /** Auto-sync on invoice creation, or batch export on demand (§11.4). */
-  async sync(id: string) {
-    const txn = await this.prisma.accountingTransaction.findUnique({ where: { id } });
+  async sync(dealerId: string, id: string) {
+    const txn = await this.prisma.accountingTransaction.findFirst({ where: { id, integration: { dealerId } } });
     if (!txn) {
       throw new NotFoundException('Transaction not found');
     }

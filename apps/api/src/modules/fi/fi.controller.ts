@@ -24,14 +24,14 @@ export class FiController {
 
   @Post('deal-products')
   @RequirePermissions({ module: ModuleKey.FI, action: PermissionAction.CREATE })
-  addToDeal(@Body() dto: AddDealProductDto) {
-    return this.fiService.addToDeal(dto);
+  addToDeal(@CurrentUser() user: AuthUser, @Body() dto: AddDealProductDto) {
+    return this.fiService.addToDeal(user.dealerId, dto);
   }
 
   @Post('deal-products/:id/disclosure')
   @RequirePermissions({ module: ModuleKey.FI, action: PermissionAction.CREATE })
-  recordDisclosure(@Param('id') id: string, @Body() dto: RecordDisclosureDto) {
-    return this.fiService.recordDisclosure(id, dto);
+  recordDisclosure(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: RecordDisclosureDto) {
+    return this.fiService.recordDisclosure(user.dealerId, id, dto);
   }
 
   @Get('reports/commission')

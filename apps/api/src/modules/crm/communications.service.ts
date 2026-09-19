@@ -23,28 +23,31 @@ export class CommunicationsService {
   }
 
   /** Preview before send — shows resolved variables (§8.6). */
-  async previewTemplate(templateId: string, contactId: string) {
+  async previewTemplate(dealerId: string, templateId: string, contactId: string) {
     const [template, contact] = await Promise.all([
-      this.prisma.emailTemplate.findUnique({ where: { id: templateId } }),
-      this.prisma.contact.findUnique({ where: { id: contactId } }),
+      this.prisma.emailTemplate.findFirst({ where: { id: templateId, dealerId } }),
+      this.prisma.contact.findFirst({ where: { id: contactId, dealerId } }),
     ]);
     if (!template || !contact) {
       throw new NotFoundException('Template or contact not found');
     }
-    return { subject: this.render(template.subject, contact), bodyHtml: this.render(template.bodyHtml, contact) };
+    return {
+      subject: this.renderTrustedTemplate(template.subject, contact),
+      bodyHtml: this.renderTrustedTemplate(template.bodyHtml, contact),
+    };
   }
 
-  async sendEmail(dto: SendEmailDto) {
+  async sendEmail(dealerId: string, dto: SendEmailDto) {
     const [template, contact] = await Promise.all([
-      this.prisma.emailTemplate.findUnique({ where: { id: dto.templateId } }),
-      this.prisma.contact.findUnique({ where: { id: dto.contactId } }),
+      this.prisma.emailTemplate.findFirst({ where: { id: dto.templateId, dealerId } }),
+      this.prisma.contact.findFirst({ where: { id: dto.contactId, dealerId } }),
     ]);
     if (!template || !contact || !contact.email) {
       throw new NotFoundException('Template, contact, or contact email not found');
     }
 
-    const subject = this.render(template.subject, contact);
-    const bodyHtml = this.render(template.bodyHtml, contact);
+    const subject = this.renderTrustedTemplate(template.subject, contact);
+    const bodyHtml = this.renderTrustedTemplate(template.bodyHtml, contact);
     await this.email.send({ to: contact.email, subject, html: bodyHtml });
 
     return this.prisma.emailMessage.create({
@@ -52,17 +55,34 @@ export class CommunicationsService {
     });
   }
 
-  async sendSms(dto: SendSmsDto) {
-    const contact = await this.prisma.contact.findUnique({ where: { id: dto.contactId } });
+  async sendSms(dealerId: string, dto: SendSmsDto) {
+    const contact = await this.prisma.contact.findFirst({ where: { id: dto.contactId, dealerId } });
     if (!contact || !contact.phone) {
       throw new NotFoundException('Contact or phone number not found');
     }
-    const body = this.render(dto.body, contact);
+    const body = this.substitutePlaceholders(dto.body, contact);
     await this.sms.send(contact.phone, body);
     return this.prisma.smsMessage.create({ data: { contactId: contact.id, body, status: 'SENT', sentAt: new Date() } });
   }
 
-  private render(source: string, contact: { firstName: string; lastName: string }): string {
+  /**
+   * Only compiles dealer-authored, stored template content (created via createTemplate, a
+   * separate CRM:CREATE-gated step) — never raw end-user input. Handlebars.compile() has no
+   * sandboxing against constructor/prototype-walking payloads, so it must never see a string an
+   * ordinary user typed into a form on this request.
+   */
+  private renderTrustedTemplate(source: string, contact: { firstName: string; lastName: string }): string {
     return Handlebars.compile(source)({ first_name: contact.firstName, last_name: contact.lastName });
+  }
+
+  /**
+   * A free-form SMS body is typed fresh on every send (no prior "author a template" gate), so it
+   * is never safe to compile as a Handlebars template — that would let a plain CRM:CREATE user
+   * attempt server-side template injection. Only a small, fixed set of placeholders is resolved.
+   */
+  private substitutePlaceholders(source: string, contact: { firstName: string; lastName: string }): string {
+    return source
+      .replace(/\{\{\s*first_name\s*\}\}/g, contact.firstName)
+      .replace(/\{\{\s*last_name\s*\}\}/g, contact.lastName);
   }
 }

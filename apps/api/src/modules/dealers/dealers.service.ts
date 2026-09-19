@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ModuleKey } from '@project-amx/shared';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SetModuleLicenseDto, UpdateDealerDto } from './dto/dealer.dto';
 
@@ -30,5 +31,13 @@ export class DealersService {
   async enabledModules(dealerId: string): Promise<ModuleKey[]> {
     const licenses = await this.prisma.moduleLicense.findMany({ where: { dealerId, enabled: true } });
     return licenses.map((l) => l.module as ModuleKey);
+  }
+
+  /** Revokes the current workshop TV board link and issues a new one (§2.3). */
+  regenerateBoardToken(dealerId: string) {
+    return this.prisma.dealer.update({
+      where: { id: dealerId },
+      data: { workshopBoardToken: randomUUID() },
+    });
   }
 }

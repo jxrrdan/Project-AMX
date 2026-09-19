@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ModuleKey, PermissionAction } from '@project-amx/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateRoleDto, UpdateRoleDto } from './dto/role.dto';
 
@@ -15,11 +16,31 @@ export class RolesService {
     });
   }
 
-  async create(dealerId: string, dto: CreateRoleDto) {
+  /** "Cannot grant what you don't have" — see UsersService.update for the full rationale. */
+  private assertGrantable(
+    permissions: { module: ModuleKey; action: PermissionAction }[],
+    actingUserPermissions: { module: ModuleKey; action: PermissionAction }[],
+  ) {
+    const heldByActor = new Set(actingUserPermissions.map((p) => `${p.module}:${p.action}`));
+    for (const permission of permissions) {
+      if (!heldByActor.has(`${permission.module}:${permission.action}`)) {
+        throw new ForbiddenException(
+          `Cannot grant ${permission.module}:${permission.action} to a role — you do not hold this permission yourself`,
+        );
+      }
+    }
+  }
+
+  async create(
+    dealerId: string,
+    dto: CreateRoleDto,
+    actingUserPermissions: { module: ModuleKey; action: PermissionAction }[] = [],
+  ) {
     const existing = await this.prisma.role.findUnique({ where: { dealerId_name: { dealerId, name: dto.name } } });
     if (existing) {
       throw new BadRequestException('A role with this name already exists');
     }
+    this.assertGrantable(dto.permissions, actingUserPermissions);
 
     return this.prisma.role.create({
       data: {
@@ -32,11 +53,17 @@ export class RolesService {
     });
   }
 
-  async update(dealerId: string, roleId: string, dto: UpdateRoleDto) {
+  async update(
+    dealerId: string,
+    roleId: string,
+    dto: UpdateRoleDto,
+    actingUserPermissions: { module: ModuleKey; action: PermissionAction }[] = [],
+  ) {
     const role = await this.prisma.role.findFirst({ where: { id: roleId, dealerId } });
     if (!role) {
       throw new NotFoundException('Role not found');
     }
+    this.assertGrantable(dto.permissions, actingUserPermissions);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.rolePermission.deleteMany({ where: { roleId } });

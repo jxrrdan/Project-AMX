@@ -38,8 +38,8 @@ export class VhcController {
 
   @Post('inspections/:id/items')
   @RequirePermissions({ module: ModuleKey.VHC, action: PermissionAction.CREATE })
-  addItem(@Param('id') id: string, @Body() dto: AddVhcItemDto) {
-    return this.vhcService.addItem(id, dto);
+  addItem(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: AddVhcItemDto) {
+    return this.vhcService.addItem(user.dealerId, id, dto);
   }
 
   @Post('inspections/:id/send')

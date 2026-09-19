@@ -43,10 +43,22 @@ export class WorkflowsService {
     });
   }
 
-  async enroll(workflowId: string, dto: EnrollDto) {
-    const workflow = await this.prisma.workflow.findUnique({ where: { id: workflowId }, include: { steps: true } });
+  async enroll(dealerId: string, workflowId: string, dto: EnrollDto) {
+    const workflow = await this.prisma.workflow.findFirst({ where: { id: workflowId, dealerId }, include: { steps: true } });
     if (!workflow) {
       throw new NotFoundException('Workflow not found');
+    }
+    if (dto.contactId) {
+      const contact = await this.prisma.contact.findFirst({ where: { id: dto.contactId, dealerId } });
+      if (!contact) {
+        throw new NotFoundException('Contact not found');
+      }
+    }
+    if (dto.leadId) {
+      const lead = await this.prisma.lead.findFirst({ where: { id: dto.leadId, dealerId } });
+      if (!lead) {
+        throw new NotFoundException('Lead not found');
+      }
     }
     const firstStep = workflow.steps.sort((a, b) => a.sortOrder - b.sortOrder)[0];
 

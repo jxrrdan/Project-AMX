@@ -41,32 +41,32 @@ export class WarrantyController {
 
   @Post(':id/operation-lines')
   @RequirePermissions({ module: ModuleKey.WARRANTY, action: PermissionAction.CREATE })
-  addLine(@Param('id') id: string, @Body() dto: CreateOperationLineDto) {
-    return this.warrantyService.addOperationLine(id, dto);
+  addLine(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CreateOperationLineDto) {
+    return this.warrantyService.addOperationLine(user.dealerId, id, dto);
   }
 
   @Patch('operation-lines/:lineId')
   @RequirePermissions({ module: ModuleKey.WARRANTY, action: PermissionAction.EDIT })
-  updateLine(@Param('lineId') lineId: string, @Body() dto: UpdateOperationLineDto) {
-    return this.warrantyService.updateOperationLine(lineId, dto);
+  updateLine(@CurrentUser() user: AuthUser, @Param('lineId') lineId: string, @Body() dto: UpdateOperationLineDto) {
+    return this.warrantyService.updateOperationLine(user.dealerId, lineId, dto);
   }
 
   @Post('operation-lines/:lineId/clock-on')
   @RequirePermissions({ module: ModuleKey.WARRANTY, action: PermissionAction.EDIT })
   clockOn(@CurrentUser() user: AuthUser, @Param('lineId') lineId: string) {
-    return this.warrantyService.clockOn(lineId, user.id);
+    return this.warrantyService.clockOn(user.dealerId, lineId, user.id);
   }
 
   @Post('operation-lines/:lineId/clock-off')
   @RequirePermissions({ module: ModuleKey.WARRANTY, action: PermissionAction.EDIT })
   clockOff(@CurrentUser() user: AuthUser, @Param('lineId') lineId: string) {
-    return this.warrantyService.clockOff(lineId, user.id);
+    return this.warrantyService.clockOff(user.dealerId, lineId, user.id);
   }
 
   @Post('operation-lines/:lineId/approve')
   @RequirePermissions({ module: ModuleKey.WARRANTY, action: PermissionAction.APPROVE })
   approveLine(@CurrentUser() user: AuthUser, @Param('lineId') lineId: string) {
-    return this.warrantyService.approveLine(lineId, `${user.firstName} ${user.lastName}`);
+    return this.warrantyService.approveLine(user.dealerId, lineId, `${user.firstName} ${user.lastName}`);
   }
 
   @Patch(':id/status')

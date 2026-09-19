@@ -19,13 +19,13 @@ export class RolesController {
   @Post()
   @RequirePermissions({ module: ModuleKey.ADMIN, action: PermissionAction.CREATE })
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateRoleDto) {
-    return this.rolesService.create(user.dealerId, dto);
+    return this.rolesService.create(user.dealerId, dto, user.permissions);
   }
 
   @Patch(':id')
   @RequirePermissions({ module: ModuleKey.ADMIN, action: PermissionAction.EDIT })
   update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateRoleDto) {
-    return this.rolesService.update(user.dealerId, id, dto);
+    return this.rolesService.update(user.dealerId, id, dto, user.permissions);
   }
 
   @Delete(':id')

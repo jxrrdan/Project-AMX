@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ModuleKey } from '@project-amx/shared';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ModuleKey, PermissionAction } from '@project-amx/shared';
 import * as bcrypt from 'bcrypt';
 import { addHours } from 'date-fns';
 import { randomUUID } from 'node:crypto';
@@ -79,13 +79,56 @@ export class UsersService {
     return user;
   }
 
-  async update(dealerId: string, userId: string, dto: UpdateUserDto, actingUserId?: string) {
+  /**
+   * "Cannot grant what you don't have": every permission this call would hand out (via a role
+   * assignment or a module-override grant) must already be held by the acting user, otherwise a
+   * user handed a narrow admin permission (e.g. just toggling active status) could grant
+   * themselves — or anyone else in the dealer — full access by writing an override for every
+   * module/action.
+   */
+  async update(
+    dealerId: string,
+    userId: string,
+    dto: UpdateUserDto,
+    actingUserId?: string,
+    actingUserPermissions: { module: ModuleKey; action: PermissionAction }[] = [],
+  ) {
     const user = await this.prisma.user.findFirst({ where: { id: userId, dealerId } });
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
     const { roleIds, moduleOverrides } = dto;
+    const heldByActor = new Set(actingUserPermissions.map((p) => `${p.module}:${p.action}`));
+
+    if (roleIds) {
+      const roles = await this.prisma.role.findMany({
+        where: { id: { in: roleIds }, dealerId },
+        include: { permissions: true },
+      });
+      if (roles.length !== roleIds.length) {
+        throw new NotFoundException('One or more roles were not found for this dealer');
+      }
+      for (const role of roles) {
+        for (const permission of role.permissions) {
+          if (!heldByActor.has(`${permission.module}:${permission.action}`)) {
+            throw new ForbiddenException(
+              `Cannot assign the "${role.name}" role — it grants ${permission.module}:${permission.action}, which you do not hold`,
+            );
+          }
+        }
+      }
+    }
+
+    if (moduleOverrides) {
+      for (const override of moduleOverrides) {
+        if (override.allowed && !heldByActor.has(`${override.module}:${override.action}`)) {
+          throw new ForbiddenException(
+            `Cannot grant ${override.module}:${override.action} — you do not hold this permission yourself`,
+          );
+        }
+      }
+    }
 
     await this.prisma.$transaction(async (tx) => {
       if (roleIds) {

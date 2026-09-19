@@ -73,7 +73,11 @@ export class UsedCarsService {
     });
   }
 
-  addPhotos(dealerId: string, id: string, dto: AddPhotosDto) {
+  async addPhotos(dealerId: string, id: string, dto: AddPhotosDto) {
+    const vehicle = await this.prisma.usedVehicle.findFirst({ where: { id, dealerId } });
+    if (!vehicle) {
+      throw new NotFoundException('Used vehicle not found');
+    }
     return this.prisma.vehiclePhoto.createMany({
       data: dto.urls.map((url, index) => ({ usedVehicleId: id, url, sortOrder: index })),
     });

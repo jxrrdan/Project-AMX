@@ -143,11 +143,29 @@ export class CrmService {
 
   // --- Activity & follow-up (§8.4) ------------------------------------------
 
-  createActivity(dto: CreateActivityDto) {
+  /** Refuses to link an activity/task to a contact or lead belonging to another dealer. */
+  private async verifyOwnership(dealerId: string, contactId?: string, leadId?: string) {
+    if (contactId) {
+      const contact = await this.prisma.contact.findFirst({ where: { id: contactId, dealerId } });
+      if (!contact) {
+        throw new NotFoundException('Contact not found');
+      }
+    }
+    if (leadId) {
+      const lead = await this.prisma.lead.findFirst({ where: { id: leadId, dealerId } });
+      if (!lead) {
+        throw new NotFoundException('Lead not found');
+      }
+    }
+  }
+
+  async createActivity(dealerId: string, dto: CreateActivityDto) {
+    await this.verifyOwnership(dealerId, dto.contactId, dto.leadId);
     return this.prisma.crmActivity.create({ data: dto });
   }
 
-  createTask(dto: CreateTaskDto) {
+  async createTask(dealerId: string, dto: CreateTaskDto) {
+    await this.verifyOwnership(dealerId, dto.contactId, dto.leadId);
     return this.prisma.crmTask.create({ data: { ...dto, dueDate: new Date(dto.dueDate) } });
   }
 
@@ -162,7 +180,13 @@ export class CrmService {
     });
   }
 
-  completeTask(id: string) {
+  async completeTask(dealerId: string, id: string) {
+    const task = await this.prisma.crmTask.findFirst({
+      where: { id, OR: [{ contact: { dealerId } }, { lead: { dealerId } }] },
+    });
+    if (!task) {
+      throw new NotFoundException('Task not found');
+    }
     return this.prisma.crmTask.update({ where: { id }, data: { completedAt: new Date() } });
   }
 

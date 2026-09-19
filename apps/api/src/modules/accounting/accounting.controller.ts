@@ -24,8 +24,12 @@ export class AccountingController {
 
   @Patch('integrations/:id/mapping')
   @RequirePermissions({ module: ModuleKey.ACCOUNTING, action: PermissionAction.EDIT })
-  updateMapping(@Param('id') id: string, @Body('accountMappings') accountMappings: Record<string, string>) {
-    return this.accountingService.updateMapping(id, accountMappings);
+  updateMapping(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body('accountMappings') accountMappings: Record<string, string>,
+  ) {
+    return this.accountingService.updateMapping(user.dealerId, id, accountMappings);
   }
 
   @Get('transactions')
@@ -36,14 +40,14 @@ export class AccountingController {
 
   @Post('transactions')
   @RequirePermissions({ module: ModuleKey.ACCOUNTING, action: PermissionAction.CREATE })
-  createTransaction(@Body() dto: CreateTransactionDto) {
-    return this.accountingService.createTransaction(dto);
+  createTransaction(@CurrentUser() user: AuthUser, @Body() dto: CreateTransactionDto) {
+    return this.accountingService.createTransaction(user.dealerId, dto);
   }
 
   @Post('transactions/:id/sync')
   @RequirePermissions({ module: ModuleKey.ACCOUNTING, action: PermissionAction.EDIT })
-  sync(@Param('id') id: string) {
-    return this.accountingService.sync(id);
+  sync(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.accountingService.sync(user.dealerId, id);
   }
 
   @Get('reports/reconciliation')

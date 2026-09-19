@@ -29,6 +29,9 @@ model Dealer {
   awpWebhookUrl  String?
   logoUrl        String?
   primaryColour  String?  @default("#0066B1")
+  /// Unguessable, revocable access token for the public workshop TV board (§2.3) — deliberately
+  /// NOT the dealer's own id, since that id is published elsewhere (embeddable widget URLs).
+  workshopBoardToken String @unique @default(uuid())
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

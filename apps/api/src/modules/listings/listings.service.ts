@@ -56,14 +56,22 @@ export class ListingsService {
     });
   }
 
-  async resync(usedVehicleId: string, platformId: string) {
+  async resync(dealerId: string, usedVehicleId: string, platformId: string) {
+    const vehicle = await this.prisma.usedVehicle.findFirst({ where: { id: usedVehicleId, dealerId } });
+    if (!vehicle) {
+      throw new NotFoundException('Used vehicle not found');
+    }
     return this.prisma.vehicleListing.update({
       where: { usedVehicleId_platformId: { usedVehicleId, platformId } },
       data: { status: ListingStatus.PUBLISHED, lastSyncedAt: new Date(), errorDetail: null },
     });
   }
 
-  listForVehicle(usedVehicleId: string) {
+  async listForVehicle(dealerId: string, usedVehicleId: string) {
+    const vehicle = await this.prisma.usedVehicle.findFirst({ where: { id: usedVehicleId, dealerId } });
+    if (!vehicle) {
+      throw new NotFoundException('Used vehicle not found');
+    }
     return this.prisma.vehicleListing.findMany({ where: { usedVehicleId }, include: { platform: true } });
   }
 }

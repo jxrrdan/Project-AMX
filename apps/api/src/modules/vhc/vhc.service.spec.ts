@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { VhcRating } from '@project-amx/shared';
 import { VhcService } from './vhc.service';
 
@@ -5,35 +6,52 @@ function makeEmail() {
   return { send: jest.fn().mockResolvedValue(undefined) };
 }
 
+function makePrisma(overrides: Record<string, unknown> = {}) {
+  return {
+    vhcInspection: { findFirst: jest.fn().mockResolvedValue({ id: 'inspection-1', dealerId: 'dealer-1' }) },
+    vhcItem: { create: jest.fn().mockResolvedValue({ id: 'item-1' }) },
+    ...overrides,
+  };
+}
+
 describe('VhcService.addItem', () => {
-  it('rejects an Amber item with no photo', () => {
-    const prisma = { vhcItem: { create: jest.fn() } };
+  it('refuses to add an item to another dealer\'s inspection', async () => {
+    const prisma = makePrisma({ vhcInspection: { findFirst: jest.fn().mockResolvedValue(null) } });
     const service = new VhcService(prisma as never, makeEmail() as never);
-    expect(() =>
-      service.addItem('inspection-1', { rating: VhcRating.AMBER, label: 'Brake pads', photoUrls: [] } as never),
-    ).toThrow('A photo is required for Amber/Red items');
+    await expect(
+      service.addItem('dealer-1', 'other-dealer-inspection', { rating: VhcRating.GREEN, label: 'Wipers' } as never),
+    ).rejects.toThrow(NotFoundException);
     expect(prisma.vhcItem.create).not.toHaveBeenCalled();
   });
 
-  it('rejects a Red item with an undefined photoUrls field', () => {
-    const prisma = { vhcItem: { create: jest.fn() } };
+  it('rejects an Amber item with no photo', async () => {
+    const prisma = makePrisma();
     const service = new VhcService(prisma as never, makeEmail() as never);
-    expect(() => service.addItem('inspection-1', { rating: VhcRating.RED, label: 'Tyres' } as never)).toThrow(
-      'A photo is required for Amber/Red items',
-    );
+    await expect(
+      service.addItem('dealer-1', 'inspection-1', { rating: VhcRating.AMBER, label: 'Brake pads', photoUrls: [] } as never),
+    ).rejects.toThrow('A photo is required for Amber/Red items');
+    expect(prisma.vhcItem.create).not.toHaveBeenCalled();
   });
 
-  it('allows a Green item with no photo', () => {
-    const prisma = { vhcItem: { create: jest.fn().mockResolvedValue({ id: 'item-1' }) } };
+  it('rejects a Red item with an undefined photoUrls field', async () => {
+    const prisma = makePrisma();
     const service = new VhcService(prisma as never, makeEmail() as never);
-    service.addItem('inspection-1', { rating: VhcRating.GREEN, label: 'Wipers' } as never);
+    await expect(
+      service.addItem('dealer-1', 'inspection-1', { rating: VhcRating.RED, label: 'Tyres' } as never),
+    ).rejects.toThrow('A photo is required for Amber/Red items');
+  });
+
+  it('allows a Green item with no photo', async () => {
+    const prisma = makePrisma();
+    const service = new VhcService(prisma as never, makeEmail() as never);
+    await service.addItem('dealer-1', 'inspection-1', { rating: VhcRating.GREEN, label: 'Wipers' } as never);
     expect(prisma.vhcItem.create).toHaveBeenCalled();
   });
 
-  it('allows an Amber item once at least one photo is attached', () => {
-    const prisma = { vhcItem: { create: jest.fn().mockResolvedValue({ id: 'item-1' }) } };
+  it('allows an Amber item once at least one photo is attached', async () => {
+    const prisma = makePrisma();
     const service = new VhcService(prisma as never, makeEmail() as never);
-    service.addItem('inspection-1', {
+    await service.addItem('dealer-1', 'inspection-1', {
       rating: VhcRating.AMBER,
       label: 'Brake pads',
       photoUrls: ['https://example.com/pad.jpg'],

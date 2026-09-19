@@ -75,6 +75,39 @@ describe('UsedCarsService.createDealSheet', () => {
   });
 });
 
+describe('UsedCarsService.addPhotos', () => {
+  it('refuses to add photos to a vehicle belonging to another dealer', async () => {
+    const createMany = jest.fn();
+    const prisma = {
+      usedVehicle: { findFirst: jest.fn().mockResolvedValue(null) },
+      vehiclePhoto: { createMany },
+    };
+    const service = new UsedCarsService(prisma as never, makePdf() as never);
+    await expect(
+      service.addPhotos('dealer-1', 'other-dealer-vehicle', { urls: ['https://x/1.jpg'] } as never),
+    ).rejects.toThrow(NotFoundException);
+    expect(createMany).not.toHaveBeenCalled();
+  });
+
+  it('adds the photos once the vehicle is confirmed to belong to this dealer', async () => {
+    const createMany = jest.fn().mockResolvedValue({ count: 2 });
+    const prisma = {
+      usedVehicle: { findFirst: jest.fn().mockResolvedValue({ id: 'vehicle-1' }) },
+      vehiclePhoto: { createMany },
+    };
+    const service = new UsedCarsService(prisma as never, makePdf() as never);
+    await service.addPhotos('dealer-1', 'vehicle-1', { urls: ['https://x/1.jpg', 'https://x/2.jpg'] } as never);
+    expect(createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [
+          { usedVehicleId: 'vehicle-1', url: 'https://x/1.jpg', sortOrder: 0 },
+          { usedVehicleId: 'vehicle-1', url: 'https://x/2.jpg', sortOrder: 1 },
+        ],
+      }),
+    );
+  });
+});
+
 describe('UsedCarsService.daysInStockAlerts', () => {
   it('only flags vehicles that have crossed the 30/60/90-day thresholds', async () => {
     const daysAgo = (n: number) => new Date(Date.now() - n * 86400000);

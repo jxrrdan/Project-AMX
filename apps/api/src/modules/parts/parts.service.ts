@@ -76,6 +76,10 @@ export class PartsService {
     if (!part) {
       throw new NotFoundException('Part not found');
     }
+    const jobCard = await this.prisma.jobCard.findFirst({ where: { id: dto.jobCardId, dealerId } });
+    if (!jobCard) {
+      throw new NotFoundException('Job card not found');
+    }
     if (part.quantityOnHand < dto.quantity) {
       throw new BadRequestException('Insufficient stock to allocate — part is on order');
     }

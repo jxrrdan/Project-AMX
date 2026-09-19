@@ -39,8 +39,8 @@ export class CourtesyService {
     );
   }
 
-  async createBooking(dto: CreateBookingDto) {
-    const vehicle = await this.prisma.courtesyVehicle.findUnique({ where: { id: dto.courtesyVehicleId } });
+  async createBooking(dealerId: string, dto: CreateBookingDto) {
+    const vehicle = await this.prisma.courtesyVehicle.findFirst({ where: { id: dto.courtesyVehicleId, dealerId } });
     if (!vehicle) {
       throw new NotFoundException('Courtesy vehicle not found');
     }
@@ -52,8 +52,10 @@ export class CourtesyService {
     ]);
   }
 
-  async returnBooking(bookingId: string, dto: ReturnBookingDto) {
-    const booking = await this.prisma.courtesyBooking.findUnique({ where: { id: bookingId } });
+  async returnBooking(dealerId: string, bookingId: string, dto: ReturnBookingDto) {
+    const booking = await this.prisma.courtesyBooking.findFirst({
+      where: { id: bookingId, courtesyVehicle: { dealerId } },
+    });
     if (!booking) {
       throw new NotFoundException('Booking not found');
     }

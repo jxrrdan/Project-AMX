@@ -77,27 +77,85 @@ describe('WarrantyService.updateStatus', () => {
 });
 
 describe('WarrantyService.clockOff', () => {
+  it('throws when the operation line does not belong to this dealer', async () => {
+    const prisma = {
+      warrantyOperationLine: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const service = new WarrantyService(prisma as never);
+    await expect(service.clockOff('dealer-1', 'line-1', 'tech-1')).rejects.toThrow(NotFoundException);
+  });
+
   it('throws when there is no open clocking for that technician on the line', async () => {
     const prisma = {
+      warrantyOperationLine: { findFirst: jest.fn().mockResolvedValue({ id: 'line-1' }) },
       warrantyClockEntry: { findFirst: jest.fn().mockResolvedValue(null) },
     };
     const service = new WarrantyService(prisma as never);
-    await expect(service.clockOff('line-1', 'tech-1')).rejects.toThrow(NotFoundException);
+    await expect(service.clockOff('dealer-1', 'line-1', 'tech-1')).rejects.toThrow(NotFoundException);
   });
 
   it('closes the most recent open clocking entry', async () => {
     const update = jest.fn().mockResolvedValue({ id: 'clock-1', clockOff: new Date() });
     const prisma = {
+      warrantyOperationLine: { findFirst: jest.fn().mockResolvedValue({ id: 'line-1' }) },
       warrantyClockEntry: {
         findFirst: jest.fn().mockResolvedValue({ id: 'clock-1', clockOff: null }),
         update,
       },
     };
     const service = new WarrantyService(prisma as never);
-    await service.clockOff('line-1', 'tech-1');
+    await service.clockOff('dealer-1', 'line-1', 'tech-1');
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'clock-1' }, data: { clockOff: expect.any(Date) } }),
     );
+  });
+});
+
+describe('WarrantyService tenant scoping', () => {
+  const dealerId = 'dealer-1';
+
+  it('addOperationLine refuses to add a line to another dealer\'s claim', async () => {
+    const prisma = {
+      warrantyClaim: { findFirst: jest.fn().mockResolvedValue(null) },
+      warrantyOperationLine: { create: jest.fn() },
+    };
+    const service = new WarrantyService(prisma as never);
+    await expect(service.addOperationLine(dealerId, 'other-dealer-claim', {} as never)).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(prisma.warrantyOperationLine.create).not.toHaveBeenCalled();
+  });
+
+  it('updateOperationLine refuses to update a line whose parent claim belongs to another dealer', async () => {
+    const prisma = {
+      warrantyOperationLine: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() },
+    };
+    const service = new WarrantyService(prisma as never);
+    await expect(service.updateOperationLine(dealerId, 'other-dealer-line', {} as never)).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(prisma.warrantyOperationLine.update).not.toHaveBeenCalled();
+  });
+
+  it('approveLine refuses to approve a line belonging to another dealer', async () => {
+    const prisma = {
+      warrantyOperationLine: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() },
+    };
+    const service = new WarrantyService(prisma as never);
+    await expect(service.approveLine(dealerId, 'other-dealer-line', 'Supervisor Name')).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(prisma.warrantyOperationLine.update).not.toHaveBeenCalled();
+  });
+
+  it('clockOn refuses to clock on a line belonging to another dealer', async () => {
+    const prisma = {
+      warrantyOperationLine: { findFirst: jest.fn().mockResolvedValue(null) },
+      warrantyClockEntry: { create: jest.fn() },
+    };
+    const service = new WarrantyService(prisma as never);
+    await expect(service.clockOn(dealerId, 'other-dealer-line', 'tech-1')).rejects.toThrow(NotFoundException);
+    expect(prisma.warrantyClockEntry.create).not.toHaveBeenCalled();
   });
 });
 

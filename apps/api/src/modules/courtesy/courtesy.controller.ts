@@ -30,14 +30,14 @@ export class CourtesyController {
 
   @Post('bookings')
   @RequirePermissions({ module: ModuleKey.COURTESY_FLEET, action: PermissionAction.CREATE })
-  createBooking(@Body() dto: CreateBookingDto) {
-    return this.courtesyService.createBooking(dto);
+  createBooking(@CurrentUser() user: AuthUser, @Body() dto: CreateBookingDto) {
+    return this.courtesyService.createBooking(user.dealerId, dto);
   }
 
   @Post('bookings/:id/return')
   @RequirePermissions({ module: ModuleKey.COURTESY_FLEET, action: PermissionAction.EDIT })
-  returnBooking(@Param('id') id: string, @Body() dto: ReturnBookingDto) {
-    return this.courtesyService.returnBooking(id, dto);
+  returnBooking(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: ReturnBookingDto) {
+    return this.courtesyService.returnBooking(user.dealerId, id, dto);
   }
 
   @Get('reports/utilisation')

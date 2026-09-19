@@ -22,11 +22,11 @@ describe('CourtesyService.expiryAlerts', () => {
 });
 
 describe('CourtesyService.createBooking', () => {
-  it('throws when the vehicle does not exist', async () => {
-    const prisma = { courtesyVehicle: { findUnique: jest.fn().mockResolvedValue(null) } };
+  it('throws when the vehicle does not exist for this dealer', async () => {
+    const prisma = { courtesyVehicle: { findFirst: jest.fn().mockResolvedValue(null) } };
     const service = new CourtesyService(prisma as never);
     await expect(
-      service.createBooking({
+      service.createBooking('dealer-1', {
         courtesyVehicleId: 'missing',
         customerName: 'A Customer',
         outDate: '2026-01-01',
@@ -35,15 +35,32 @@ describe('CourtesyService.createBooking', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
+  it('refuses to book a vehicle belonging to another dealer', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const prisma = { courtesyVehicle: { findFirst } };
+    const service = new CourtesyService(prisma as never);
+    await expect(
+      service.createBooking('dealer-1', {
+        courtesyVehicleId: 'dealer-2-vehicle',
+        customerName: 'A Customer',
+        outDate: '2026-01-01',
+        expectedReturnDate: '2026-01-05',
+      } as never),
+    ).rejects.toThrow(NotFoundException);
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'dealer-2-vehicle', dealerId: 'dealer-1' } }),
+    );
+  });
+
   it('marks the vehicle ON_LOAN when a booking is created', async () => {
     const updateVehicle = jest.fn();
     const prisma = {
-      courtesyVehicle: { findUnique: jest.fn().mockResolvedValue({ id: 'v1' }), update: updateVehicle },
+      courtesyVehicle: { findFirst: jest.fn().mockResolvedValue({ id: 'v1' }), update: updateVehicle },
       courtesyBooking: { create: jest.fn().mockResolvedValue({ id: 'booking-1' }) },
       $transaction: jest.fn((ops) => Promise.all(ops)),
     };
     const service = new CourtesyService(prisma as never);
-    await service.createBooking({
+    await service.createBooking('dealer-1', {
       courtesyVehicleId: 'v1',
       customerName: 'A Customer',
       outDate: '2026-01-01',
@@ -56,24 +73,38 @@ describe('CourtesyService.createBooking', () => {
 });
 
 describe('CourtesyService.returnBooking', () => {
-  it('throws when the booking does not exist', async () => {
-    const prisma = { courtesyBooking: { findUnique: jest.fn().mockResolvedValue(null) } };
+  it('throws when the booking does not exist for this dealer', async () => {
+    const prisma = { courtesyBooking: { findFirst: jest.fn().mockResolvedValue(null) } };
     const service = new CourtesyService(prisma as never);
-    await expect(service.returnBooking('missing', { returnMileage: 1000 } as never)).rejects.toThrow(NotFoundException);
+    await expect(
+      service.returnBooking('dealer-1', 'missing', { returnMileage: 1000 } as never),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('refuses to return a booking belonging to another dealer', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const prisma = { courtesyBooking: { findFirst } };
+    const service = new CourtesyService(prisma as never);
+    await expect(
+      service.returnBooking('dealer-1', 'dealer-2-booking', { returnMileage: 1000 } as never),
+    ).rejects.toThrow(NotFoundException);
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'dealer-2-booking', courtesyVehicle: { dealerId: 'dealer-1' } } }),
+    );
   });
 
   it('marks the vehicle AVAILABLE when returned with no damage', async () => {
     const updateVehicle = jest.fn();
     const prisma = {
       courtesyBooking: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'booking-1', courtesyVehicleId: 'v1' }),
+        findFirst: jest.fn().mockResolvedValue({ id: 'booking-1', courtesyVehicleId: 'v1' }),
         update: jest.fn(),
       },
       courtesyVehicle: { update: updateVehicle },
       $transaction: jest.fn((ops) => Promise.all(ops)),
     };
     const service = new CourtesyService(prisma as never);
-    await service.returnBooking('booking-1', { returnMileage: 12345 } as never);
+    await service.returnBooking('dealer-1', 'booking-1', { returnMileage: 12345 } as never);
     expect(updateVehicle).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: CourtesyVehicleStatus.AVAILABLE }) }),
     );
@@ -83,14 +114,17 @@ describe('CourtesyService.returnBooking', () => {
     const updateVehicle = jest.fn();
     const prisma = {
       courtesyBooking: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'booking-1', courtesyVehicleId: 'v1' }),
+        findFirst: jest.fn().mockResolvedValue({ id: 'booking-1', courtesyVehicleId: 'v1' }),
         update: jest.fn(),
       },
       courtesyVehicle: { update: updateVehicle },
       $transaction: jest.fn((ops) => Promise.all(ops)),
     };
     const service = new CourtesyService(prisma as never);
-    await service.returnBooking('booking-1', { returnMileage: 12345, newDamageNotes: 'Scratched rear bumper' } as never);
+    await service.returnBooking('dealer-1', 'booking-1', {
+      returnMileage: 12345,
+      newDamageNotes: 'Scratched rear bumper',
+    } as never);
     expect(updateVehicle).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: CourtesyVehicleStatus.OFF_ROAD }) }),
     );

@@ -27,7 +27,11 @@ export class VhcService {
   }
 
   /** Photo capture is mandatory for Amber/Red items (§9.1) — enforced here rather than only in the UI. */
-  addItem(inspectionId: string, dto: AddVhcItemDto) {
+  async addItem(dealerId: string, inspectionId: string, dto: AddVhcItemDto) {
+    const inspection = await this.prisma.vhcInspection.findFirst({ where: { id: inspectionId, dealerId } });
+    if (!inspection) {
+      throw new NotFoundException('Inspection not found');
+    }
     if (dto.rating !== VhcRating.GREEN && (!dto.photoUrls || dto.photoUrls.length === 0)) {
       throw new Error('A photo is required for Amber/Red items');
     }

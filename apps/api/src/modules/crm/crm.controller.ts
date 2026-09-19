@@ -81,14 +81,14 @@ export class CrmController {
 
   @Post('crm-activities')
   @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.CREATE })
-  createActivity(@Body() dto: CreateActivityDto) {
-    return this.crmService.createActivity(dto);
+  createActivity(@CurrentUser() user: AuthUser, @Body() dto: CreateActivityDto) {
+    return this.crmService.createActivity(user.dealerId, dto);
   }
 
   @Post('crm-tasks')
   @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.CREATE })
-  createTask(@Body() dto: CreateTaskDto) {
-    return this.crmService.createTask(dto);
+  createTask(@CurrentUser() user: AuthUser, @Body() dto: CreateTaskDto) {
+    return this.crmService.createTask(user.dealerId, dto);
   }
 
   @Get('crm-tasks/overdue')
@@ -99,8 +99,8 @@ export class CrmController {
 
   @Patch('crm-tasks/:id/complete')
   @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.EDIT })
-  completeTask(@Param('id') id: string) {
-    return this.crmService.completeTask(id);
+  completeTask(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.crmService.completeTask(user.dealerId, id);
   }
 
   @Get('email-templates')
@@ -117,14 +117,14 @@ export class CrmController {
 
   @Post('emails/send')
   @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.CREATE })
-  sendEmail(@Body() dto: SendEmailDto) {
-    return this.communicationsService.sendEmail(dto);
+  sendEmail(@CurrentUser() user: AuthUser, @Body() dto: SendEmailDto) {
+    return this.communicationsService.sendEmail(user.dealerId, dto);
   }
 
   @Post('sms/send')
   @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.CREATE })
-  sendSms(@Body() dto: SendSmsDto) {
-    return this.communicationsService.sendSms(dto);
+  sendSms(@CurrentUser() user: AuthUser, @Body() dto: SendSmsDto) {
+    return this.communicationsService.sendSms(user.dealerId, dto);
   }
 
   @Get('workflows')
@@ -141,7 +141,7 @@ export class CrmController {
 
   @Post('workflows/:id/enroll')
   @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.EDIT })
-  enroll(@Param('id') id: string, @Body() dto: EnrollDto) {
-    return this.workflowsService.enroll(id, dto);
+  enroll(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: EnrollDto) {
+    return this.workflowsService.enroll(user.dealerId, id, dto);
   }
 }

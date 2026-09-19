@@ -60,11 +60,15 @@ export class WorkshopController {
     return this.workshopService.clockOff(user.dealerId, id, user.id);
   }
 
-  /** Token-based read-only URL for the workshop TV board (Feature Spec §2.3) — no login required. */
+  /**
+   * Token-based read-only URL for the workshop TV board (Feature Spec §2.3) — no login required.
+   * Gated by a dedicated unguessable `workshopBoardToken` (see GET /dealers/me), never the
+   * dealer's own id, which this app already publishes elsewhere (public widget URLs).
+   */
   @Public()
-  @Get('workshop-board/:dealerId')
-  getBoard(@Param('dealerId') dealerId: string) {
-    return this.workshopService.listJobCards(dealerId);
+  @Get('workshop-board/:boardToken')
+  getBoard(@Param('boardToken') boardToken: string) {
+    return this.workshopService.getPublicBoard(boardToken);
   }
 
   @Get('capacity')
