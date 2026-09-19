@@ -155,9 +155,6 @@ a contained change, not a rewrite.
 
 ## What's deliberately not built
 
-- **Full nurture-workflow branching** (Module 8.9) — the workflow runner executes sequential
-  steps (send email/SMS, create task, change stage) on a timer; the condition/branch step type
-  from the spec's builder isn't implemented.
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks
   (Module 11), Stripe billing (Module 7.6) are modelled in the schema and their sync/publish
   actions are mocked (mark-as-published/synced immediately) rather than calling real APIs nobody

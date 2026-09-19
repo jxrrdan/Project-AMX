@@ -1066,6 +1066,8 @@ enum WorkflowActionType {
   CREATE_TASK
   CHANGE_LEAD_STAGE
   ADD_TAG
+  /// Branches the workflow to a different step rather than performing an action of its own.
+  CONDITION
 }
 
 model WorkflowStep {

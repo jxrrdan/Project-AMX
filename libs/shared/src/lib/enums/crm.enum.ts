@@ -88,6 +88,36 @@ export enum WorkflowActionType {
   CREATE_TASK = 'CREATE_TASK',
   CHANGE_LEAD_STAGE = 'CHANGE_LEAD_STAGE',
   ADD_TAG = 'ADD_TAG',
+  /** Branches the workflow to a different step rather than performing an action of its own. */
+  CONDITION = 'CONDITION',
+}
+
+/** Fields a CONDITION step can branch on — deliberately limited to what this system actually tracks. */
+export enum WorkflowConditionField {
+  LEAD_STAGE = 'LEAD_STAGE',
+  CONTACT_HAS_EMAIL = 'CONTACT_HAS_EMAIL',
+  CONTACT_HAS_PHONE = 'CONTACT_HAS_PHONE',
+  CONTACT_GDPR_CONSENT = 'CONTACT_GDPR_CONSENT',
+}
+
+export enum WorkflowConditionOperator {
+  EQUALS = 'EQUALS',
+  NOT_EQUALS = 'NOT_EQUALS',
+}
+
+/**
+ * Shape of `WorkflowStep.actionConfig` when `actionType` is CONDITION. `onTrueStep`/`onFalseStep`
+ * are the `sortOrder` of the step to jump to next — not the array index — so branches can skip
+ * forward, loop back, or terminate (a step with no match at that sortOrder simply completes the
+ * enrolment, the same way running off the end of a purely sequential workflow already does).
+ */
+export interface WorkflowConditionConfig {
+  field: WorkflowConditionField;
+  operator: WorkflowConditionOperator;
+  /** Ignored for boolean fields (CONTACT_HAS_EMAIL/CONTACT_HAS_PHONE/CONTACT_GDPR_CONSENT), which compare against "true"/"false". */
+  value?: string;
+  onTrueStep: number;
+  onFalseStep: number;
 }
 
 export enum WorkflowEnrollmentStatus {

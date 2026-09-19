@@ -1,7 +1,14 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
-import { LeadStage, WorkflowActionType, WorkflowEnrollmentStatus } from '@project-amx/shared';
+import {
+  LeadStage,
+  WorkflowActionType,
+  WorkflowConditionConfig,
+  WorkflowConditionField,
+  WorkflowConditionOperator,
+  WorkflowEnrollmentStatus,
+} from '@project-amx/shared';
 import { addHours } from 'date-fns';
 import { EmailService } from '../../common/email/email.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -11,9 +18,8 @@ import { CreateWorkflowDto, EnrollDto } from './dto/workflow.dto';
 /**
  * Module 8.9 — nurture workflow builder and runner. Each step fires after `delayHours` from
  * enrolment/the previous step; a cron tick advances any enrolment whose `nextRunAt` has passed.
- * This is a simplified sequential runner (no branching/condition steps yet) — enough to
- * demonstrate the pre-built nurture sequences end-to-end; a production build would add the
- * condition/branch step type described in the spec's workflow builder.
+ * `currentStep` holds a step's `sortOrder` (not an array index), which is what lets a CONDITION
+ * step jump to any other step rather than always advancing by one.
  */
 @Injectable()
 export class WorkflowsService {
@@ -81,7 +87,8 @@ export class WorkflowsService {
 
     for (const enrollment of due) {
       const steps = enrollment.workflow.steps.sort((a, b) => a.sortOrder - b.sortOrder);
-      const step = steps[enrollment.currentStep];
+      const stepIndex = steps.findIndex((s) => s.sortOrder === enrollment.currentStep);
+      const step = stepIndex === -1 ? undefined : steps[stepIndex];
       if (!step) {
         await this.prisma.workflowEnrollment.update({
           where: { id: enrollment.id },
@@ -91,6 +98,27 @@ export class WorkflowsService {
       }
 
       const contact = enrollment.contact ?? enrollment.lead?.contact ?? null;
+
+      if ((step.actionType as unknown as WorkflowActionType) === WorkflowActionType.CONDITION) {
+        const config = step.actionConfig as unknown as WorkflowConditionConfig;
+        const matched = this.evaluateCondition(
+          config,
+          contact,
+          enrollment.lead as unknown as { stage: LeadStage } | null,
+        );
+        const targetSortOrder = matched ? config.onTrueStep : config.onFalseStep;
+        const targetStep = steps.find((s) => s.sortOrder === targetSortOrder);
+        await this.prisma.workflowEnrollment.update({
+          where: { id: enrollment.id },
+          data: {
+            currentStep: targetSortOrder,
+            nextRunAt: targetStep ? addHours(new Date(), targetStep.delayHours) : null,
+            status: targetStep ? WorkflowEnrollmentStatus.ACTIVE : WorkflowEnrollmentStatus.COMPLETED,
+          },
+        });
+        continue;
+      }
+
       await this.executeStep(
         step.actionType as unknown as WorkflowActionType,
         step.actionConfig as Record<string, unknown>,
@@ -98,16 +126,41 @@ export class WorkflowsService {
         enrollment.leadId,
       );
 
-      const nextStep = steps[enrollment.currentStep + 1];
+      const nextStep = steps[stepIndex + 1];
       await this.prisma.workflowEnrollment.update({
         where: { id: enrollment.id },
         data: {
-          currentStep: enrollment.currentStep + 1,
+          currentStep: nextStep ? nextStep.sortOrder : enrollment.currentStep,
           nextRunAt: nextStep ? addHours(new Date(), nextStep.delayHours) : null,
           status: nextStep ? WorkflowEnrollmentStatus.ACTIVE : WorkflowEnrollmentStatus.COMPLETED,
         },
       });
     }
+  }
+
+  /** Evaluates a CONDITION step's branch against the enrolment's contact/lead. */
+  private evaluateCondition(
+    config: WorkflowConditionConfig,
+    contact: { email: string | null; phone: string | null; gdprConsent: boolean } | null,
+    lead: { stage: LeadStage } | null,
+  ): boolean {
+    const actual = ((): string => {
+      switch (config.field) {
+        case WorkflowConditionField.LEAD_STAGE:
+          return lead?.stage ?? '';
+        case WorkflowConditionField.CONTACT_HAS_EMAIL:
+          return contact?.email ? 'true' : 'false';
+        case WorkflowConditionField.CONTACT_HAS_PHONE:
+          return contact?.phone ? 'true' : 'false';
+        case WorkflowConditionField.CONTACT_GDPR_CONSENT:
+          return contact?.gdprConsent ? 'true' : 'false';
+        default:
+          return '';
+      }
+    })();
+
+    const matches = actual === config.value;
+    return config.operator === WorkflowConditionOperator.NOT_EQUALS ? !matches : matches;
   }
 
   private async executeStep(
