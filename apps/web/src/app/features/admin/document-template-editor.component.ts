@@ -8,9 +8,12 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   COMMON_DOCUMENT_TEMPLATE_VARIABLES,
+  ConfigScope,
+  CONFIG_SCOPE_LABELS,
   DOCUMENT_TEMPLATE_TYPE_LABELS,
   DOCUMENT_TEMPLATE_VARIABLES,
   DocumentTemplateType,
@@ -74,7 +77,7 @@ const PREVIEW_SAMPLES: Record<string, string> = {
 
 @Component({
   selector: 'app-document-template-editor',
-  imports: [FormsModule, MatButtonModule, MatCardModule, MatFormFieldModule, MatIconModule, MatInputModule, MatMenuModule],
+  imports: [FormsModule, MatButtonModule, MatCardModule, MatFormFieldModule, MatIconModule, MatInputModule, MatMenuModule, MatSelectModule],
   template: `
     <div class="header">
       <div>
@@ -92,10 +95,22 @@ const PREVIEW_SAMPLES: Record<string, string> = {
       </div>
     </div>
 
-    <mat-form-field appearance="outline" class="full-width">
-      <mat-label>Template name</mat-label>
-      <input matInput [(ngModel)]="name" placeholder="e.g. Standard deal sheet" />
-    </mat-form-field>
+    <div class="row">
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Template name</mat-label>
+        <input matInput [(ngModel)]="name" placeholder="e.g. Standard deal sheet" />
+      </mat-form-field>
+      @if (isNew) {
+        <mat-form-field appearance="outline">
+          <mat-label>Scope</mat-label>
+          <mat-select [(ngModel)]="scope">
+            @for (s of scopes; track s) {
+              <mat-option [value]="s">{{ scopeLabels[s] }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+    </div>
 
     <div class="editor-layout">
       <mat-card class="editor-card">
@@ -153,6 +168,11 @@ const PREVIEW_SAMPLES: Record<string, string> = {
       .full-width {
         width: 100%;
       }
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
       .editor-layout {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -201,9 +221,12 @@ export class DocumentTemplateEditorComponent implements OnInit {
   readonly template = signal<{ isDefault: boolean } | null>(null);
   readonly eachSyntaxHint = '{{#each accessories}}...{{/each}}';
   readonly ifSyntaxHint = '{{#if field}}...{{/if}}';
+  readonly scopes = Object.values(ConfigScope);
+  readonly scopeLabels = CONFIG_SCOPE_LABELS;
 
   isNew = true;
   type: DocumentTemplateType = DocumentTemplateType.DEAL_SHEET;
+  scope: ConfigScope = ConfigScope.DEALER;
   name = '';
   bodyHtml = STARTER_BODY;
   availableVariables: DocumentTemplateVariable[] = [];
@@ -280,7 +303,12 @@ export class DocumentTemplateEditorComponent implements OnInit {
       return;
     }
     const request = this.isNew
-      ? this.http.post(`${environment.apiUrl}/document-templates`, { type: this.type, name: this.name, bodyHtml: this.bodyHtml })
+      ? this.http.post(`${environment.apiUrl}/document-templates`, {
+          type: this.type,
+          name: this.name,
+          bodyHtml: this.bodyHtml,
+          scope: this.scope,
+        })
       : this.http.patch(`${environment.apiUrl}/document-templates/${this.templateId}`, { name: this.name, bodyHtml: this.bodyHtml });
 
     request.subscribe({

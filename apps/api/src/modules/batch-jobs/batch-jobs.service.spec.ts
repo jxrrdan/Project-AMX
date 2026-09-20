@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { BatchJobName, BatchJobStatus, LeadStage, SystemRole } from '@project-amx/shared';
+import { BatchJobName, BatchJobStatus, LeadStage, NotificationChannel, SystemRole } from '@project-amx/shared';
 import { BatchJobsService } from './batch-jobs.service';
 
 function makeNotifications() {
@@ -67,6 +67,7 @@ describe('BatchJobsService.runNow', () => {
       'STALE_LEAD',
       'Stale lead needs attention',
       expect.stringContaining('Jamie Smith'),
+      NotificationChannel.SMS,
     );
     expect(result).toMatchObject({ summary: '1 stale lead(s) flagged' });
   });
@@ -96,6 +97,28 @@ describe('BatchJobsService.runNow', () => {
       expect.stringContaining('P1'),
     );
     expect(result).toMatchObject({ summary: '1 part(s) at/below reorder level; notified 1 parts manager(s)' });
+  });
+
+  it('notifies managers by EMAIL about courtesy vehicles due for renewal', async () => {
+    const notifications = makeNotifications();
+    const soon = new Date(Date.now() + 10 * 86400000);
+    const prisma = makePrisma({
+      courtesyVehicle: { findMany: jest.fn().mockResolvedValue([{ id: 'cv-1', motExpiry: soon, insuranceExpiry: null, taxExpiry: null }]) },
+      user: { findMany: jest.fn().mockResolvedValue([{ id: 'gm-1' }]) },
+    });
+    const service = new BatchJobsService(prisma as never, notifications as never);
+
+    const result = await service.runNow(dealerId, BatchJobName.COURTESY_FLEET_EXPIRY_SWEEP);
+
+    expect(notifications.createMany).toHaveBeenCalledWith(
+      dealerId,
+      ['gm-1'],
+      'COURTESY_FLEET_EXPIRY',
+      'Courtesy vehicles due for renewal',
+      expect.stringContaining('1 courtesy vehicle'),
+      NotificationChannel.EMAIL,
+    );
+    expect(result).toMatchObject({ summary: '1 courtesy vehicle(s) due for renewal; notified 1 manager(s)' });
   });
 
   it('records an ERROR run when the job throws', async () => {

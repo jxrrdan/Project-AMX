@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DocumentTemplateType, UsedVehicleStatus } from '@project-amx/shared';
+import { ActionTriggerPoint, DocumentTemplateType, UsedVehicleStatus } from '@project-amx/shared';
 import { PdfService } from '../../common/pdf/pdf.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { ActionTriggersService } from '../action-triggers/action-triggers.service';
 import { DocumentSequenceService } from '../dealers/document-sequence.service';
 import { DocumentTemplatesService } from '../document-templates/document-templates.service';
 import {
@@ -45,6 +46,7 @@ export class UsedCarsService {
     private readonly pdf: PdfService,
     private readonly documentSequences: DocumentSequenceService,
     private readonly documentTemplates: DocumentTemplatesService,
+    private readonly actionTriggers: ActionTriggersService,
   ) {}
 
   // --- Stock (§4.1) --------------------------------------------------------
@@ -66,6 +68,21 @@ export class UsedCarsService {
 
   create(dealerId: string, dto: CreateUsedVehicleDto) {
     return this.prisma.usedVehicle.create({ data: { dealerId, ...dto } });
+  }
+
+  /**
+   * Searches this dealer's own stock for a matching registration AND, if a business systems
+   * manager has configured one (Settings > Action Triggers), calls an external OEM/DMS API with
+   * the same value and returns its mapped enrichment — the concrete "search a reg, it also calls
+   * an OEM API" capability. `enrichment` is advisory data for the caller to pre-fill a new record
+   * with; it's never written to the database here.
+   */
+  async regLookup(dealerId: string, reg: string) {
+    const [existingVehicle, enrichment] = await Promise.all([
+      this.prisma.usedVehicle.findFirst({ where: { dealerId, reg } }),
+      this.actionTriggers.run(dealerId, ActionTriggerPoint.USED_VEHICLE_REG_LOOKUP, reg),
+    ]);
+    return { existingVehicle, enrichment };
   }
 
   async updateStatus(dealerId: string, id: string, dto: UpdateUsedVehicleStatusDto) {

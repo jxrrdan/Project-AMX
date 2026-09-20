@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { ModuleKey } from '@project-amx/shared';
 
 export class UpdateDealerDto {
@@ -41,6 +41,11 @@ export class UpdateDealerDto {
   @IsOptional()
   @IsString()
   invoiceFooterNote?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  labourRatePerHour?: number;
 
   @IsOptional()
   @IsString()

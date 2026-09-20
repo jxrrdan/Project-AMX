@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { BatchJobName, BatchJobStatus, LeadStage, SystemRole } from '@project-amx/shared';
+import { BatchJobName, BatchJobStatus, LeadStage, NotificationChannel, SystemRole } from '@project-amx/shared';
 import { addDays, subDays } from 'date-fns';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -94,12 +94,16 @@ export class BatchJobsService {
     });
 
     for (const lead of staleLeads) {
+      // SMS, not just in-app — a lead going cold is time-sensitive enough to interrupt the
+      // salesperson directly (falls back to an in-app-only notification if they have no phone
+      // number on file — see NotificationsService.deliver).
       await this.notifications.create(
         dealerId,
         lead.assignedSalespersonId as string,
         'STALE_LEAD',
         'Stale lead needs attention',
         `${lead.contact.firstName} ${lead.contact.lastName} has had no activity in 7+ days (stage: ${lead.stage}).`,
+        NotificationChannel.SMS,
       );
     }
     return `${staleLeads.length} stale lead(s) flagged`;
@@ -149,12 +153,14 @@ export class BatchJobsService {
         roles: { some: { role: { systemRole: { in: [SystemRole.GENERAL_MANAGER, SystemRole.DEALER_PRINCIPAL] } } } },
       },
     });
+    // Email, not just in-app — a monthly digest a GM is more likely to actually read from their inbox.
     await this.notifications.createMany(
       dealerId,
       managers.map((u) => u.id),
       'COURTESY_FLEET_EXPIRY',
       'Courtesy vehicles due for renewal',
       `${expiring.length} courtesy vehicle(s) due MOT/insurance/tax renewal within 30 days.`,
+      NotificationChannel.EMAIL,
     );
     return `${expiring.length} courtesy vehicle(s) due for renewal; notified ${managers.length} manager(s)`;
   }

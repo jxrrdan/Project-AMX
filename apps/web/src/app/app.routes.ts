@@ -28,6 +28,15 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/workshop/workshop-diary.component').then((m) => m.WorkshopDiaryComponent),
       },
       {
+        // Literal segment — must come before 'workshop/job-cards/:id' below.
+        path: 'workshop/loading',
+        loadComponent: () => import('./features/workshop/workshop-loading.component').then((m) => m.WorkshopLoadingComponent),
+      },
+      {
+        path: 'workshop/job-cards/:id',
+        loadComponent: () => import('./features/workshop/job-card-detail.component').then((m) => m.JobCardDetailComponent),
+      },
+      {
         path: 'vehicles',
         loadComponent: () => import('./features/vehicles/vehicle-pipeline.component').then((m) => m.VehiclePipelineComponent),
       },
@@ -110,9 +119,18 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/settings.component').then((m) => m.SettingsComponent),
       },
       {
+        path: 'my-profile',
+        loadComponent: () => import('./features/profile/my-profile.component').then((m) => m.MyProfileComponent),
+      },
+      {
         path: 'admin/document-templates/:id',
         loadComponent: () =>
           import('./features/admin/document-template-editor.component').then((m) => m.DocumentTemplateEditorComponent),
+      },
+      {
+        path: 'admin/action-triggers/:id',
+        loadComponent: () =>
+          import('./features/admin/action-trigger-editor.component').then((m) => m.ActionTriggerEditorComponent),
       },
       {
         path: 'integrations',

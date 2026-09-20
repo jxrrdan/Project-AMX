@@ -9,10 +9,14 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatTabsModule } from '@angular/material/tabs';
 import {
+  ACTION_TRIGGER_POINT_LABELS,
+  ActionTriggerPoint,
   BATCH_JOB_DEFINITIONS,
   BatchJobName,
   DOCUMENT_TEMPLATE_TYPE_LABELS,
@@ -33,6 +37,8 @@ interface DealerProfile {
   logoUrl: string | null;
   primaryColour: string | null;
   secondaryColour: string | null;
+  labourRatePerHour: number | null;
+  franchise: Franchise | null;
 }
 
 interface DocumentSequence {
@@ -61,6 +67,25 @@ interface DocumentTemplateSummary {
   updatedAt: string;
 }
 
+interface Group {
+  id: string;
+  name: string;
+}
+
+interface Franchise {
+  id: string;
+  name: string;
+  group: Group | null;
+}
+
+interface ActionTriggerSummary {
+  id: string;
+  name: string;
+  triggerPoint: ActionTriggerPoint;
+  active: boolean;
+  scope: string;
+}
+
 @Component({
   selector: 'app-settings',
   imports: [
@@ -72,6 +97,8 @@ interface DocumentTemplateSummary {
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
+    MatSelectModule,
+    MatSlideToggleModule,
     MatTableModule,
     MatTabsModule,
   ],
@@ -112,7 +139,61 @@ interface DocumentTemplateSummary {
             <mat-label>Invoice footer note</mat-label>
             <textarea matInput rows="2" [(ngModel)]="profileForm.invoiceFooterNote" placeholder="e.g. company registration details, terms & conditions link"></textarea>
           </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Labour rate (£/hour, for aftersales invoices)</mat-label>
+            <input matInput type="number" [(ngModel)]="profileForm.labourRatePerHour" />
+          </mat-form-field>
           <button mat-flat-button color="primary" (click)="saveProfile()">Save profile</button>
+        </mat-card>
+      </mat-tab>
+
+      <mat-tab label="Organisation">
+        <mat-card class="section">
+          <p class="hint">
+            Join a franchise (e.g. "BMW") to share document templates, branding, and action
+            triggers with every other outlet in it — and, transitively, with its dealer group. This
+            outlet's own settings always take priority over anything shared.
+          </p>
+          <p>
+            Current franchise: <b>{{ myFranchiseName() || 'None' }}</b>
+            @if (myFranchiseGroupName()) {
+              (group: <b>{{ myFranchiseGroupName() }}</b>)
+            }
+          </p>
+          <mat-form-field appearance="outline">
+            <mat-label>Join franchise</mat-label>
+            <mat-select [(ngModel)]="selectedFranchiseId" (selectionChange)="joinFranchise()">
+              <mat-option [value]="null">None</mat-option>
+              @for (f of franchises(); track f.id) {
+                <mat-option [value]="f.id">{{ f.name }}{{ f.group ? ' (' + f.group.name + ')' : '' }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <div class="row">
+            <mat-form-field appearance="outline">
+              <mat-label>New franchise name</mat-label>
+              <input matInput [(ngModel)]="newFranchiseName" placeholder="e.g. BMW" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Under group (optional)</mat-label>
+              <mat-select [(ngModel)]="newFranchiseGroupId">
+                <mat-option [value]="null">None</mat-option>
+                @for (g of groups(); track g.id) {
+                  <mat-option [value]="g.id">{{ g.name }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <button mat-stroked-button [disabled]="!newFranchiseName" (click)="createFranchise()">+ Add franchise</button>
+          </div>
+
+          <div class="row">
+            <mat-form-field appearance="outline">
+              <mat-label>New group name</mat-label>
+              <input matInput [(ngModel)]="newGroupName" placeholder="e.g. Sytner Group" />
+            </mat-form-field>
+            <button mat-stroked-button [disabled]="!newGroupName" (click)="createGroup()">+ Add group</button>
+          </div>
         </mat-card>
       </mat-tab>
 
@@ -246,6 +327,10 @@ interface DocumentTemplateSummary {
               <th mat-header-cell *matHeaderCellDef>Name</th>
               <td mat-cell *matCellDef="let t">{{ t.name }}</td>
             </ng-container>
+            <ng-container matColumnDef="scope">
+              <th mat-header-cell *matHeaderCellDef>Scope</th>
+              <td mat-cell *matCellDef="let t">{{ t.scope }}</td>
+            </ng-container>
             <ng-container matColumnDef="default">
               <th mat-header-cell *matHeaderCellDef></th>
               <td mat-cell *matCellDef="let t">
@@ -265,6 +350,48 @@ interface DocumentTemplateSummary {
           </table>
           @if (!templates().length) {
             <p class="hint">No document templates yet — the built-in default is used until you create one.</p>
+          }
+        </mat-card>
+      </mat-tab>
+
+      <mat-tab label="Action triggers">
+        <mat-card class="section">
+          <p class="hint">
+            Wire a user-facing lookup (e.g. searching a used car by registration) to also call an
+            external OEM/DMS API, alongside the normal database search — see the "OEM lookup"
+            button on Used Cars.
+          </p>
+          <button mat-flat-button color="primary" (click)="newActionTrigger()">+ New action trigger</button>
+          <table mat-table [dataSource]="actionTriggers()" class="mat-elevation-z0">
+            <ng-container matColumnDef="name">
+              <th mat-header-cell *matHeaderCellDef>Name</th>
+              <td mat-cell *matCellDef="let t">{{ t.name }}</td>
+            </ng-container>
+            <ng-container matColumnDef="triggerPoint">
+              <th mat-header-cell *matHeaderCellDef>Fires on</th>
+              <td mat-cell *matCellDef="let t">{{ triggerPointLabel(t.triggerPoint) }}</td>
+            </ng-container>
+            <ng-container matColumnDef="scope">
+              <th mat-header-cell *matHeaderCellDef>Scope</th>
+              <td mat-cell *matCellDef="let t">{{ t.scope }}</td>
+            </ng-container>
+            <ng-container matColumnDef="active">
+              <th mat-header-cell *matHeaderCellDef>Active</th>
+              <td mat-cell *matCellDef="let t">
+                <mat-chip [class]="t.active ? 'status-active' : ''">{{ t.active ? 'Active' : 'Paused' }}</mat-chip>
+              </td>
+            </ng-container>
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef></th>
+              <td mat-cell *matCellDef="let t">
+                <button mat-button (click)="editActionTrigger(t.id)">Edit</button>
+              </td>
+            </ng-container>
+            <tr mat-header-row *matHeaderRowDef="actionTriggerColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: actionTriggerColumns"></tr>
+          </table>
+          @if (!actionTriggers().length) {
+            <p class="hint">No action triggers configured yet.</p>
           }
         </mat-card>
       </mat-tab>
@@ -361,7 +488,17 @@ export class SettingsComponent implements OnInit {
   readonly sequenceColumns = ['docType', 'prefix', 'nextNumber', 'actions'];
   readonly jobColumns = ['label', 'schedule', 'actions'];
   readonly runColumns = ['jobName', 'status', 'summary', 'startedAt'];
-  readonly templateColumns = ['type', 'name', 'default', 'actions'];
+  readonly templateColumns = ['type', 'name', 'scope', 'default', 'actions'];
+  readonly actionTriggerColumns = ['name', 'triggerPoint', 'scope', 'active', 'actions'];
+  readonly triggerPointLabels = ACTION_TRIGGER_POINT_LABELS;
+
+  readonly groups = signal<Group[]>([]);
+  readonly franchises = signal<Franchise[]>([]);
+  readonly actionTriggers = signal<ActionTriggerSummary[]>([]);
+  selectedFranchiseId: string | null = null;
+  newFranchiseName = '';
+  newFranchiseGroupId: string | null = null;
+  newGroupName = '';
 
   profileForm: DealerProfile = {
     id: '',
@@ -375,6 +512,8 @@ export class SettingsComponent implements OnInit {
     logoUrl: null,
     primaryColour: '#0066B1',
     secondaryColour: '#1C69D4',
+    labourRatePerHour: 95,
+    franchise: null,
   };
 
   private readonly http = inject(HttpClient);
@@ -386,6 +525,64 @@ export class SettingsComponent implements OnInit {
     this.loadSequences();
     this.loadRuns();
     this.loadTemplates();
+    this.loadOrg();
+    this.loadActionTriggers();
+  }
+
+  myFranchiseName(): string | null {
+    return this.profileForm.franchise?.name ?? null;
+  }
+
+  myFranchiseGroupName(): string | null {
+    return this.profileForm.franchise?.group?.name ?? null;
+  }
+
+  loadOrg(): void {
+    this.http.get<Group[]>(`${environment.apiUrl}/org/groups`).subscribe((data) => this.groups.set(data));
+    this.http.get<Franchise[]>(`${environment.apiUrl}/org/franchises`).subscribe((data) => this.franchises.set(data));
+  }
+
+  joinFranchise(): void {
+    this.http.post(`${environment.apiUrl}/org/my-dealer/franchise`, { franchiseId: this.selectedFranchiseId }).subscribe({
+      next: () => {
+        this.snackBar.open('Franchise updated', 'Dismiss', { duration: 2000 });
+        this.loadProfile();
+      },
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not update franchise', 'Dismiss', { duration: 4000 }),
+    });
+  }
+
+  createFranchise(): void {
+    this.http.post(`${environment.apiUrl}/org/franchises`, { name: this.newFranchiseName, groupId: this.newFranchiseGroupId }).subscribe({
+      next: () => {
+        this.newFranchiseName = '';
+        this.newFranchiseGroupId = null;
+        this.loadOrg();
+      },
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not create franchise', 'Dismiss', { duration: 4000 }),
+    });
+  }
+
+  createGroup(): void {
+    this.http.post(`${environment.apiUrl}/org/groups`, { name: this.newGroupName }).subscribe({
+      next: () => {
+        this.newGroupName = '';
+        this.loadOrg();
+      },
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not create group', 'Dismiss', { duration: 4000 }),
+    });
+  }
+
+  loadActionTriggers(): void {
+    this.http.get<ActionTriggerSummary[]>(`${environment.apiUrl}/action-triggers`).subscribe((data) => this.actionTriggers.set(data));
+  }
+
+  newActionTrigger(): void {
+    this.router.navigate(['/admin/action-triggers/new']);
+  }
+
+  editActionTrigger(id: string): void {
+    this.router.navigate(['/admin/action-triggers', id]);
   }
 
   loadProfile(): void {
@@ -395,6 +592,7 @@ export class SettingsComponent implements OnInit {
         primaryColour: dealer.primaryColour || '#0066B1',
         secondaryColour: dealer.secondaryColour || '#1C69D4',
       };
+      this.selectedFranchiseId = dealer.franchise?.id ?? null;
     });
   }
 
@@ -465,5 +663,9 @@ export class SettingsComponent implements OnInit {
 
   typeLabel(type: string): string {
     return (this.typeLabels as Record<string, string>)[type] ?? type;
+  }
+
+  triggerPointLabel(triggerPoint: string): string {
+    return (this.triggerPointLabels as Record<string, string>)[triggerPoint] ?? triggerPoint;
   }
 }

@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { IntegrationRunStatus, IntegrationStatus, IntegrationType } from '@project-amx/shared';
 import axios from 'axios';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { assertSafeOutboundUrl } from '../../common/security/outbound-url.util';
 import { resolvePath } from './field-mapping.util';
 import { IngestableConnector, IntegrationIngestService } from './integration-ingest.service';
 import { buildRequestHeaders, HeaderPair, RestAuthConfig } from './rest-auth.util';
@@ -62,6 +63,7 @@ export class RestPollerService {
     }
 
     try {
+      assertSafeOutboundUrl(config.url);
       const response = await axios.request({
         url: config.url,
         method: config.method ?? 'GET',

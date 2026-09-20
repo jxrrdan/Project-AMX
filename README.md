@@ -205,6 +205,49 @@ multi-tenant SaaS product needs before go-live:
   restricted placeholder substitution the CRM SMS free-text path uses — that fix (§ security
   review) was specifically about a much lower-trust `CRM:CREATE` user submitting arbitrary text.
 
+## Org hierarchy, Action Triggers, real notifications, and aftersales invoicing (beyond the original spec)
+
+A further wave on top of the two above, driven by "documents/APIs/settings should be configurable
+above the single-dealer level" and "let a business systems manager wire an API call into a user
+function, not just a scheduled feed":
+
+- **Group → Franchise → Dealer hierarchy** — additive, nullable FKs (`Dealer.franchiseId`,
+  `Franchise.groupId`) so every existing single-tenant `dealerId`-scoped query keeps working
+  unchanged. `/admin/settings` → Organisation lets a dealer create or join a franchise/group.
+  Branding (logo, colours) cascades DEALER → FRANCHISE → GROUP → hardcoded default the same way
+  Document Templates and Action Triggers now do, via a shared `TenancyScopeService`. There is no
+  separate "group admin" identity in this app — a franchise/group-scoped row is collaboratively
+  owned by any `ADMIN:EDIT` user at any dealer already inside that franchise/group, and the owning
+  franchise/group id is always derived server-side from the caller's own tenancy context, never
+  accepted from the client — a deliberate v1 simplification over building a whole new admin role.
+- **Action Triggers** (`/admin/settings` → Action triggers) — lets a business systems manager wire
+  a user-facing lookup (currently: searching a used car by registration) to also call an external
+  OEM/DMS API and map its response into AMX fields, using the same field-mapping engine and
+  REST auth/header handling as the Integration Hub's connectors. It runs *alongside*, not instead
+  of, the normal database search: if the configured API is unreachable, misconfigured, or blocked
+  by the SSRF guard, the trigger just logs a warning and returns nothing extra — the database
+  search half of the request always succeeds regardless.
+- **SSRF protection** (`common/security/outbound-url.util.ts`) — any admin-configured outbound URL
+  (Action Triggers, Integration Hub REST-pull connectors) is checked against non-http(s) schemes,
+  `localhost`, the cloud metadata address, and private IPv4/IPv6 ranges before it's ever requested.
+  This checks the literal hostname/IP at validation time only — it doesn't re-resolve at request
+  time, so a DNS-rebinding attack is a known, accepted residual gap for v1.
+- **Real notification delivery** — `NotificationChannel` now covers IN_APP (always writes a row, so
+  the bell keeps working exactly as before), EMAIL and SMS (call the existing console-log
+  email/SMS adapters — real SES/Twilio in production), and PUSH (deliberately just logs a warning,
+  since no push provider is wired into this app). Batch jobs now pick a channel per alert (SMS for
+  stale-lead escalation, email for courtesy-fleet expiry).
+- **Workshop loading & parts** (`/workshop/loading`) — per-bay-per-day utilisation (booked job-card
+  hours vs. configured bay capacity, `null` rather than a false 0%/100% when no capacity is set for
+  that day) and a proactive **parts-shortfall report**: a service advisor logs what an upcoming job
+  will need (`JobCardPartRequirement`, separate from parts already taken off the shelf) and the
+  report flags where the aggregated requirement across all open jobs exceeds stock on hand, days
+  before the job is due.
+- **Aftersales invoicing** (`/workshop/job-cards/:id`) — generates an invoice from actual clocked
+  labour time (falling back to the estimate if nobody's clocked off yet) and allocated parts at
+  cost, through the exact same `DocumentTemplateType`/`DocumentSequenceService` pattern as the
+  used-car deal sheet, so a dealer can override its layout the same way.
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks

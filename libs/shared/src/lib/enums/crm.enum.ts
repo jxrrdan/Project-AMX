@@ -74,6 +74,7 @@ export enum DocumentTemplateType {
   SERVICE_ESTIMATE = 'SERVICE_ESTIMATE',
   HANDOVER_DOCUMENT = 'HANDOVER_DOCUMENT',
   DEAL_SHEET = 'DEAL_SHEET',
+  AFTERSALES_INVOICE = 'AFTERSALES_INVOICE',
 }
 
 export enum WorkflowTrigger {

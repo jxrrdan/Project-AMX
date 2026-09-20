@@ -1,7 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { CustomFieldDataType, IntegrationTargetEntity } from '@project-amx/shared';
+import { CustomFieldDataType, IntegrationTargetEntity, IntegrationType } from '@project-amx/shared';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { assertSafeOutboundUrl } from '../../common/security/outbound-url.util';
 import {
   CreateConnectorDto,
   CreateCustomFieldDto,
@@ -53,6 +54,7 @@ export class IntegrationsService {
   }
 
   createConnector(dealerId: string, dto: CreateConnectorDto) {
+    this.validateConfigUrl(dto.type, dto.config);
     return this.prisma.integrationConnector.create({
       data: {
         dealerId,
@@ -73,6 +75,9 @@ export class IntegrationsService {
     // A blank password/token/API key field in the request means "unchanged" — the frontend never
     // has the real secret to send back, since getConnector redacts it. See rest-auth.util.
     const mergedConfig = dto.config ? mergeConfigPreservingSecrets(connector.config, dto.config) : undefined;
+    if (mergedConfig) {
+      this.validateConfigUrl(connector.type as unknown as IntegrationType, mergedConfig);
+    }
     const updated = await this.prisma.integrationConnector.update({
       where: { id },
       data: {
@@ -278,5 +283,15 @@ export class IntegrationsService {
       throw new NotFoundException('Record not found');
     }
     return record;
+  }
+
+  /** Rejects an SSRF-risky URL as soon as a REST_PULL connector's config is saved, rather than
+   * only when RestPollerService next tries to fetch it — see assertSafeOutboundUrl. */
+  private validateConfigUrl(type: IntegrationType, config: Record<string, unknown> | undefined): void {
+    if (type !== IntegrationType.REST_PULL) return;
+    const url = (config ?? {})['url'];
+    if (typeof url === 'string' && url) {
+      assertSafeOutboundUrl(url);
+    }
   }
 }

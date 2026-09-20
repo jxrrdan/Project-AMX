@@ -17,10 +17,61 @@ datasource db {
 // Module 7 — Admin, User Management & RBAC, and core tenancy
 // ---------------------------------------------------------------------------
 
+/// A dealer group (holding company) owning multiple outlets, potentially across several
+/// franchise brands — e.g. a group that owns both BMW and MINI outlets. Optional: most dealers
+/// in this app have no group at all (franchiseId/groupId are nullable end-to-end).
+model Group {
+  id              String   @id @default(uuid())
+  name            String
+  logoUrl         String?
+  primaryColour   String?
+  secondaryColour String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  franchises        Franchise[]
+  documentTemplates DocumentTemplate[]
+  actionTriggers    ActionTrigger[]
+
+  @@map("groups")
+}
+
+/// A brand/franchise (e.g. "BMW", "MINI") — sits between Group and Dealer. A dealer's franchise
+/// determines which franchise-level (and, transitively, group-level) config it inherits.
+model Franchise {
+  id              String   @id @default(uuid())
+  groupId         String?
+  group           Group?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  name            String
+  brandCode       String?
+  logoUrl         String?
+  primaryColour   String?
+  secondaryColour String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  dealers           Dealer[]
+  documentTemplates DocumentTemplate[]
+  actionTriggers    ActionTrigger[]
+
+  @@map("franchises")
+}
+
+/// Which of the three tenancy levels a piece of shared config (document template, action
+/// trigger) belongs to — resolution always prefers the most specific: DEALER, then FRANCHISE,
+/// then GROUP, then a built-in fallback.
+enum ConfigScope {
+  GROUP
+  FRANCHISE
+  DEALER
+}
+
 model Dealer {
   id             String   @id @default(uuid())
   name           String
   franchiseCode  String?
+  franchiseId    String?
+  franchise      Franchise? @relation(fields: [franchiseId], references: [id], onDelete: SetNull)
   address        String?
   timeZone       String   @default("Europe/London")
   locale         String   @default("en-GB")
@@ -28,10 +79,12 @@ model Dealer {
   risDealerId    String?
   awpWebhookUrl  String?
   logoUrl        String?
-  primaryColour  String?  @default("#0066B1")
-  secondaryColour String? @default("#1C69D4")
+  primaryColour  String?
+  secondaryColour String?
   vatNumber      String?
   invoiceFooterNote String?
+  /// Used to compute AftersalesInvoice's labour total — see AftersalesInvoiceService.
+  labourRatePerHour Decimal @default(95.00) @db.Decimal(10, 2)
   /// Unguessable, revocable access token for the public workshop TV board (§2.3) — deliberately
   /// NOT the dealer's own id, since that id is published elsewhere (embeddable widget URLs).
   workshopBoardToken String @unique @default(uuid())
@@ -72,6 +125,9 @@ model Dealer {
   customFieldDefinitions CustomFieldDefinition[]
   uiScreenDefinitions    UiScreenDefinition[]
   batchJobRuns           BatchJobRun[]
+  actionTriggers         ActionTrigger[]
+  jobCardPartRequirements JobCardPartRequirement[]
+  aftersalesInvoices     AftersalesInvoice[]
 
   @@map("dealers")
 }
@@ -149,6 +205,7 @@ model User {
   dealerId          String
   dealer            Dealer    @relation(fields: [dealerId], references: [id], onDelete: Cascade)
   email             String
+  phone             String?
   firstName         String
   lastName          String
   passwordHash      String
@@ -274,6 +331,7 @@ model AuditLog {
 enum NotificationChannel {
   IN_APP
   EMAIL
+  SMS
   PUSH
 }
 
@@ -513,11 +571,54 @@ model JobCard {
 
   timeEntries      JobCardTimeEntry[]
   partAllocations  PartAllocation[]
+  partRequirements JobCardPartRequirement[]
   pdiJob           PdiJob?
   warrantyClaim    WarrantyClaim?
   vhcInspections   VhcInspection[]
+  aftersalesInvoice AftersalesInvoice?
 
   @@map("job_cards")
+}
+
+/// A customer-facing invoice for a completed workshop job — labour (from JobCardTimeEntry) plus
+/// parts (from PartAllocation) plus VAT. Generated via the same document-template system as the
+/// used-car deal sheet (DocumentTemplateType.AFTERSALES_INVOICE), so a dealer/franchise/group can
+/// brand it the same way. One invoice per job card.
+model AftersalesInvoice {
+  id            String   @id @default(uuid())
+  dealerId      String
+  dealer        Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  jobCardId     String   @unique
+  jobCard       JobCard  @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  invoiceNumber String
+  labourTotal   Decimal  @default(0) @db.Decimal(10, 2)
+  partsTotal    Decimal  @default(0) @db.Decimal(10, 2)
+  vatAmount     Decimal  @default(0) @db.Decimal(10, 2)
+  totalAmount   Decimal  @default(0) @db.Decimal(10, 2)
+  pdfUrl        String?
+  createdAt     DateTime @default(now())
+
+  @@map("aftersales_invoices")
+}
+
+/// Parts a job card is *expected* to need, entered at booking/estimate time — distinct from
+/// PartAllocation, which only exists once stock has actually been taken. Lets the workshop-loading
+/// view flag shortfalls against upcoming (not yet started) jobs, before they become a problem on
+/// the day. partId is optional so a service advisor can log "need a rear brake disc" before
+/// matching it to a specific stocked part.
+model JobCardPartRequirement {
+  id          String   @id @default(uuid())
+  dealerId    String
+  dealer      Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  jobCardId   String
+  jobCard     JobCard  @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  partId      String?
+  part        Part?    @relation(fields: [partId], references: [id], onDelete: SetNull)
+  description String
+  quantity    Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  @@map("job_card_part_requirements")
 }
 
 model JobCardTimeEntry {
@@ -591,6 +692,7 @@ model Part {
   movements     StockMovement[]
   allocations   PartAllocation[]
   poLines       PurchaseOrderLine[]
+  jobCardRequirements JobCardPartRequirement[]
 
   @@unique([dealerId, partNumber])
   @@map("parts")
@@ -1064,22 +1166,34 @@ enum DocumentTemplateType {
   SERVICE_ESTIMATE
   HANDOVER_DOCUMENT
   DEAL_SHEET
+  AFTERSALES_INVOICE
 }
 
 /// Dealer-authored document templates (variables/text/styling/logo) — see DOCUMENT_TEMPLATE_VARIABLES
 /// in @project-amx/shared for the mail-merge-style placeholders available per type. Only one
 /// template per (dealerId, type) may be flagged isDefault — enforced in DocumentTemplatesService,
 /// not the DB, so a dealer can keep drafts/alternates around without deleting them.
+/// Dealer-authored document templates (variables/text/styling/logo) — see DOCUMENT_TEMPLATE_VARIABLES
+/// in @project-amx/shared for the mail-merge-style placeholders available per type. Configurable
+/// at any of the three tenancy levels (`scope` + exactly one of dealerId/franchiseId/groupId set);
+/// DocumentTemplatesService.getDefaultBody() resolves the most specific default: DEALER, then
+/// FRANCHISE, then GROUP, then a built-in fallback. Only one template per (owner, type) may be
+/// isDefault — enforced in DocumentTemplatesService, not the DB.
 model DocumentTemplate {
-  id        String               @id @default(uuid())
-  dealerId  String
-  dealer    Dealer               @relation(fields: [dealerId], references: [id], onDelete: Cascade)
-  type      DocumentTemplateType
-  name      String
-  bodyHtml  String
-  isDefault Boolean              @default(false)
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
+  id          String               @id @default(uuid())
+  scope       ConfigScope          @default(DEALER)
+  dealerId    String?
+  dealer      Dealer?              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  franchiseId String?
+  franchise   Franchise?           @relation(fields: [franchiseId], references: [id], onDelete: Cascade)
+  groupId     String?
+  group       Group?               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  type        DocumentTemplateType
+  name        String
+  bodyHtml    String
+  isDefault   Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 
   @@map("document_templates")
 }
@@ -1586,4 +1700,51 @@ model UiScreenDefinition {
 
   @@unique([dealerId, entity])
   @@map("ui_screen_definitions")
+}
+
+/// A user-facing lookup function (e.g. searching a used car by registration) that a business
+/// systems manager has configured to also call an external API and merge its response, alongside
+/// the normal database search — see ActionTriggersService. Configurable at any of the three
+/// tenancy levels, same resolution rule as DocumentTemplate: DEALER, then FRANCHISE, then GROUP.
+enum ActionTriggerPoint {
+  USED_VEHICLE_REG_LOOKUP
+}
+
+model ActionTrigger {
+  id           String             @id @default(uuid())
+  scope        ConfigScope        @default(DEALER)
+  dealerId     String?
+  dealer       Dealer?            @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  franchiseId  String?
+  franchise    Franchise?         @relation(fields: [franchiseId], references: [id], onDelete: Cascade)
+  groupId      String?
+  group        Group?             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name         String
+  triggerPoint ActionTriggerPoint
+  active       Boolean            @default(true)
+  targetEntity IntegrationTargetEntity
+  /// REST call config: urlTemplate (with a `{value}` placeholder), method, headers, auth — same
+  /// shape as IntegrationConnector's REST_PULL config (see rest-auth.util.ts), reused as-is.
+  config       Json               @default("{}")
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  mappings ActionTriggerMapping[]
+
+  @@map("action_triggers")
+}
+
+/// Maps a field from the external API's response onto an AMX column or custom field — identical
+/// shape/semantics to IntegrationFieldMapping, reusing field-mapping.util's resolvePath/applyTransform.
+model ActionTriggerMapping {
+  id              String        @id @default(uuid())
+  actionTriggerId String
+  actionTrigger   ActionTrigger @relation(fields: [actionTriggerId], references: [id], onDelete: Cascade)
+  sourcePath      String
+  targetField     String
+  isCustomField   Boolean       @default(false)
+  transform       String?
+  sortOrder       Int           @default(0)
+
+  @@map("action_trigger_mappings")
 }

@@ -46,6 +46,15 @@ export class UsedCarsController {
     return this.dvlaService.lookup(reg);
   }
 
+  /** Searches this dealer's own stock, plus any business-systems-manager-configured Action
+   * Trigger for USED_VEHICLE_REG_LOOKUP (Settings > Action Triggers) — a second, independently
+   * configurable "also call an OEM API" lookup alongside the built-in DVLA one above. */
+  @Get('reg-lookup/:reg')
+  @RequirePermissions({ module: ModuleKey.USED_CARS, action: PermissionAction.VIEW })
+  regLookup(@CurrentUser() user: AuthUser, @Param('reg') reg: string) {
+    return this.usedCarsService.regLookup(user.dealerId, reg);
+  }
+
   @Get(':id')
   @RequirePermissions({ module: ModuleKey.USED_CARS, action: PermissionAction.VIEW })
   findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {

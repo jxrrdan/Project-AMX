@@ -14,11 +14,26 @@ export class DealersService {
     private readonly storage: StorageService,
   ) {}
 
-  findOne(dealerId: string) {
-    return this.prisma.dealer.findUnique({
+  async findOne(dealerId: string) {
+    const dealer = await this.prisma.dealer.findUnique({
       where: { id: dealerId },
-      include: { moduleLicenses: true },
+      include: {
+        moduleLicenses: true,
+        franchise: { include: { group: true } },
+      },
     });
+    if (!dealer) return dealer;
+
+    // Effective branding cascades DEALER -> FRANCHISE -> GROUP -> hardcoded default, so an
+    // outlet that hasn't set its own logo/colours still picks up its brand's/group's look.
+    const franchise = dealer.franchise;
+    const group = franchise?.group;
+    return {
+      ...dealer,
+      effectiveLogoUrl: dealer.logoUrl || franchise?.logoUrl || group?.logoUrl || null,
+      effectivePrimaryColour: dealer.primaryColour || franchise?.primaryColour || group?.primaryColour || '#0066B1',
+      effectiveSecondaryColour: dealer.secondaryColour || franchise?.secondaryColour || group?.secondaryColour || '#1C69D4',
+    };
   }
 
   update(dealerId: string, dto: UpdateDealerDto) {

@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { AuditService } from '../../common/audit/audit.service';
 import { EmailService } from '../../common/email/email.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { AcceptInvitationDto, InviteUserDto, UpdateUserDto } from './dto/user.dto';
+import { AcceptInvitationDto, InviteUserDto, UpdateMyProfileDto, UpdateUserDto } from './dto/user.dto';
 
 @Injectable()
 export class UsersService {
@@ -22,6 +22,12 @@ export class UsersService {
       include: { roles: { include: { role: true } } },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  /** Self-service — updates the CALLING user's own record only (id comes from their verified
+   * JWT, never a client-supplied parameter), so no ADMIN permission is required. */
+  updateMyProfile(userId: string, dto: UpdateMyProfileDto) {
+    return this.prisma.user.update({ where: { id: userId }, data: { phone: dto.phone } });
   }
 
   /** Invitation link expires after 48 hours per Feature Spec §7.3. */

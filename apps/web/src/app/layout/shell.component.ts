@@ -67,6 +67,10 @@ const NAV_ITEMS: NavItem[] = [
       </button>
       <mat-menu #userMenu="matMenu">
         <div class="menu-user">{{ userName() }}</div>
+        <a mat-menu-item routerLink="/my-profile">
+          <mat-icon>person</mat-icon>
+          <span>My profile</span>
+        </a>
         <button mat-menu-item (click)="auth.logout()">
           <mat-icon>logout</mat-icon>
           <span>Sign out</span>

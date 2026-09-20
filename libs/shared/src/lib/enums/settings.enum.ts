@@ -1,11 +1,27 @@
 import { DocumentTemplateType } from './crm.enum';
 
+/** Mirrors the Prisma `ConfigScope` enum — which of the three tenancy levels a shared piece of
+ * config (document template, action trigger) belongs to. Resolution always prefers the most
+ * specific: DEALER, then FRANCHISE, then GROUP. */
+export enum ConfigScope {
+  GROUP = 'GROUP',
+  FRANCHISE = 'FRANCHISE',
+  DEALER = 'DEALER',
+}
+
+export const CONFIG_SCOPE_LABELS: Record<ConfigScope, string> = {
+  [ConfigScope.DEALER]: 'This outlet only',
+  [ConfigScope.FRANCHISE]: 'Whole franchise/brand',
+  [ConfigScope.GROUP]: 'Whole dealer group',
+};
+
 export const DOCUMENT_TEMPLATE_TYPE_LABELS: Record<DocumentTemplateType, string> = {
   [DocumentTemplateType.SALES_INVOICE]: 'Sales invoice',
   [DocumentTemplateType.PART_EXCHANGE_RECEIPT]: 'Part-exchange receipt',
   [DocumentTemplateType.SERVICE_ESTIMATE]: 'Service estimate',
   [DocumentTemplateType.HANDOVER_DOCUMENT]: 'Handover document',
   [DocumentTemplateType.DEAL_SHEET]: 'Used car deal sheet',
+  [DocumentTemplateType.AFTERSALES_INVOICE]: 'Aftersales (workshop) invoice',
 };
 
 export interface DocumentTemplateVariable {
@@ -59,12 +75,38 @@ export const DOCUMENT_TEMPLATE_VARIABLES: Record<DocumentTemplateType, DocumentT
     { key: 'handoverDate', label: 'Handover date' },
     { key: 'salesExecutiveName', label: 'Sales executive name' },
   ],
+  [DocumentTemplateType.AFTERSALES_INVOICE]: [
+    { key: 'invoiceNumber', label: 'Invoice number' },
+    { key: 'customerName', label: 'Customer name' },
+    { key: 'vehicleReg', label: 'Vehicle registration' },
+    { key: 'jobType', label: 'Job type' },
+    { key: 'labourTotal', label: 'Labour total' },
+    { key: 'partsTotal', label: 'Parts total' },
+    { key: 'vatAmount', label: 'VAT amount' },
+    { key: 'totalAmount', label: 'Total amount' },
+    { key: '#each parts', label: 'Part line loop (description / quantity / price)' },
+  ],
 };
 
-/** Mirrors the Prisma `NotificationChannel` enum. */
+/** Mirrors the Prisma `ActionTriggerPoint` enum — a user-facing lookup function a business
+ * systems manager can wire up to also call an external API (see ActionTriggersService). */
+export enum ActionTriggerPoint {
+  USED_VEHICLE_REG_LOOKUP = 'USED_VEHICLE_REG_LOOKUP',
+}
+
+export const ACTION_TRIGGER_POINT_LABELS: Record<ActionTriggerPoint, string> = {
+  [ActionTriggerPoint.USED_VEHICLE_REG_LOOKUP]: 'Used car search by registration',
+};
+
+/** Mirrors the Prisma `NotificationChannel` enum. IN_APP always writes a row the bell can show;
+ * EMAIL/SMS additionally deliver via EmailService/SmsService (console-log adapters locally, real
+ * SES/Twilio in production — same pattern as everywhere else in this app). PUSH has no adapter at
+ * all yet — there's no push infra (FCM/APNs/web-push) in this codebase — so it logs a warning
+ * rather than pretending to deliver. */
 export enum NotificationChannel {
   IN_APP = 'IN_APP',
   EMAIL = 'EMAIL',
+  SMS = 'SMS',
   PUSH = 'PUSH',
 }
 
