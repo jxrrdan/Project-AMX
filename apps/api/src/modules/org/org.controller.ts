@@ -12,16 +12,11 @@ const MODULE = ModuleKey.ADMIN;
 export class OrgController {
   constructor(private readonly orgService: OrgService) {}
 
-  @Get('groups')
+  /** The caller's own franchise/group (with their join codes to share with sibling dealers) — never a directory of every org. */
+  @Get('my-org')
   @RequirePermissions({ module: MODULE, action: PermissionAction.VIEW })
-  listGroups() {
-    return this.orgService.listGroups();
-  }
-
-  @Get('franchises')
-  @RequirePermissions({ module: MODULE, action: PermissionAction.VIEW })
-  listFranchises() {
-    return this.orgService.listFranchises();
+  myOrg(@CurrentUser() user: AuthUser) {
+    return this.orgService.myOrg(user.dealerId);
   }
 
   @Post('groups')
@@ -36,7 +31,7 @@ export class OrgController {
     return this.orgService.createFranchise(dto);
   }
 
-  /** Self-service: assigns the CALLER's own dealer to a franchise (or clears it with a null id). */
+  /** Self-service: assigns the CALLER's own dealer to a franchise by its join code (or clears it if omitted). */
   @Post('my-dealer/franchise')
   @RequirePermissions({ module: MODULE, action: PermissionAction.EDIT })
   assignMyDealerFranchise(@CurrentUser() user: AuthUser, @Body() dto: AssignDealerFranchiseDto) {

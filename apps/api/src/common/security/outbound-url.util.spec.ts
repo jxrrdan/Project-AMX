@@ -42,4 +42,22 @@ describe('assertSafeOutboundUrl', () => {
     expect(() => assertSafeOutboundUrl('http://[::1]/x')).toThrow(BadRequestException);
     expect(() => assertSafeOutboundUrl('http://[fd00::1]/x')).toThrow(BadRequestException);
   });
+
+  it('rejects IPv4-mapped/-compatible IPv6 literals that embed a private or metadata IPv4 address', () => {
+    expect(() => assertSafeOutboundUrl('http://[::ffff:127.0.0.1]/x')).toThrow(BadRequestException);
+    expect(() => assertSafeOutboundUrl('http://[::ffff:169.254.169.254]/x')).toThrow(BadRequestException);
+    expect(() => assertSafeOutboundUrl('http://[::ffff:a9fe:a9fe]/x')).toThrow(BadRequestException);
+    expect(() => assertSafeOutboundUrl('http://[::ffff:192.168.1.5]/x')).toThrow(BadRequestException);
+    expect(() => assertSafeOutboundUrl('http://[::10.0.0.5]/x')).toThrow(BadRequestException);
+  });
+
+  it('allows an IPv4-mapped IPv6 literal that embeds a public IPv4 address', () => {
+    expect(() => assertSafeOutboundUrl('http://[::ffff:93.184.216.34]/x')).not.toThrow();
+  });
+
+  it('rejects the Alibaba and Oracle Cloud metadata endpoints and the CGNAT range', () => {
+    expect(() => assertSafeOutboundUrl('http://100.100.100.200/latest/meta-data/')).toThrow(BadRequestException);
+    expect(() => assertSafeOutboundUrl('http://192.0.0.192/latest/meta-data/')).toThrow(BadRequestException);
+    expect(() => assertSafeOutboundUrl('http://100.64.0.5/x')).toThrow(BadRequestException);
+  });
 });

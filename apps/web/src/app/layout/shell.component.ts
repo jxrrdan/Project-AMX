@@ -10,6 +10,7 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { ModuleKey, PermissionAction } from '@project-amx/shared';
 import { AuthService } from '../core/auth.service';
 import { ThemeService } from '../core/theme.service';
+import { AiAssistantDockComponent } from '../features/ai/ai-assistant-dock.component';
 import { NotificationsBellComponent } from '../features/notifications/notifications-bell.component';
 
 interface NavItem {
@@ -52,6 +53,7 @@ const NAV_ITEMS: NavItem[] = [
     MatMenuModule,
     MatBadgeModule,
     NotificationsBellComponent,
+    AiAssistantDockComponent,
   ],
   template: `
     <mat-toolbar class="toolbar" [style.background]="theme.primaryColour()" [style.color]="'#fff'">
@@ -98,6 +100,10 @@ const NAV_ITEMS: NavItem[] = [
         <router-outlet />
       </mat-sidenav-content>
     </mat-sidenav-container>
+
+    @if (auth.hasPermission(aiModule, viewAction)) {
+      <app-ai-assistant-dock />
+    }
   `,
   styles: [
     `
@@ -141,6 +147,8 @@ const NAV_ITEMS: NavItem[] = [
 export class ShellComponent implements OnInit {
   readonly auth = inject(AuthService);
   readonly theme = inject(ThemeService);
+  readonly aiModule = ModuleKey.AI_INSIGHTS;
+  readonly viewAction = PermissionAction.VIEW;
 
   readonly userName = computed(() => {
     const user = this.auth.user();

@@ -288,10 +288,20 @@ export class IntegrationsService {
   /** Rejects an SSRF-risky URL as soon as a REST_PULL connector's config is saved, rather than
    * only when RestPollerService next tries to fetch it — see assertSafeOutboundUrl. */
   private validateConfigUrl(type: IntegrationType, config: Record<string, unknown> | undefined): void {
-    if (type !== IntegrationType.REST_PULL) return;
-    const url = (config ?? {})['url'];
-    if (typeof url === 'string' && url) {
-      assertSafeOutboundUrl(url);
+    const cfg = config ?? {};
+    if (type === IntegrationType.REST_PULL) {
+      const url = cfg['url'];
+      if (typeof url === 'string' && url) {
+        assertSafeOutboundUrl(url);
+      }
+    }
+    // Model-metadata enrichment (IntegrationIngestService) applies to any connector transport
+    // (REST_PULL, REST_PUSH, MQTT) whose target entity is a vehicle, so validate it regardless of type.
+    const metadataUrlTemplate = (cfg['modelEnrichment'] as { metadataUrlTemplate?: unknown } | undefined)?.metadataUrlTemplate;
+    if (typeof metadataUrlTemplate === 'string' && metadataUrlTemplate) {
+      // Validate with the {model} placeholder stripped — a bare placeholder isn't a real URL, but
+      // the surrounding host/scheme the admin configured still needs to be safe.
+      assertSafeOutboundUrl(metadataUrlTemplate.replace('{model}', 'placeholder'));
     }
   }
 }

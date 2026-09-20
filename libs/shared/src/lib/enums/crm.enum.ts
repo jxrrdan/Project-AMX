@@ -75,6 +75,16 @@ export enum DocumentTemplateType {
   HANDOVER_DOCUMENT = 'HANDOVER_DOCUMENT',
   DEAL_SHEET = 'DEAL_SHEET',
   AFTERSALES_INVOICE = 'AFTERSALES_INVOICE',
+  CUSTOMER_SUPPORT_INVOICE = 'CUSTOMER_SUPPORT_INVOICE',
+}
+
+/** Mirrors the Prisma `DealSheetStatus` enum — ACTIVE until either a sale is signed (SIGNED,
+ * set automatically when the vehicle's status moves to SOLD) or the deal falls through
+ * (INVALIDATED), which frees the vehicle up for a new deal sheet. */
+export enum DealSheetStatus {
+  ACTIVE = 'ACTIVE',
+  SIGNED = 'SIGNED',
+  INVALIDATED = 'INVALIDATED',
 }
 
 export enum WorkflowTrigger {

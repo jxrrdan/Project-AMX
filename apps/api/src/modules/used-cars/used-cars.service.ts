@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { ActionTriggerPoint, DocumentTemplateType, UsedVehicleStatus } from '@project-amx/shared';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { ActionTriggerPoint, DealSheetStatus, DocumentTemplateType, UsedVehicleStatus } from '@project-amx/shared';
 import { PdfService } from '../../common/pdf/pdf.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ActionTriggersService } from '../action-triggers/action-triggers.service';
@@ -10,6 +10,7 @@ import {
   CreateAppraisalDto,
   CreateDealSheetDto,
   CreateUsedVehicleDto,
+  InvalidateDealSheetDto,
   SetAskingPriceDto,
   UpdateUsedVehicleStatusDto,
 } from './dto/used-car.dto';
@@ -62,7 +63,13 @@ export class UsedCarsService {
   findOne(dealerId: string, id: string) {
     return this.prisma.usedVehicle.findFirst({
       where: { id, dealerId },
-      include: { photos: true, priceHistory: true, appraisal: true, dealSheet: true, leads: true },
+      include: {
+        photos: true,
+        priceHistory: true,
+        appraisal: true,
+        dealSheets: { orderBy: { createdAt: 'desc' }, include: { accessoryLines: true } },
+        leads: true,
+      },
     });
   }
 
@@ -90,7 +97,7 @@ export class UsedCarsService {
     if (!vehicle) {
       throw new NotFoundException('Used vehicle not found');
     }
-    return this.prisma.usedVehicle.update({
+    const updated = await this.prisma.usedVehicle.update({
       where: { id },
       data: {
         status: dto.status,
@@ -98,6 +105,16 @@ export class UsedCarsService {
         soldAt: dto.status === UsedVehicleStatus.SOLD ? new Date() : undefined,
       },
     });
+    // The vehicle going SOLD means whichever deal sheet was actively being worked resulted in a
+    // signed sale — record that transition on the deal sheet itself so its status is meaningful,
+    // not just the vehicle's.
+    if (dto.status === UsedVehicleStatus.SOLD) {
+      await this.prisma.dealSheet.updateMany({
+        where: { usedVehicleId: id, status: DealSheetStatus.ACTIVE },
+        data: { status: DealSheetStatus.SIGNED },
+      });
+    }
+    return updated;
   }
 
   async addPhotos(dealerId: string, id: string, dto: AddPhotosDto) {
@@ -151,6 +168,14 @@ export class UsedCarsService {
     if (!vehicle) {
       throw new NotFoundException('Used vehicle not found');
     }
+    const activeDealSheet = await this.prisma.dealSheet.findFirst({
+      where: { usedVehicleId, status: DealSheetStatus.ACTIVE },
+    });
+    if (activeDealSheet) {
+      throw new BadRequestException(
+        'This vehicle already has an active deal sheet — invalidate it first if that deal fell through',
+      );
+    }
 
     const accessories = dto.accessories ?? [];
     const accessoriesTotal = accessories.reduce((sum, line) => sum + line.price, 0);
@@ -183,6 +208,7 @@ export class UsedCarsService {
     return this.prisma.dealSheet.create({
       data: {
         usedVehicleId,
+        status: DealSheetStatus.ACTIVE,
         sellingPrice: dto.sellingPrice,
         partExchangeValue: dto.partExchangeValue,
         financeContribution: dto.financeContribution,
@@ -192,6 +218,28 @@ export class UsedCarsService {
         accessoryLines: { create: accessories },
       },
       include: { accessoryLines: true },
+    });
+  }
+
+  /**
+   * A deal that doesn't result in a signed sale must be invalidated (not deleted, for audit trail)
+   * before this vehicle can get a new deal sheet — see the single-active-deal-sheet check in
+   * createDealSheet(). Only an ACTIVE deal sheet can be invalidated: one already SIGNED represents
+   * a completed sale and shouldn't be reopened this way, and an already-INVALIDATED one is a no-op.
+   */
+  async invalidateDealSheet(dealerId: string, usedVehicleId: string, dealSheetId: string, dto: InvalidateDealSheetDto) {
+    const dealSheet = await this.prisma.dealSheet.findFirst({
+      where: { id: dealSheetId, usedVehicleId, usedVehicle: { dealerId } },
+    });
+    if (!dealSheet) {
+      throw new NotFoundException('Deal sheet not found');
+    }
+    if (dealSheet.status !== DealSheetStatus.ACTIVE) {
+      throw new BadRequestException(`Only an active deal sheet can be invalidated (this one is ${dealSheet.status})`);
+    }
+    return this.prisma.dealSheet.update({
+      where: { id: dealSheetId },
+      data: { status: DealSheetStatus.INVALIDATED, invalidatedAt: new Date(), invalidatedReason: dto.reason },
     });
   }
 

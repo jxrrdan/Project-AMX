@@ -213,13 +213,16 @@ function, not just a scheduled feed":
 
 - **Group → Franchise → Dealer hierarchy** — additive, nullable FKs (`Dealer.franchiseId`,
   `Franchise.groupId`) so every existing single-tenant `dealerId`-scoped query keeps working
-  unchanged. `/admin/settings` → Organisation lets a dealer create or join a franchise/group.
-  Branding (logo, colours) cascades DEALER → FRANCHISE → GROUP → hardcoded default the same way
-  Document Templates and Action Triggers now do, via a shared `TenancyScopeService`. There is no
-  separate "group admin" identity in this app — a franchise/group-scoped row is collaboratively
-  owned by any `ADMIN:EDIT` user at any dealer already inside that franchise/group, and the owning
-  franchise/group id is always derived server-side from the caller's own tenancy context, never
-  accepted from the client — a deliberate v1 simplification over building a whole new admin role.
+  unchanged. `/admin/settings` → Organisation lets a dealer create a franchise/group or join an
+  existing one. Branding (logo, colours) cascades DEALER → FRANCHISE → GROUP → hardcoded default
+  the same way Document Templates and Action Triggers now do, via a shared `TenancyScopeService`.
+  There is no separate "group admin" identity in this app — a franchise/group-scoped row is
+  collaboratively owned by any `ADMIN:EDIT` user at any dealer already inside that franchise/group.
+  Joining an existing franchise/group requires its unguessable **join code** (shown only to a
+  dealer already inside it, to share with a sibling outlet out of band) rather than its raw id or a
+  browsable list of every org in the system — a security review of this feature found the original
+  id-based design let any `ADMIN:EDIT` user attach their dealer to any franchise/group by id and
+  inherit read/write access to its shared config, which the join-code redemption model closes.
 - **Action Triggers** (`/admin/settings` → Action triggers) — lets a business systems manager wire
   a user-facing lookup (currently: searching a used car by registration) to also call an external
   OEM/DMS API and map its response into AMX fields, using the same field-mapping engine and
@@ -229,7 +232,10 @@ function, not just a scheduled feed":
   search half of the request always succeeds regardless.
 - **SSRF protection** (`common/security/outbound-url.util.ts`) — any admin-configured outbound URL
   (Action Triggers, Integration Hub REST-pull connectors) is checked against non-http(s) schemes,
-  `localhost`, the cloud metadata address, and private IPv4/IPv6 ranges before it's ever requested.
+  `localhost`, cloud metadata addresses (AWS/GCP/Azure/Alibaba/Oracle), the CGNAT range, and private
+  IPv4/IPv6 ranges before it's ever requested — including an IPv4-mapped/-compatible IPv6 literal
+  (`::ffff:169.254.169.254`), which a security review found reached the metadata endpoint unblocked
+  in the first version of this guard, since dual-stack hosts deliver it to the embedded IPv4 address.
   This checks the literal hostname/IP at validation time only — it doesn't re-resolve at request
   time, so a DNS-rebinding attack is a known, accepted residual gap for v1.
 - **Real notification delivery** — `NotificationChannel` now covers IN_APP (always writes a row, so
@@ -247,6 +253,30 @@ function, not just a scheduled feed":
   labour time (falling back to the estimate if nobody's clocked off yet) and allocated parts at
   cost, through the exact same `DocumentTemplateType`/`DocumentSequenceService` pattern as the
   used-car deal sheet, so a dealer can override its layout the same way.
+
+## Deal sheet lifecycle, customer invoicing, model enrichment, and an AI assistant on every screen
+
+- **Deal sheet invalidation** — a deal sheet is no longer 1:1 with a vehicle: it now carries a
+  `DealSheetStatus` (ACTIVE/SIGNED/INVALIDATED) and a vehicle can have many over time, one active at
+  once. If a deal falls through before a sale is signed, invalidating it (with an optional reason)
+  frees the vehicle up for a new deal sheet — the old one stays visible in a "previous deal sheets"
+  history rather than being deleted. Marking the vehicle SOLD automatically flips its active deal
+  sheet to SIGNED, so the status reflects reality without a separate manual step.
+- **Customer support invoicing** (a Contact's detail page) — an ad-hoc invoice (goodwill gestures,
+  admin fees, lost-key/remote charges) raised directly against a CRM contact rather than a workshop
+  job card, through the same document-template/sequence engine as every other AMX document.
+- **Model metadata enrichment** (Integration Hub connector settings, for VEHICLE/USED_VEHICLE
+  connectors) — when an inbound REST or MQTT payload's "model" isn't already known to AMX (e.g. a
+  new derivative nobody's stored yet), the shared ingest engine looks it up in a small
+  franchise/dealer-scoped cache first and, on a miss, calls a configured OEM metadata API once,
+  caches the result, and merges it into that record's custom fields — later records for the same
+  model reuse the cache instead of calling the API again. Never fails the ingest: an unreachable
+  metadata API just means the record is stored without the extra metadata, the same
+  graceful-degradation contract as Action Triggers.
+- **AI assistant on every screen** — a floating assistant button/panel (`AiAssistantDockComponent`)
+  is mounted in the app shell, so it's reachable from any module without navigating away, sharing
+  its conversation with the full `/ai` page (now just a dedicated, larger window onto the same
+  thread and history) via a shared `AiAssistantService`.
 
 ## What's deliberately not built
 

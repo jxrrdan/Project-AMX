@@ -117,3 +117,9 @@ export class CreateDealSheetDto {
   @Type(() => DealAccessoryLineDto)
   accessories?: DealAccessoryLineDto[];
 }
+
+export class InvalidateDealSheetDto {
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}

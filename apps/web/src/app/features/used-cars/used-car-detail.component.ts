@@ -1,7 +1,7 @@
 import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
@@ -20,6 +20,18 @@ interface AccessoryLine {
   price: number | null;
 }
 
+interface DealSheetDetail {
+  id: string;
+  status: 'ACTIVE' | 'SIGNED' | 'INVALIDATED';
+  sellingPrice: number;
+  accessoriesTotal: number;
+  grossProfit: number | null;
+  pdfUrl: string | null;
+  invalidatedReason: string | null;
+  createdAt: string;
+  accessoryLines: { description: string; price: number }[];
+}
+
 interface UsedVehicleDetail {
   id: string;
   reg: string;
@@ -32,13 +44,7 @@ interface UsedVehicleDetail {
   status: UsedVehicleStatus;
   priceHistory: { price: number; changedAt: string }[];
   appraisal: { condition: string | null; mileage: number | null; damageNotes: string | null; agreedValue: number } | null;
-  dealSheet: {
-    sellingPrice: number;
-    accessoriesTotal: number;
-    grossProfit: number | null;
-    pdfUrl: string | null;
-    accessoryLines: { description: string; price: number }[];
-  } | null;
+  dealSheets: DealSheetDetail[];
 }
 
 @Component({
@@ -129,7 +135,8 @@ interface UsedVehicleDetail {
         <div class="col">
           <mat-card>
             <h3>Deal sheet</h3>
-            @if (v.dealSheet; as d) {
+            @if (activeDealSheet(); as d) {
+              <mat-chip-set><mat-chip [class]="'status-' + d.status">{{ d.status }}</mat-chip></mat-chip-set>
               <p>Selling price: {{ d.sellingPrice | currency: 'GBP' }}</p>
               <p>Gross profit: {{ d.grossProfit | currency: 'GBP' }}</p>
               @if (d.accessoryLines.length) {
@@ -144,6 +151,13 @@ interface UsedVehicleDetail {
               @if (d.pdfUrl) {
                 <a [href]="storageUrl(d.pdfUrl)" target="_blank" rel="noopener">View deal sheet document</a>
               }
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Reason (optional)</mat-label>
+                <input matInput [(ngModel)]="invalidateReason" placeholder="e.g. Buyer withdrew, finance fell through" />
+              </mat-form-field>
+              <button mat-stroked-button color="warn" (click)="invalidateDealSheet(d.id)">
+                Invalidate — deal didn't result in a signed sale
+              </button>
             } @else {
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>Selling price (£)</mat-label>
@@ -187,6 +201,22 @@ interface UsedVehicleDetail {
               >
                 Generate deal sheet
               </button>
+            }
+
+            @if (pastDealSheets().length) {
+              <h4>Previous deal sheets</h4>
+              @for (d of pastDealSheets(); track d.id) {
+                <div class="line-item">
+                  <span>
+                    <mat-chip [class]="'status-' + d.status">{{ d.status }}</mat-chip>
+                    {{ d.sellingPrice | currency: 'GBP' }}
+                    @if (d.invalidatedReason) { — {{ d.invalidatedReason }} }
+                  </span>
+                  @if (d.pdfUrl) {
+                    <a [href]="storageUrl(d.pdfUrl)" target="_blank" rel="noopener">Document</a>
+                  }
+                </div>
+              }
             }
           </mat-card>
         </div>
@@ -241,6 +271,24 @@ interface UsedVehicleDetail {
         font-weight: 600;
         margin: 8px 0 0;
       }
+      .line-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #eee;
+        padding: 6px 0;
+        font-size: 13px;
+      }
+      .status-ACTIVE {
+        background: #e3f2fd;
+      }
+      .status-SIGNED {
+        background: #e8f5e9;
+      }
+      .status-INVALIDATED {
+        background: #fbe9e7;
+        text-decoration: line-through;
+      }
     `,
   ],
 })
@@ -249,9 +297,12 @@ export class UsedCarDetailComponent implements OnInit {
   readonly statuses = Object.values(UsedVehicleStatus);
   readonly usedVehicleEntity = IntegrationTargetEntity.USED_VEHICLE;
   readonly accessoryLines = signal<AccessoryLine[]>([{ description: '', price: null }]);
+  readonly activeDealSheet = computed(() => this.vehicle()?.dealSheets.find((d) => d.status === 'ACTIVE') ?? null);
+  readonly pastDealSheets = computed(() => this.vehicle()?.dealSheets.filter((d) => d.status !== 'ACTIVE') ?? []);
 
   statusValue: UsedVehicleStatus = UsedVehicleStatus.IN_STOCK;
   askingPriceValue: number | null = null;
+  invalidateReason = '';
 
   appraisalForm = { condition: '', damageNotes: '', agreedValue: null as number | null };
   dealSheetForm = { sellingPrice: null as number | null, partExchangeValue: null as number | null, financeContribution: null as number | null };
@@ -315,6 +366,24 @@ export class UsedCarDetailComponent implements OnInit {
 
     this.http
       .post(`${environment.apiUrl}/used-vehicles/${this.vehicleId}/deal-sheet`, { ...this.dealSheetForm, accessories })
-      .subscribe(() => this.load());
+      .subscribe({
+        next: () => this.load(),
+        error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not generate deal sheet', 'Dismiss', { duration: 4000 }),
+      });
+  }
+
+  invalidateDealSheet(dealSheetId: string): void {
+    this.http
+      .post(`${environment.apiUrl}/used-vehicles/${this.vehicleId}/deal-sheet/${dealSheetId}/invalidate`, {
+        reason: this.invalidateReason || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.invalidateReason = '';
+          this.snackBar.open('Deal sheet invalidated — this vehicle can now get a new one', 'Dismiss', { duration: 3000 });
+          this.load();
+        },
+        error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not invalidate deal sheet', 'Dismiss', { duration: 4000 }),
+      });
   }
 }

@@ -5,6 +5,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CommunicationsService } from './communications.service';
+import { CustomerInvoiceService } from './customer-invoice.service';
 import {
   CreateActivityDto,
   CreateContactDto,
@@ -13,6 +14,7 @@ import {
   CreateTaskDto,
   UpdateLeadStageDto,
 } from './dto/contact.dto';
+import { CreateCustomerInvoiceDto } from './dto/customer-invoice.dto';
 import { CreateEmailTemplateDto, SendEmailDto, SendSmsDto } from './dto/template.dto';
 import { CreateWorkflowDto, EnrollDto } from './dto/workflow.dto';
 import { CrmService } from './crm.service';
@@ -24,7 +26,21 @@ export class CrmController {
     private readonly crmService: CrmService,
     private readonly communicationsService: CommunicationsService,
     private readonly workflowsService: WorkflowsService,
+    private readonly customerInvoiceService: CustomerInvoiceService,
   ) {}
+
+  @Get('contacts/:id/invoices')
+  @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.VIEW })
+  listCustomerInvoices(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.customerInvoiceService.list(user.dealerId, id);
+  }
+
+  /** Ad-hoc customer-support invoicing (goodwill/admin/lost-key charges) — not tied to a workshop job card. */
+  @Post('contacts/:id/invoices')
+  @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.CREATE })
+  createCustomerInvoice(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CreateCustomerInvoiceDto) {
+    return this.customerInvoiceService.create(user.dealerId, id, dto);
+  }
 
   @Get('contacts')
   @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.VIEW })

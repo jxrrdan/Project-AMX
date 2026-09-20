@@ -9,7 +9,6 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
@@ -38,7 +37,7 @@ interface DealerProfile {
   primaryColour: string | null;
   secondaryColour: string | null;
   labourRatePerHour: number | null;
-  franchise: Franchise | null;
+  franchise: { id: string; name: string; group: { id: string; name: string } | null } | null;
 }
 
 interface DocumentSequence {
@@ -67,15 +66,22 @@ interface DocumentTemplateSummary {
   updatedAt: string;
 }
 
-interface Group {
+interface OrgGroup {
   id: string;
   name: string;
+  joinCode: string;
 }
 
-interface Franchise {
+interface OrgFranchise {
   id: string;
   name: string;
-  group: Group | null;
+  brandCode: string | null;
+  joinCode: string;
+}
+
+interface MyOrg {
+  franchise: OrgFranchise | null;
+  group: OrgGroup | null;
 }
 
 interface ActionTriggerSummary {
@@ -97,7 +103,6 @@ interface ActionTriggerSummary {
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatSelectModule,
     MatSlideToggleModule,
     MatTableModule,
     MatTabsModule,
@@ -152,23 +157,33 @@ interface ActionTriggerSummary {
           <p class="hint">
             Join a franchise (e.g. "BMW") to share document templates, branding, and action
             triggers with every other outlet in it — and, transitively, with its dealer group. This
-            outlet's own settings always take priority over anything shared.
+            outlet's own settings always take priority over anything shared. Joining uses an invite
+            code from an outlet already in that franchise/group, rather than picking one from a
+            list — nobody outside an org can browse or attach to it just by knowing its name.
           </p>
-          <p>
-            Current franchise: <b>{{ myFranchiseName() || 'None' }}</b>
-            @if (myFranchiseGroupName()) {
-              (group: <b>{{ myFranchiseGroupName() }}</b>)
-            }
-          </p>
-          <mat-form-field appearance="outline">
-            <mat-label>Join franchise</mat-label>
-            <mat-select [(ngModel)]="selectedFranchiseId" (selectionChange)="joinFranchise()">
-              <mat-option [value]="null">None</mat-option>
-              @for (f of franchises(); track f.id) {
-                <mat-option [value]="f.id">{{ f.name }}{{ f.group ? ' (' + f.group.name + ')' : '' }}</mat-option>
+          @if (myOrg().franchise; as f) {
+            <p>
+              Current franchise: <b>{{ f.name }}</b>
+              @if (myOrg().group; as g) {
+                (group: <b>{{ g.name }}</b>)
               }
-            </mat-select>
-          </mat-form-field>
+            </p>
+            <p class="hint">
+              Share this franchise's join code with a sibling outlet so they can join it:
+              <code>{{ f.joinCode }}</code>
+              @if (myOrg().group; as g) {
+                <br />Share this group's join code so another franchise can join it: <code>{{ g.joinCode }}</code>
+              }
+            </p>
+            <button mat-stroked-button (click)="leaveFranchise()">Leave franchise</button>
+          } @else {
+            <p>Current franchise: <b>None</b></p>
+            <mat-form-field appearance="outline" class="grow">
+              <mat-label>Franchise join code</mat-label>
+              <input matInput [(ngModel)]="franchiseJoinCodeInput" placeholder="paste the code a sibling outlet shared with you" />
+            </mat-form-field>
+            <button mat-flat-button color="primary" [disabled]="!franchiseJoinCodeInput" (click)="joinFranchise()">Join franchise</button>
+          }
 
           <div class="row">
             <mat-form-field appearance="outline">
@@ -176,13 +191,8 @@ interface ActionTriggerSummary {
               <input matInput [(ngModel)]="newFranchiseName" placeholder="e.g. BMW" />
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>Under group (optional)</mat-label>
-              <mat-select [(ngModel)]="newFranchiseGroupId">
-                <mat-option [value]="null">None</mat-option>
-                @for (g of groups(); track g.id) {
-                  <mat-option [value]="g.id">{{ g.name }}</mat-option>
-                }
-              </mat-select>
+              <mat-label>Group join code (optional)</mat-label>
+              <input matInput [(ngModel)]="newFranchiseGroupJoinCode" placeholder="paste a group's join code to attach under it" />
             </mat-form-field>
             <button mat-stroked-button [disabled]="!newFranchiseName" (click)="createFranchise()">+ Add franchise</button>
           </div>
@@ -194,6 +204,9 @@ interface ActionTriggerSummary {
             </mat-form-field>
             <button mat-stroked-button [disabled]="!newGroupName" (click)="createGroup()">+ Add group</button>
           </div>
+          @if (lastCreatedJoinCode()) {
+            <p class="hint">Created — its join code is <code>{{ lastCreatedJoinCode() }}</code>. Share it with the outlet(s) that should join it.</p>
+          }
         </mat-card>
       </mat-tab>
 
@@ -492,12 +505,12 @@ export class SettingsComponent implements OnInit {
   readonly actionTriggerColumns = ['name', 'triggerPoint', 'scope', 'active', 'actions'];
   readonly triggerPointLabels = ACTION_TRIGGER_POINT_LABELS;
 
-  readonly groups = signal<Group[]>([]);
-  readonly franchises = signal<Franchise[]>([]);
+  readonly myOrg = signal<MyOrg>({ franchise: null, group: null });
   readonly actionTriggers = signal<ActionTriggerSummary[]>([]);
-  selectedFranchiseId: string | null = null;
+  readonly lastCreatedJoinCode = signal<string | null>(null);
+  franchiseJoinCodeInput = '';
   newFranchiseName = '';
-  newFranchiseGroupId: string | null = null;
+  newFranchiseGroupJoinCode = '';
   newGroupName = '';
 
   profileForm: DealerProfile = {
@@ -529,45 +542,52 @@ export class SettingsComponent implements OnInit {
     this.loadActionTriggers();
   }
 
-  myFranchiseName(): string | null {
-    return this.profileForm.franchise?.name ?? null;
-  }
-
-  myFranchiseGroupName(): string | null {
-    return this.profileForm.franchise?.group?.name ?? null;
-  }
-
   loadOrg(): void {
-    this.http.get<Group[]>(`${environment.apiUrl}/org/groups`).subscribe((data) => this.groups.set(data));
-    this.http.get<Franchise[]>(`${environment.apiUrl}/org/franchises`).subscribe((data) => this.franchises.set(data));
+    this.http.get<MyOrg>(`${environment.apiUrl}/org/my-org`).subscribe((data) => this.myOrg.set(data));
   }
 
   joinFranchise(): void {
-    this.http.post(`${environment.apiUrl}/org/my-dealer/franchise`, { franchiseId: this.selectedFranchiseId }).subscribe({
+    this.http.post(`${environment.apiUrl}/org/my-dealer/franchise`, { franchiseJoinCode: this.franchiseJoinCodeInput }).subscribe({
       next: () => {
-        this.snackBar.open('Franchise updated', 'Dismiss', { duration: 2000 });
-        this.loadProfile();
+        this.franchiseJoinCodeInput = '';
+        this.snackBar.open('Franchise joined', 'Dismiss', { duration: 2000 });
+        this.loadOrg();
       },
-      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not update franchise', 'Dismiss', { duration: 4000 }),
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not join that franchise', 'Dismiss', { duration: 4000 }),
+    });
+  }
+
+  leaveFranchise(): void {
+    this.http.post(`${environment.apiUrl}/org/my-dealer/franchise`, {}).subscribe({
+      next: () => {
+        this.snackBar.open('Left franchise', 'Dismiss', { duration: 2000 });
+        this.loadOrg();
+      },
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not leave franchise', 'Dismiss', { duration: 4000 }),
     });
   }
 
   createFranchise(): void {
-    this.http.post(`${environment.apiUrl}/org/franchises`, { name: this.newFranchiseName, groupId: this.newFranchiseGroupId }).subscribe({
-      next: () => {
-        this.newFranchiseName = '';
-        this.newFranchiseGroupId = null;
-        this.loadOrg();
-      },
-      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not create franchise', 'Dismiss', { duration: 4000 }),
-    });
+    this.http
+      .post<OrgFranchise>(`${environment.apiUrl}/org/franchises`, {
+        name: this.newFranchiseName,
+        groupJoinCode: this.newFranchiseGroupJoinCode || undefined,
+      })
+      .subscribe({
+        next: (created) => {
+          this.newFranchiseName = '';
+          this.newFranchiseGroupJoinCode = '';
+          this.lastCreatedJoinCode.set(created.joinCode);
+        },
+        error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not create franchise', 'Dismiss', { duration: 4000 }),
+      });
   }
 
   createGroup(): void {
-    this.http.post(`${environment.apiUrl}/org/groups`, { name: this.newGroupName }).subscribe({
-      next: () => {
+    this.http.post<OrgGroup>(`${environment.apiUrl}/org/groups`, { name: this.newGroupName }).subscribe({
+      next: (created) => {
         this.newGroupName = '';
-        this.loadOrg();
+        this.lastCreatedJoinCode.set(created.joinCode);
       },
       error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not create group', 'Dismiss', { duration: 4000 }),
     });
@@ -592,7 +612,6 @@ export class SettingsComponent implements OnInit {
         primaryColour: dealer.primaryColour || '#0066B1',
         secondaryColour: dealer.secondaryColour || '#1C69D4',
       };
-      this.selectedFranchiseId = dealer.franchise?.id ?? null;
     });
   }
 

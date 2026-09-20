@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { IntegrationRunStatus, IntegrationStatus, IntegrationTargetEntity } from '@project-amx/shared';
+import { ConfigScope, IntegrationRunStatus, IntegrationStatus, IntegrationTargetEntity } from '@project-amx/shared';
+import axios from 'axios';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { assertSafeOutboundUrl } from '../../common/security/outbound-url.util';
+import { TenancyScopeService } from '../../common/tenancy/tenancy-scope.service';
 import { applyTransform, coerceForColumn, ENTITY_MODEL_NAME, isKnownTargetField, resolvePath } from './field-mapping.util';
 
 interface TargetDelegate {
@@ -15,7 +18,18 @@ export interface IngestableConnector {
   targetEntity: string;
   matchField: string | null;
   mappings: { sourcePath: string; targetField: string; isCustomField: boolean; transform: string | null }[];
+  /** Present on every real Prisma row; only spelled out on the mock connectors in tests that need it. */
+  config?: unknown;
 }
+
+interface ModelEnrichmentConfig {
+  /** e.g. "https://oem.example.com/models/{model}" — {model} is replaced with the normalised model name. */
+  metadataUrlTemplate?: string;
+  /** Dot-path into the response body where the metadata object lives, if it's nested. */
+  resultsPath?: string;
+}
+
+const ENRICHABLE_ENTITIES = new Set([IntegrationTargetEntity.VEHICLE, IntegrationTargetEntity.USED_VEHICLE]);
 
 /**
  * The actual data-writing engine behind every OEM Integration Hub connector — shared by the
@@ -27,7 +41,10 @@ export interface IngestableConnector {
 export class IntegrationIngestService {
   private readonly logger = new Logger(IntegrationIngestService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenancy: TenancyScopeService,
+  ) {}
 
   /** Runs one inbound payload (a single record, or an array of records) through the mapping engine. */
   async ingest(connector: IngestableConnector, rawPayload: unknown) {
@@ -87,6 +104,10 @@ export class IntegrationIngestService {
       }
     }
 
+    if (ENRICHABLE_ENTITIES.has(entity)) {
+      await this.enrichWithModelMetadata(connector, columnValues, customFieldValues);
+    }
+
     const delegate = this.delegateFor(entity);
     // Every lookup and write is scoped to this connector's own dealer — an inbound payload must
     // never be able to match, and therefore silently overwrite, another dealer's record.
@@ -112,5 +133,65 @@ export class IntegrationIngestService {
 
   private delegateFor(entity: IntegrationTargetEntity): TargetDelegate {
     return (this.prisma as unknown as Record<string, TargetDelegate>)[ENTITY_MODEL_NAME[entity]];
+  }
+
+  /**
+   * Conditional post-mapping workflow: when this connector's payload carries a "model" (VEHICLE
+   * and USED_VEHICLE both map that field already — see field-mapping.util's TARGET_ENTITY_FIELDS)
+   * and the connector has an OEM metadata API configured, checks whether AMX already knows this
+   * model before doing anything else. A cache hit needs no external call; a miss (e.g. a new MINI
+   * derivative nobody's stored yet) calls the configured API once, caches the result, and merges
+   * it into this record's custom fields — the same "call another API or look it up" branching the
+   * business systems manager wants, but reusing this shared ingest engine (REST_PULL, REST_PUSH,
+   * and MQTT all funnel through it) rather than special-casing any one transport.
+   *
+   * Never fails the ingest: an unreachable/misconfigured metadata API just means this record is
+   * stored without the extra metadata, same graceful-degradation contract as ActionTriggersService.run().
+   */
+  private async enrichWithModelMetadata(
+    connector: IngestableConnector,
+    columnValues: Record<string, unknown>,
+    customFieldValues: Record<string, unknown>,
+  ): Promise<void> {
+    const config = ((connector.config ?? {}) as { modelEnrichment?: ModelEnrichmentConfig }).modelEnrichment;
+    const rawModel = columnValues['model'];
+    if (!config?.metadataUrlTemplate || typeof rawModel !== 'string' || !rawModel.trim()) {
+      return;
+    }
+    const modelKey = rawModel.trim().toLowerCase();
+
+    try {
+      const ctx = await this.tenancy.resolve(connector.dealerId);
+      for (const clause of this.tenancy.scopeWhereClauses(ctx)) {
+        const cached = await this.prisma.vehicleModelMetadata.findFirst({ where: { ...clause, modelKey } });
+        if (cached) {
+          customFieldValues['modelMetadata'] = cached.data;
+          return;
+        }
+      }
+
+      // Not seen before anywhere in this dealer's/franchise's/group's cache — fetch it once.
+      const url = config.metadataUrlTemplate.replace('{model}', encodeURIComponent(modelKey));
+      assertSafeOutboundUrl(url);
+      const response = await axios.request({ url, method: 'GET', timeout: 10_000 });
+      const data = config.resultsPath ? resolvePath(response.data, config.resultsPath) : response.data;
+
+      // A franchise-wide brand (e.g. every MINI outlet) benefits from sharing this fetch; fall
+      // back to this dealer alone when it isn't assigned to a franchise yet.
+      const scope = ctx.franchiseId ? ConfigScope.FRANCHISE : ConfigScope.DEALER;
+      await this.prisma.vehicleModelMetadata.create({
+        data: {
+          scope,
+          dealerId: scope === ConfigScope.DEALER ? ctx.dealerId : undefined,
+          franchiseId: scope === ConfigScope.FRANCHISE ? ctx.franchiseId : undefined,
+          modelKey,
+          data: (data ?? {}) as never,
+        },
+      });
+      customFieldValues['modelMetadata'] = data ?? {};
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Model metadata lookup for "${modelKey}" failed on connector ${connector.id} — storing without it: ${message}`);
+    }
   }
 }

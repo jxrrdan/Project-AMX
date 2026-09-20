@@ -22,6 +22,7 @@ export const DOCUMENT_TEMPLATE_TYPE_LABELS: Record<DocumentTemplateType, string>
   [DocumentTemplateType.HANDOVER_DOCUMENT]: 'Handover document',
   [DocumentTemplateType.DEAL_SHEET]: 'Used car deal sheet',
   [DocumentTemplateType.AFTERSALES_INVOICE]: 'Aftersales (workshop) invoice',
+  [DocumentTemplateType.CUSTOMER_SUPPORT_INVOICE]: 'Customer support invoice',
 };
 
 export interface DocumentTemplateVariable {
@@ -85,6 +86,14 @@ export const DOCUMENT_TEMPLATE_VARIABLES: Record<DocumentTemplateType, DocumentT
     { key: 'vatAmount', label: 'VAT amount' },
     { key: 'totalAmount', label: 'Total amount' },
     { key: '#each parts', label: 'Part line loop (description / quantity / price)' },
+  ],
+  [DocumentTemplateType.CUSTOMER_SUPPORT_INVOICE]: [
+    { key: 'invoiceNumber', label: 'Invoice number' },
+    { key: 'customerName', label: 'Customer name' },
+    { key: 'description', label: 'Charge description' },
+    { key: 'amount', label: 'Amount (excl. VAT)' },
+    { key: 'vatAmount', label: 'VAT amount' },
+    { key: 'totalAmount', label: 'Total amount' },
   ],
 };
 

@@ -1,17 +1,11 @@
-import { HttpClient } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { environment } from '../../../environments/environment';
-
-interface ChatEntry {
-  role: 'user' | 'assistant';
-  content: string;
-}
+import { AiAssistantService } from './ai-assistant.service';
 
 @Component({
   selector: 'app-ai-assistant',
@@ -20,14 +14,16 @@ interface ChatEntry {
     <h1>AI Assistant</h1>
     <p class="hint">
       Ask about operational data across every module — e.g. "Show me all used cars in stock over 60 days" or
-      "What warranty claims are still awaiting authorisation?"
+      "What warranty claims are still awaiting authorisation?" This is the same conversation as the assistant
+      panel available from every screen (the icon in the bottom-right corner) — this page is just its full,
+      dedicated window with the whole history.
     </p>
 
     <mat-card class="chat">
-      @for (entry of history(); track $index) {
+      @for (entry of assistant.history(); track $index) {
         <div class="bubble" [class.user]="entry.role === 'user'">{{ entry.content }}</div>
       }
-      @if (loading()) {
+      @if (assistant.loading()) {
         <mat-spinner diameter="24"></mat-spinner>
       }
     </mat-card>
@@ -37,7 +33,7 @@ interface ChatEntry {
         <mat-label>Ask a question</mat-label>
         <input matInput [(ngModel)]="message" (keyup.enter)="send()" />
       </mat-form-field>
-      <button mat-flat-button color="primary" (click)="send()" [disabled]="loading() || !message">Send</button>
+      <button mat-flat-button color="primary" (click)="send()" [disabled]="assistant.loading() || !message">Send</button>
     </div>
   `,
   styles: [
@@ -78,32 +74,12 @@ interface ChatEntry {
   ],
 })
 export class AiAssistantComponent {
-  readonly history = signal<ChatEntry[]>([]);
-  readonly loading = signal(false);
+  readonly assistant = inject(AiAssistantService);
   message = '';
-  private conversationId: string | undefined;
-
-  private readonly http = inject(HttpClient);
 
   send(): void {
     if (!this.message.trim()) return;
-    const userMessage = this.message;
-    this.history.update((h) => [...h, { role: 'user', content: userMessage }]);
+    this.assistant.send(this.message);
     this.message = '';
-    this.loading.set(true);
-
-    this.http
-      .post<{ conversationId: string; reply: string }>(`${environment.apiUrl}/ai/assistant/chat`, {
-        conversationId: this.conversationId,
-        message: userMessage,
-      })
-      .subscribe({
-        next: (res) => {
-          this.conversationId = res.conversationId;
-          this.history.update((h) => [...h, { role: 'assistant', content: res.reply }]);
-          this.loading.set(false);
-        },
-        error: () => this.loading.set(false),
-      });
   }
 }

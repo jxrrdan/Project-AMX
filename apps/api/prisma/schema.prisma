@@ -26,12 +26,17 @@ model Group {
   logoUrl         String?
   primaryColour   String?
   secondaryColour String?
+  /// Unguessable invite secret — a franchise joins this group by presenting this code (never its
+  /// raw id), same "capability token, not an enumerable id" pattern as webhookToken elsewhere.
+  /// Only ever returned to a caller whose own dealer already belongs to this group.
+  joinCode        String   @unique @default(uuid())
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   franchises        Franchise[]
   documentTemplates DocumentTemplate[]
   actionTriggers    ActionTrigger[]
+  vehicleModelMetadata VehicleModelMetadata[]
 
   @@map("groups")
 }
@@ -47,14 +52,44 @@ model Franchise {
   logoUrl         String?
   primaryColour   String?
   secondaryColour String?
+  /// Unguessable invite secret — a dealer joins this franchise by presenting this code (never its
+  /// raw id). Without this, any ADMIN:EDIT user could look up any franchise/group id and attach
+  /// their own dealer to it, inheriting read/write access to that org's shared document templates
+  /// and Action Triggers — this code is what proves the caller was actually invited.
+  joinCode        String   @unique @default(uuid())
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   dealers           Dealer[]
   documentTemplates DocumentTemplate[]
   actionTriggers    ActionTrigger[]
+  vehicleModelMetadata VehicleModelMetadata[]
 
   @@map("franchises")
+}
+
+/// Cached reference metadata (body type, fuel options, segment, etc.) for a vehicle model/derivative,
+/// fetched from an OEM metadata API the first time an inbound integration payload (REST or MQTT)
+/// mentions a model AMX doesn't already know about — see IntegrationIngestService. Scoped like
+/// DocumentTemplate/ActionTrigger (most-specific-wins DEALER > FRANCHISE > GROUP), but the row is
+/// written by the ingest engine itself rather than authored by a user.
+model VehicleModelMetadata {
+  id          String      @id @default(uuid())
+  scope       ConfigScope
+  dealerId    String?
+  dealer      Dealer?     @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  franchiseId String?
+  franchise   Franchise?  @relation(fields: [franchiseId], references: [id], onDelete: Cascade)
+  groupId     String?
+  group       Group?      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  /// Normalised (trimmed, lower-cased) model/derivative name — the cache key.
+  modelKey    String
+  /// Whatever the metadata API returned — body type, fuel options, doors, segment, etc.
+  data        Json
+  createdAt   DateTime    @default(now())
+
+  @@unique([dealerId, franchiseId, groupId, modelKey])
+  @@map("vehicle_model_metadata")
 }
 
 /// Which of the three tenancy levels a piece of shared config (document template, action
@@ -128,6 +163,8 @@ model Dealer {
   actionTriggers         ActionTrigger[]
   jobCardPartRequirements JobCardPartRequirement[]
   aftersalesInvoices     AftersalesInvoice[]
+  customerInvoices       CustomerInvoice[]
+  vehicleModelMetadata   VehicleModelMetadata[]
 
   @@map("dealers")
 }
@@ -815,7 +852,7 @@ model UsedVehicle {
   priceHistory      PriceHistoryEntry[]
   leads             Lead[]
   appraisal         PartExchangeAppraisal?
-  dealSheet         DealSheet?
+  dealSheets        DealSheet[]
   handoverAppointments HandoverAppointment[]
   listings          VehicleListing[]
   financeProducts   DealFinanceProduct[]
@@ -859,10 +896,22 @@ model PartExchangeAppraisal {
   @@map("part_exchange_appraisals")
 }
 
+/// A deal sheet that didn't result in a signed sale must be INVALIDATED (never deleted, for audit
+/// trail) before the same vehicle can get a new one — enforced in UsedCarsService, not by a DB
+/// constraint, since Postgres/Prisma don't support a clean "only one ACTIVE row" filtered unique
+/// index across schema-level tooling here. A vehicle can therefore have many DealSheet rows over
+/// time (one per attempt), which is why this is no longer a 1:1 relation to UsedVehicle.
+enum DealSheetStatus {
+  ACTIVE
+  SIGNED
+  INVALIDATED
+}
+
 model DealSheet {
   id                String      @id @default(uuid())
-  usedVehicleId     String      @unique
+  usedVehicleId     String
   usedVehicle       UsedVehicle @relation(fields: [usedVehicleId], references: [id], onDelete: Cascade)
+  status            DealSheetStatus @default(ACTIVE)
   sellingPrice      Decimal     @db.Decimal(10, 2)
   partExchangeValue Decimal?    @db.Decimal(10, 2)
   financeContribution Decimal?  @db.Decimal(10, 2)
@@ -870,6 +919,8 @@ model DealSheet {
   accessoriesTotal  Decimal     @default(0) @db.Decimal(10, 2)
   grossProfit       Decimal?    @db.Decimal(10, 2)
   pdfUrl            String?
+  invalidatedAt     DateTime?
+  invalidatedReason String?
   createdAt         DateTime    @default(now())
 
   accessoryLines    DealAccessoryLine[]
@@ -989,8 +1040,30 @@ model Contact {
   smsMessages    SmsMessage[]
   jobCards       JobCard[]
   workflowEnrollments WorkflowEnrollment[]
+  invoices       CustomerInvoice[]
 
   @@map("contacts")
+}
+
+/// Ad-hoc customer-support invoicing (goodwill gestures, admin fees, lost-key/remote charges) —
+/// distinct from AftersalesInvoice, which is always tied to a workshop JobCard. Raised directly
+/// against a CRM Contact through the same document-template/sequence engine as every other AMX
+/// document, so a dealer can override its layout the same way.
+model CustomerInvoice {
+  id            String   @id @default(uuid())
+  dealerId      String
+  dealer        Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  contactId     String
+  contact       Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  invoiceNumber String
+  description   String
+  amount        Decimal  @db.Decimal(10, 2)
+  vatAmount     Decimal  @db.Decimal(10, 2)
+  totalAmount   Decimal  @db.Decimal(10, 2)
+  pdfUrl        String?
+  createdAt     DateTime @default(now())
+
+  @@map("customer_invoices")
 }
 
 enum LeadStage {
@@ -1167,6 +1240,7 @@ enum DocumentTemplateType {
   HANDOVER_DOCUMENT
   DEAL_SHEET
   AFTERSALES_INVOICE
+  CUSTOMER_SUPPORT_INVOICE
 }
 
 /// Dealer-authored document templates (variables/text/styling/logo) — see DOCUMENT_TEMPLATE_VARIABLES

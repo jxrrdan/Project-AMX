@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { CurrencyPipe, DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Component, OnInit, inject, signal } from '@angular/core';
@@ -29,6 +29,17 @@ interface ContactDetail {
   tasks: { id: string; title: string; dueDate: string; completedAt: string | null }[];
 }
 
+interface CustomerInvoiceSummary {
+  id: string;
+  invoiceNumber: string;
+  description: string;
+  amount: number;
+  vatAmount: number;
+  totalAmount: number;
+  pdfUrl: string | null;
+  createdAt: string;
+}
+
 interface EmailTemplate {
   id: string;
   name: string;
@@ -37,6 +48,7 @@ interface EmailTemplate {
 @Component({
   selector: 'app-contact-detail',
   imports: [
+    CurrencyPipe,
     DatePipe,
     FormsModule,
     RouterLink,
@@ -160,6 +172,34 @@ interface EmailTemplate {
               <p class="empty">No tasks yet.</p>
             }
           </mat-card>
+
+          <mat-card>
+            <h3>Customer support invoicing</h3>
+            <p class="hint">Ad-hoc charges outside a workshop job — goodwill gestures, admin fees, lost-key charges.</p>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Description</mat-label>
+              <input matInput [(ngModel)]="invoiceDescription" placeholder="e.g. Replacement key fob" />
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Amount (£, excl. VAT)</mat-label>
+              <input matInput type="number" [(ngModel)]="invoiceAmount" />
+            </mat-form-field>
+            <button mat-flat-button color="primary" [disabled]="!invoiceDescription || !invoiceAmount" (click)="createCustomerInvoice()">
+              Raise invoice
+            </button>
+
+            @for (inv of invoices(); track inv.id) {
+              <div class="timeline-item">
+                <span class="type">{{ inv.invoiceNumber }} — {{ inv.description }}</span>
+                <span class="date">{{ inv.totalAmount | currency: 'GBP' }}</span>
+                @if (inv.pdfUrl) {
+                  <a [href]="storageUrl(inv.pdfUrl)" target="_blank" rel="noopener">View document</a>
+                }
+              </div>
+            } @empty {
+              <p class="empty">No invoices raised yet.</p>
+            }
+          </mat-card>
         </div>
       </div>
 
@@ -226,6 +266,7 @@ interface EmailTemplate {
 export class ContactDetailComponent implements OnInit {
   readonly contact = signal<ContactDetail | null>(null);
   readonly templates = signal<EmailTemplate[]>([]);
+  readonly invoices = signal<CustomerInvoiceSummary[]>([]);
   readonly contactEntity = IntegrationTargetEntity.CONTACT;
 
   selectedTemplateId = '';
@@ -234,6 +275,8 @@ export class ContactDetailComponent implements OnInit {
   activityNotes = '';
   taskTitle = '';
   taskDueDate = '';
+  invoiceDescription = '';
+  invoiceAmount: number | null = null;
 
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
@@ -244,11 +287,39 @@ export class ContactDetailComponent implements OnInit {
   ngOnInit(): void {
     this.contactId = this.route.snapshot.paramMap.get('id') ?? '';
     this.load();
+    this.loadInvoices();
     this.http.get<EmailTemplate[]>(`${environment.apiUrl}/email-templates`).subscribe((data) => this.templates.set(data));
   }
 
   load(): void {
     this.http.get<ContactDetail>(`${environment.apiUrl}/contacts/${this.contactId}`).subscribe((data) => this.contact.set(data));
+  }
+
+  loadInvoices(): void {
+    this.http
+      .get<CustomerInvoiceSummary[]>(`${environment.apiUrl}/contacts/${this.contactId}/invoices`)
+      .subscribe((data) => this.invoices.set(data));
+  }
+
+  createCustomerInvoice(): void {
+    if (!this.invoiceDescription || this.invoiceAmount == null) return;
+    this.http
+      .post(`${environment.apiUrl}/contacts/${this.contactId}/invoices`, {
+        description: this.invoiceDescription,
+        amount: this.invoiceAmount,
+      })
+      .subscribe({
+        next: () => {
+          this.invoiceDescription = '';
+          this.invoiceAmount = null;
+          this.loadInvoices();
+        },
+        error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not raise invoice', 'Dismiss', { duration: 4000 }),
+      });
+  }
+
+  storageUrl(path: string): string {
+    return `${environment.apiUrl.replace(/\/api$/, '')}${path}`;
   }
 
   logActivity(): void {

@@ -9,6 +9,7 @@ import {
   CreateAppraisalDto,
   CreateDealSheetDto,
   CreateUsedVehicleDto,
+  InvalidateDealSheetDto,
   SetAskingPriceDto,
   UpdateUsedVehicleStatusDto,
 } from './dto/used-car.dto';
@@ -95,5 +96,17 @@ export class UsedCarsController {
   @RequirePermissions({ module: ModuleKey.USED_CARS, action: PermissionAction.CREATE })
   createDealSheet(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CreateDealSheetDto) {
     return this.usedCarsService.createDealSheet(user.dealerId, id, dto);
+  }
+
+  /** Voids a deal sheet that fell through (no signed sale) so this vehicle can get a new one. */
+  @Post(':id/deal-sheet/:dealSheetId/invalidate')
+  @RequirePermissions({ module: ModuleKey.USED_CARS, action: PermissionAction.EDIT })
+  invalidateDealSheet(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('dealSheetId') dealSheetId: string,
+    @Body() dto: InvalidateDealSheetDto,
+  ) {
+    return this.usedCarsService.invalidateDealSheet(user.dealerId, id, dealSheetId, dto);
   }
 }

@@ -87,6 +87,7 @@ interface ConnectionForm {
   auth?: AuthForm;
   requiredHeaderName?: string;
   requiredHeaderValue?: string;
+  modelEnrichment?: { metadataUrlTemplate?: string; resultsPath?: string };
 }
 
 @Component({
@@ -275,6 +276,33 @@ interface ConnectionForm {
             }
           </mat-select>
         </mat-form-field>
+
+        @if (c.targetEntity === 'VEHICLE' || c.targetEntity === 'USED_VEHICLE') {
+          <mat-divider />
+          <h4>Model metadata enrichment</h4>
+          <p class="hint">
+            When an inbound record's "model" isn't already known to AMX (e.g. a new derivative
+            nobody's stored yet), fetch its metadata from this API once and cache it — every later
+            record for that same model reuses the cached copy instead of calling the API again.
+          </p>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Metadata API URL</mat-label>
+            <input
+              matInput
+              [(ngModel)]="connectionForm.modelEnrichment!.metadataUrlTemplate"
+              placeholder="https://oem.example.com/models/{{ '{' }}model{{ '}' }}"
+            />
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Results path (optional)</mat-label>
+            <input
+              matInput
+              [(ngModel)]="connectionForm.modelEnrichment!.resultsPath"
+              placeholder="e.g. data.model — leave blank if the response body is the metadata object itself"
+            />
+          </mat-form-field>
+        }
+
         <div class="row">
           <button mat-flat-button color="primary" (click)="saveConnection()">Save connection settings</button>
         </div>
@@ -639,6 +667,7 @@ export class ConnectorDetailComponent implements OnInit {
         ...data.config,
         headers: ((data.config['headers'] as HeaderPairForm[]) ?? []).map((h) => ({ ...h })),
       });
+      this.connectionForm.modelEnrichment ??= {};
       this.authForm = this.unredact({ type: IntegrationAuthType.NONE, ...(data.config['auth'] as AuthForm | undefined) });
       this.matchFieldForm = data.matchField;
       this.mappings.set(data.mappings.map((m) => ({ ...m })));

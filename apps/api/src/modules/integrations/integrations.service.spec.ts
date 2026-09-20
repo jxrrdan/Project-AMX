@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { IntegrationTargetEntity } from '@project-amx/shared';
+import { IntegrationTargetEntity, IntegrationType } from '@project-amx/shared';
 import { IntegrationsService } from './integrations.service';
 
 function makeIngestService() {
@@ -33,6 +33,41 @@ describe('IntegrationsService connector CRUD — tenant scoping', () => {
     const service = new IntegrationsService(prisma as never, makeIngestService() as never);
     await expect(service.regenerateWebhookToken(dealerId, 'other-dealer-connector')).rejects.toThrow(NotFoundException);
     expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe('IntegrationsService.createConnector — model-enrichment SSRF validation', () => {
+  const dealerId = 'dealer-1';
+
+  it('rejects an unsafe modelEnrichment.metadataUrlTemplate even on a non-REST_PULL connector (e.g. MQTT)', () => {
+    const create = jest.fn();
+    const prisma = { integrationConnector: { create } };
+    const service = new IntegrationsService(prisma as never, makeIngestService() as never);
+
+    expect(() =>
+      service.createConnector(dealerId, {
+        name: 'MQTT feed',
+        type: IntegrationType.MQTT,
+        targetEntity: IntegrationTargetEntity.VEHICLE,
+        config: { brokerUrl: 'mqtt://broker.example.com', topic: 'x', modelEnrichment: { metadataUrlTemplate: 'http://169.254.169.254/{model}' } },
+      } as never),
+    ).toThrow(BadRequestException);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('accepts a safe modelEnrichment.metadataUrlTemplate', () => {
+    const create = jest.fn().mockReturnValue({ id: 'c1' });
+    const prisma = { integrationConnector: { create } };
+    const service = new IntegrationsService(prisma as never, makeIngestService() as never);
+
+    service.createConnector(dealerId, {
+      name: 'MQTT feed',
+      type: IntegrationType.MQTT,
+      targetEntity: IntegrationTargetEntity.VEHICLE,
+      config: { brokerUrl: 'mqtt://broker.example.com', topic: 'x', modelEnrichment: { metadataUrlTemplate: 'https://oem.example.com/models/{model}' } },
+    } as never);
+
+    expect(create).toHaveBeenCalled();
   });
 });
 
