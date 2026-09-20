@@ -9,8 +9,22 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { CourtesyVehicleStatus } from '@project-amx/shared';
+import { CourtesyVehicleStatus, DamageSeverity } from '@project-amx/shared';
 import { environment } from '../../../environments/environment';
+
+interface DamageMarker {
+  location: string;
+  description: string;
+  severity: DamageSeverity;
+}
+
+interface ConditionReport {
+  id: string;
+  stage: 'INITIAL' | 'FINAL';
+  mileage: number | null;
+  notes: string | null;
+  damageMarkers: DamageMarker[];
+}
 
 interface Booking {
   id: string;
@@ -18,6 +32,7 @@ interface Booking {
   outDate: string;
   expectedReturnDate: string;
   actualReturnDate: string | null;
+  conditionReports: ConditionReport[];
 }
 
 interface CourtesyVehicle {
@@ -103,6 +118,12 @@ interface CourtesyVehicle {
               <span class="date">due {{ b.expectedReturnDate | date: 'd MMM' }}</span>
               <button mat-button (click)="openReturnForm(b.id)">Return</button>
             </div>
+            @if (initialCondition(b); as c) {
+              <p class="hint">
+                Out at {{ c.mileage ?? '?' }} miles
+                @if (c.damageMarkers.length) { — {{ c.damageMarkers.length }} damage marker(s) logged }
+              </p>
+            }
           }
         </mat-card>
       }
@@ -124,7 +145,36 @@ interface CourtesyVehicle {
             <mat-label>Expected return</mat-label>
             <input matInput type="date" [(ngModel)]="bookingForm.expectedReturnDate" />
           </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Out mileage</mat-label>
+            <input matInput type="number" [(ngModel)]="bookingForm.outMileage" />
+          </mat-form-field>
         </div>
+
+        <p class="markers-label">Existing damage (before handover)</p>
+        @for (m of outDamageMarkers(); track $index) {
+          <div class="row">
+            <mat-form-field appearance="outline">
+              <mat-label>Location</mat-label>
+              <input matInput [(ngModel)]="m.location" placeholder="e.g. front bumper" />
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="grow">
+              <mat-label>Description</mat-label>
+              <input matInput [(ngModel)]="m.description" placeholder="e.g. small scuff" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Severity</mat-label>
+              <mat-select [(ngModel)]="m.severity">
+                @for (s of severities; track s) {
+                  <mat-option [value]="s">{{ s }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <button mat-icon-button (click)="removeOutDamageMarker($index)"><mat-icon>close</mat-icon></button>
+          </div>
+        }
+        <button mat-button (click)="addOutDamageMarker()"><mat-icon>add</mat-icon> Add damage marker</button>
+
         <div class="row">
           <button
             mat-flat-button
@@ -147,9 +197,34 @@ interface CourtesyVehicle {
           <input matInput type="number" [(ngModel)]="returnForm.returnMileage" />
         </mat-form-field>
         <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Any new damage?</mat-label>
+          <mat-label>Any new damage? (summary)</mat-label>
           <textarea matInput rows="2" [(ngModel)]="returnForm.newDamageNotes"></textarea>
         </mat-form-field>
+
+        <p class="markers-label">New damage found on return</p>
+        @for (m of returnDamageMarkers(); track $index) {
+          <div class="row">
+            <mat-form-field appearance="outline">
+              <mat-label>Location</mat-label>
+              <input matInput [(ngModel)]="m.location" placeholder="e.g. rear door" />
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="grow">
+              <mat-label>Description</mat-label>
+              <input matInput [(ngModel)]="m.description" placeholder="e.g. dent" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Severity</mat-label>
+              <mat-select [(ngModel)]="m.severity">
+                @for (s of severities; track s) {
+                  <mat-option [value]="s">{{ s }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <button mat-icon-button (click)="removeReturnDamageMarker($index)"><mat-icon>close</mat-icon></button>
+          </div>
+        }
+        <button mat-button (click)="addReturnDamageMarker()"><mat-icon>add</mat-icon> Add damage marker</button>
+
         <div class="row">
           <button mat-flat-button color="primary" [disabled]="returnForm.returnMileage === null" (click)="submitReturn()">Confirm return</button>
           <button mat-button (click)="returnBookingId.set(null)">Cancel</button>
@@ -219,6 +294,19 @@ interface CourtesyVehicle {
       .date {
         color: rgba(0, 0, 0, 0.5);
       }
+      .hint {
+        font-size: 11px;
+        color: rgba(0, 0, 0, 0.5);
+        margin: 2px 0 0;
+      }
+      .markers-label {
+        font-weight: 600;
+        margin: 8px 0 0;
+        font-size: 13px;
+      }
+      .grow {
+        flex: 1;
+      }
     `,
   ],
 })
@@ -228,9 +316,12 @@ export class CourtesyListComponent implements OnInit {
   readonly showForm = signal(false);
   readonly bookingVehicleId = signal<string | null>(null);
   readonly returnBookingId = signal<string | null>(null);
+  readonly outDamageMarkers = signal<DamageMarker[]>([]);
+  readonly returnDamageMarkers = signal<DamageMarker[]>([]);
+  readonly severities = Object.values(DamageSeverity);
 
   form = { reg: '', make: '', model: '', insuranceExpiry: '', motExpiry: '', taxExpiry: '' };
-  bookingForm = { customerName: '', outDate: '', expectedReturnDate: '' };
+  bookingForm = { customerName: '', outDate: '', expectedReturnDate: '', outMileage: null as number | null };
   returnForm = { returnMileage: null as number | null, newDamageNotes: '' };
 
   private readonly http = inject(HttpClient);
@@ -248,6 +339,26 @@ export class CourtesyListComponent implements OnInit {
 
   activeBookings(vehicle: CourtesyVehicle): Booking[] {
     return vehicle.bookings.filter((b) => !b.actualReturnDate);
+  }
+
+  initialCondition(booking: Booking): ConditionReport | null {
+    return booking.conditionReports.find((r) => r.stage === 'INITIAL') ?? null;
+  }
+
+  addOutDamageMarker(): void {
+    this.outDamageMarkers.update((m) => [...m, { location: '', description: '', severity: DamageSeverity.MINOR }]);
+  }
+
+  removeOutDamageMarker(index: number): void {
+    this.outDamageMarkers.update((m) => m.filter((_, i) => i !== index));
+  }
+
+  addReturnDamageMarker(): void {
+    this.returnDamageMarkers.update((m) => [...m, { location: '', description: '', severity: DamageSeverity.MINOR }]);
+  }
+
+  removeReturnDamageMarker(index: number): void {
+    this.returnDamageMarkers.update((m) => m.filter((_, i) => i !== index));
   }
 
   regFor(vehicleId: string): string {
@@ -276,11 +387,26 @@ export class CourtesyListComponent implements OnInit {
 
   createBooking(vehicleId: string): void {
     this.http
-      .post(`${environment.apiUrl}/courtesy-fleet/bookings`, { courtesyVehicleId: vehicleId, ...this.bookingForm })
-      .subscribe(() => {
+      .post<[Booking, unknown]>(`${environment.apiUrl}/courtesy-fleet/bookings`, { courtesyVehicleId: vehicleId, ...this.bookingForm })
+      .subscribe((result) => {
+        const bookingId = result[0].id;
+        const markers = this.outDamageMarkers().filter((m) => m.location && m.description);
+        const recordCondition = markers.length || this.bookingForm.outMileage != null
+          ? this.http.post(`${environment.apiUrl}/courtesy-fleet/bookings/${bookingId}/condition-checks`, {
+              stage: 'INITIAL',
+              mileage: this.bookingForm.outMileage,
+              damageMarkers: markers,
+            })
+          : null;
+
         this.bookingVehicleId.set(null);
-        this.bookingForm = { customerName: '', outDate: '', expectedReturnDate: '' };
-        this.load();
+        this.bookingForm = { customerName: '', outDate: '', expectedReturnDate: '', outMileage: null };
+        this.outDamageMarkers.set([]);
+        if (recordCondition) {
+          recordCondition.subscribe(() => this.load());
+        } else {
+          this.load();
+        }
       });
   }
 
@@ -292,9 +418,24 @@ export class CourtesyListComponent implements OnInit {
     const id = this.returnBookingId();
     if (!id) return;
     this.http.post(`${environment.apiUrl}/courtesy-fleet/bookings/${id}/return`, this.returnForm).subscribe(() => {
+      const markers = this.returnDamageMarkers().filter((m) => m.location && m.description);
+      const recordCondition = markers.length || this.returnForm.returnMileage != null
+        ? this.http.post(`${environment.apiUrl}/courtesy-fleet/bookings/${id}/condition-checks`, {
+            stage: 'FINAL',
+            mileage: this.returnForm.returnMileage,
+            notes: this.returnForm.newDamageNotes || undefined,
+            damageMarkers: markers,
+          })
+        : null;
+
       this.returnBookingId.set(null);
       this.returnForm = { returnMileage: null, newDamageNotes: '' };
-      this.load();
+      this.returnDamageMarkers.set([]);
+      if (recordCondition) {
+        recordCondition.subscribe(() => this.load());
+      } else {
+        this.load();
+      }
     });
   }
 }

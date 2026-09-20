@@ -18,13 +18,17 @@ function makeActionTriggers() {
   return { run: jest.fn().mockResolvedValue(null) };
 }
 
+function makeTradeIn() {
+  return { intake: jest.fn().mockResolvedValue({ usedVehicle: { id: 'trade-in-vehicle' }, appraisal: { id: 'appraisal-1' } }) };
+}
+
 describe('UsedCarsService.createDealSheet', () => {
   const dealerId = 'dealer-1';
   const usedVehicleId = 'vehicle-1';
 
   it('throws when the vehicle does not belong to this dealer', async () => {
     const prisma = { usedVehicle: { findFirst: jest.fn().mockResolvedValue(null) } };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
     await expect(
       service.createDealSheet(dealerId, usedVehicleId, { sellingPrice: 15000 } as never),
     ).rejects.toThrow(NotFoundException);
@@ -37,7 +41,7 @@ describe('UsedCarsService.createDealSheet', () => {
       dealSheet: { create, findFirst: jest.fn().mockResolvedValue(null) },
       dealer: { findUnique: jest.fn().mockResolvedValue({ id: dealerId, name: 'Test Dealer' }) },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
 
     const result = await service.createDealSheet(dealerId, usedVehicleId, {
       sellingPrice: 15000,
@@ -68,7 +72,7 @@ describe('UsedCarsService.createDealSheet', () => {
       dealSheet: { create, findFirst: jest.fn().mockResolvedValue(null) },
       dealer: { findUnique: jest.fn().mockResolvedValue({ id: dealerId, name: 'Test Dealer' }) },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
 
     const result = await service.createDealSheet(dealerId, usedVehicleId, { sellingPrice: 15000 } as never);
 
@@ -83,7 +87,7 @@ describe('UsedCarsService.createDealSheet', () => {
       dealSheet: { create, findFirst: jest.fn().mockResolvedValue(null) },
       dealer: { findUnique: jest.fn().mockResolvedValue({ id: dealerId, name: 'Test Dealer' }) },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
 
     const result = await service.createDealSheet(dealerId, usedVehicleId, { sellingPrice: 15000 } as never);
 
@@ -96,7 +100,7 @@ describe('UsedCarsService.createDealSheet', () => {
       usedVehicle: { findFirst: jest.fn().mockResolvedValue({ id: usedVehicleId, purchasePrice: 12000 }) },
       dealSheet: { create, findFirst: jest.fn().mockResolvedValue({ id: 'existing-deal', status: DealSheetStatus.ACTIVE }) },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
 
     await expect(service.createDealSheet(dealerId, usedVehicleId, { sellingPrice: 15000 } as never)).rejects.toThrow(BadRequestException);
     expect(create).not.toHaveBeenCalled();
@@ -109,11 +113,45 @@ describe('UsedCarsService.createDealSheet', () => {
       dealSheet: { create, findFirst: jest.fn().mockResolvedValue(null) },
       dealer: { findUnique: jest.fn().mockResolvedValue({ id: dealerId, name: 'Test Dealer' }) },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
 
     const result = await service.createDealSheet(dealerId, usedVehicleId, { sellingPrice: 15000 } as never);
 
     expect(result.status).toBe(DealSheetStatus.ACTIVE);
+  });
+
+  it('intakes a trade-in vehicle and uses its agreed value as the deal sheet\'s partExchangeValue', async () => {
+    const create = jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'deal-1', ...data }));
+    const prisma = {
+      usedVehicle: { findFirst: jest.fn().mockResolvedValue({ id: usedVehicleId, purchasePrice: 12000 }) },
+      dealSheet: { create, findFirst: jest.fn().mockResolvedValue(null) },
+      dealer: { findUnique: jest.fn().mockResolvedValue({ id: dealerId, name: 'Test Dealer' }) },
+    };
+    const tradeIn = makeTradeIn();
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, tradeIn as never);
+
+    const tradeInDto = { reg: 'AB12CDE', make: 'Ford', model: 'Focus', agreedValue: 3000 };
+    await service.createDealSheet(dealerId, usedVehicleId, { sellingPrice: 15000, tradeIn: tradeInDto } as never);
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ partExchangeValue: 3000 }) }),
+    );
+    expect(tradeIn.intake).toHaveBeenCalledWith(dealerId, tradeInDto, { dealSheetId: 'deal-1' });
+  });
+
+  it('does not attempt a trade-in intake when none is given', async () => {
+    const create = jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'deal-1', ...data }));
+    const prisma = {
+      usedVehicle: { findFirst: jest.fn().mockResolvedValue({ id: usedVehicleId, purchasePrice: 12000 }) },
+      dealSheet: { create, findFirst: jest.fn().mockResolvedValue(null) },
+      dealer: { findUnique: jest.fn().mockResolvedValue({ id: dealerId, name: 'Test Dealer' }) },
+    };
+    const tradeIn = makeTradeIn();
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, tradeIn as never);
+
+    await service.createDealSheet(dealerId, usedVehicleId, { sellingPrice: 15000 } as never);
+
+    expect(tradeIn.intake).not.toHaveBeenCalled();
   });
 });
 
@@ -124,7 +162,7 @@ describe('UsedCarsService.invalidateDealSheet', () => {
   it('throws when the deal sheet does not belong to this dealer', async () => {
     const update = jest.fn();
     const prisma = { dealSheet: { findFirst: jest.fn().mockResolvedValue(null), update } };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
     await expect(service.invalidateDealSheet(dealerId, usedVehicleId, 'deal-1', {})).rejects.toThrow(NotFoundException);
     expect(update).not.toHaveBeenCalled();
   });
@@ -132,7 +170,7 @@ describe('UsedCarsService.invalidateDealSheet', () => {
   it('refuses to invalidate a deal sheet that is not ACTIVE', async () => {
     const update = jest.fn();
     const prisma = { dealSheet: { findFirst: jest.fn().mockResolvedValue({ id: 'deal-1', status: DealSheetStatus.SIGNED }), update } };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
     await expect(service.invalidateDealSheet(dealerId, usedVehicleId, 'deal-1', {})).rejects.toThrow(BadRequestException);
     expect(update).not.toHaveBeenCalled();
   });
@@ -140,7 +178,7 @@ describe('UsedCarsService.invalidateDealSheet', () => {
   it('invalidates an ACTIVE deal sheet with the given reason', async () => {
     const update = jest.fn().mockResolvedValue({ id: 'deal-1', status: DealSheetStatus.INVALIDATED });
     const prisma = { dealSheet: { findFirst: jest.fn().mockResolvedValue({ id: 'deal-1', status: DealSheetStatus.ACTIVE }), update } };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
 
     await service.invalidateDealSheet(dealerId, usedVehicleId, 'deal-1', { reason: 'Buyer withdrew' });
 
@@ -160,7 +198,7 @@ describe('UsedCarsService.updateStatus', () => {
       usedVehicle: { findFirst: jest.fn().mockResolvedValue({ id: 'vehicle-1' }), update: jest.fn().mockResolvedValue({ id: 'vehicle-1', status: UsedVehicleStatus.SOLD }) },
       dealSheet: { updateMany },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
 
     await service.updateStatus(dealerId, 'vehicle-1', { status: UsedVehicleStatus.SOLD });
 
@@ -176,7 +214,7 @@ describe('UsedCarsService.updateStatus', () => {
       usedVehicle: { findFirst: jest.fn().mockResolvedValue({ id: 'vehicle-1' }), update: jest.fn().mockResolvedValue({ id: 'vehicle-1', status: UsedVehicleStatus.LISTED }) },
       dealSheet: { updateMany },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
 
     await service.updateStatus(dealerId, 'vehicle-1', { status: UsedVehicleStatus.LISTED });
 
@@ -191,7 +229,7 @@ describe('UsedCarsService.regLookup', () => {
     const vehicle = { id: 'v1', reg: 'AB12CDE', dealerId };
     const prisma = { usedVehicle: { findFirst: jest.fn().mockResolvedValue(vehicle) } };
     const actionTriggers = makeActionTriggers();
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, actionTriggers as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, actionTriggers as never, makeTradeIn() as never);
 
     const result = await service.regLookup(dealerId, 'AB12CDE');
 
@@ -203,7 +241,7 @@ describe('UsedCarsService.regLookup', () => {
     const prisma = { usedVehicle: { findFirst: jest.fn().mockResolvedValue(null) } };
     const enrichment = { triggerName: 'OEM lookup', columnValues: { colour: 'Black' }, customFieldValues: {} };
     const actionTriggers = { run: jest.fn().mockResolvedValue(enrichment) };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, actionTriggers as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, actionTriggers as never, makeTradeIn() as never);
 
     const result = await service.regLookup(dealerId, 'AB12CDE');
 
@@ -218,7 +256,7 @@ describe('UsedCarsService.addPhotos', () => {
       usedVehicle: { findFirst: jest.fn().mockResolvedValue(null) },
       vehiclePhoto: { createMany },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
     await expect(
       service.addPhotos('dealer-1', 'other-dealer-vehicle', { urls: ['https://x/1.jpg'] } as never),
     ).rejects.toThrow(NotFoundException);
@@ -231,7 +269,7 @@ describe('UsedCarsService.addPhotos', () => {
       usedVehicle: { findFirst: jest.fn().mockResolvedValue({ id: 'vehicle-1' }) },
       vehiclePhoto: { createMany },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
     await service.addPhotos('dealer-1', 'vehicle-1', { urls: ['https://x/1.jpg', 'https://x/2.jpg'] } as never);
     expect(createMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -256,7 +294,7 @@ describe('UsedCarsService.daysInStockAlerts', () => {
         ]),
       },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never, makeActionTriggers() as never, makeTradeIn() as never);
     const alerts = await service.daysInStockAlerts('dealer-1');
     expect(alerts.map((v) => v.id)).toEqual(['thirty', 'ninety']);
   });

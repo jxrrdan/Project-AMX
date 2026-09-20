@@ -97,6 +97,45 @@ export class DealAccessoryLineDto {
   price!: number;
 }
 
+/** A customer's incoming trade-in vehicle, captured in one step alongside the sale that generated
+ * it — see TradeInService. Used identically for a used-car deal sheet or a new-car sale. */
+export class TradeInDto {
+  @IsString()
+  reg!: string;
+
+  @IsString()
+  make!: string;
+
+  @IsString()
+  model!: string;
+
+  @IsOptional()
+  @IsString()
+  colour?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  mileage?: number;
+
+  @IsOptional()
+  @IsString()
+  condition?: string;
+
+  @IsOptional()
+  @IsString()
+  damageNotes?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  photoUrls?: string[];
+
+  @IsNumber()
+  @Min(0)
+  agreedValue!: number;
+}
+
 export class CreateDealSheetDto {
   @IsNumber()
   @Min(0)
@@ -116,6 +155,13 @@ export class CreateDealSheetDto {
   @ValidateNested({ each: true })
   @Type(() => DealAccessoryLineDto)
   accessories?: DealAccessoryLineDto[];
+
+  /** If set, intakes this vehicle as new used stock (source: PART_EX) and its agreedValue becomes
+   * this deal sheet's partExchangeValue, taking priority over a separately-supplied one. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => TradeInDto)
+  tradeIn?: TradeInDto;
 }
 
 export class InvalidateDealSheetDto {

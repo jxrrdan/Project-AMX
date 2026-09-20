@@ -23,6 +23,7 @@ export const DOCUMENT_TEMPLATE_TYPE_LABELS: Record<DocumentTemplateType, string>
   [DocumentTemplateType.DEAL_SHEET]: 'Used car deal sheet',
   [DocumentTemplateType.AFTERSALES_INVOICE]: 'Aftersales (workshop) invoice',
   [DocumentTemplateType.CUSTOMER_SUPPORT_INVOICE]: 'Customer support invoice',
+  [DocumentTemplateType.NEW_CAR_SALE]: 'New car sale confirmation',
 };
 
 export interface DocumentTemplateVariable {
@@ -94,6 +95,15 @@ export const DOCUMENT_TEMPLATE_VARIABLES: Record<DocumentTemplateType, DocumentT
     { key: 'amount', label: 'Amount (excl. VAT)' },
     { key: 'vatAmount', label: 'VAT amount' },
     { key: 'totalAmount', label: 'Total amount' },
+  ],
+  [DocumentTemplateType.NEW_CAR_SALE]: [
+    { key: 'vehicle.vin', label: 'Vehicle VIN' },
+    { key: 'vehicle.model', label: 'Vehicle model' },
+    { key: 'customerName', label: 'Customer name' },
+    { key: 'saleModel', label: 'Sale model (Retail/Agency)' },
+    { key: 'sellingPrice', label: 'Selling price' },
+    { key: 'agencyCommission', label: 'Agency commission (agency sales only)' },
+    { key: 'tradeIn.agreedValue', label: 'Trade-in agreed value (if any)' },
   ],
 };
 

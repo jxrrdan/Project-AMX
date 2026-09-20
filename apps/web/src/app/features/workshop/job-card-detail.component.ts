@@ -9,7 +9,9 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { DamageSeverity } from '@project-amx/shared';
 import { environment } from '../../../environments/environment';
 
 interface JobCard {
@@ -24,6 +26,20 @@ interface JobCard {
   partRequirements: { id: string; description: string; quantity: number; part: { partNumber: string } | null }[];
 }
 
+interface DamageMarker {
+  location: string;
+  description: string;
+  severity: DamageSeverity;
+}
+
+interface ConditionReport {
+  id: string;
+  stage: 'INITIAL' | 'FINAL';
+  mileage: number | null;
+  notes: string | null;
+  damageMarkers: DamageMarker[];
+}
+
 interface Invoice {
   invoiceNumber: string;
   labourTotal: number;
@@ -35,7 +51,7 @@ interface Invoice {
 
 @Component({
   selector: 'app-job-card-detail',
-  imports: [DatePipe, FormsModule, MatButtonModule, MatCardModule, MatChipsModule, MatFormFieldModule, MatIconModule, MatInputModule],
+  imports: [DatePipe, FormsModule, MatButtonModule, MatCardModule, MatChipsModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule],
   template: `
     @if (jobCard(); as jc) {
       <div class="header">
@@ -107,6 +123,65 @@ interface Invoice {
             <button mat-flat-button color="primary" (click)="generateInvoice()">Generate invoice</button>
           }
         </mat-card>
+
+        <mat-card class="col">
+          <h3>Vehicle condition</h3>
+          @for (r of conditionReports(); track r.id) {
+            <div class="condition-report">
+              <mat-chip>{{ r.stage }}</mat-chip>
+              <span>{{ r.mileage !== null ? r.mileage + ' miles' : '' }}</span>
+              @if (r.notes) { <p class="hint">{{ r.notes }}</p> }
+              @for (m of r.damageMarkers; track m.location) {
+                <div class="line-item">
+                  <span>{{ m.location }} — {{ m.description }}</span>
+                  <span>{{ m.severity }}</span>
+                </div>
+              }
+            </div>
+          } @empty {
+            <p class="hint">No condition checks logged yet.</p>
+          }
+
+          <mat-form-field appearance="outline">
+            <mat-label>Stage</mat-label>
+            <mat-select [(ngModel)]="conditionForm.stage">
+              <mat-option value="INITIAL">Initial (drop-off)</mat-option>
+              <mat-option value="FINAL">Final (handback)</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Mileage</mat-label>
+            <input matInput type="number" [(ngModel)]="conditionForm.mileage" />
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Notes</mat-label>
+            <textarea matInput rows="2" [(ngModel)]="conditionForm.notes"></textarea>
+          </mat-form-field>
+
+          @for (m of damageMarkers(); track $index) {
+            <div class="row">
+              <mat-form-field appearance="outline">
+                <mat-label>Location</mat-label>
+                <input matInput [(ngModel)]="m.location" placeholder="e.g. rear bumper" />
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="grow">
+                <mat-label>Description</mat-label>
+                <input matInput [(ngModel)]="m.description" placeholder="e.g. scratch" />
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Severity</mat-label>
+                <mat-select [(ngModel)]="m.severity">
+                  @for (s of severities; track s) {
+                    <mat-option [value]="s">{{ s }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <button mat-icon-button (click)="removeDamageMarker($index)"><mat-icon>close</mat-icon></button>
+            </div>
+          }
+          <button mat-button (click)="addDamageMarker()"><mat-icon>add</mat-icon> Add damage marker</button>
+          <button mat-stroked-button (click)="recordConditionCheck()">Log condition check</button>
+        </mat-card>
       </div>
     }
   `,
@@ -132,8 +207,19 @@ interface Invoice {
       }
       .columns {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr 1fr 1fr;
         gap: 16px;
+      }
+      .condition-report {
+        border-bottom: 1px solid #eee;
+        padding-bottom: 8px;
+        margin-bottom: 4px;
+      }
+      .grow {
+        flex: 1;
+      }
+      .full-width {
+        width: 100%;
       }
       .col {
         padding: 16px;
@@ -165,10 +251,18 @@ export class JobCardDetailComponent implements OnInit {
   readonly jobCard = signal<JobCard | null>(null);
   readonly partRequirements = signal<JobCard['partRequirements']>([]);
   readonly invoice = signal<Invoice | null>(null);
+  readonly conditionReports = signal<ConditionReport[]>([]);
+  readonly damageMarkers = signal<DamageMarker[]>([]);
+  readonly severities = Object.values(DamageSeverity);
   readonly apiUrl = environment.apiUrl;
 
   requirementDescription = '';
   requirementQuantity: number | null = 1;
+  conditionForm: { stage: 'INITIAL' | 'FINAL'; mileage: number | null; notes: string } = {
+    stage: 'INITIAL',
+    mileage: null,
+    notes: '',
+  };
 
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
@@ -180,6 +274,7 @@ export class JobCardDetailComponent implements OnInit {
     this.jobCardId = this.route.snapshot.paramMap.get('id') ?? '';
     this.load();
     this.loadInvoice();
+    this.loadConditionReports();
   }
 
   load(): void {
@@ -218,6 +313,34 @@ export class JobCardDetailComponent implements OnInit {
       next: (invoice) => this.invoice.set(invoice),
       error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not generate invoice', 'Dismiss', { duration: 4000 }),
     });
+  }
+
+  loadConditionReports(): void {
+    this.http
+      .get<ConditionReport[]>(`${environment.apiUrl}/job-cards/${this.jobCardId}/condition-checks`)
+      .subscribe((data) => this.conditionReports.set(data));
+  }
+
+  addDamageMarker(): void {
+    this.damageMarkers.update((m) => [...m, { location: '', description: '', severity: DamageSeverity.MINOR }]);
+  }
+
+  removeDamageMarker(index: number): void {
+    this.damageMarkers.update((m) => m.filter((_, i) => i !== index));
+  }
+
+  recordConditionCheck(): void {
+    const markers = this.damageMarkers().filter((m) => m.location && m.description);
+    this.http
+      .post(`${environment.apiUrl}/job-cards/${this.jobCardId}/condition-checks`, { ...this.conditionForm, damageMarkers: markers })
+      .subscribe({
+        next: () => {
+          this.conditionForm = { stage: 'INITIAL', mileage: null, notes: '' };
+          this.damageMarkers.set([]);
+          this.loadConditionReports();
+        },
+        error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not log condition check', 'Dismiss', { duration: 4000 }),
+      });
   }
 
   storageUrl(path: string): string {

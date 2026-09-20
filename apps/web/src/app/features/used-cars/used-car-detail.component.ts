@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -30,6 +31,7 @@ interface DealSheetDetail {
   invalidatedReason: string | null;
   createdAt: string;
   accessoryLines: { description: string; price: number }[];
+  tradeIn: { usedVehicleId: string; agreedValue: number } | null;
 }
 
 interface UsedVehicleDetail {
@@ -61,6 +63,7 @@ interface UsedVehicleDetail {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    MatCheckboxModule,
     CustomFieldsPanelComponent,
   ],
   template: `
@@ -148,6 +151,12 @@ interface UsedVehicleDetail {
                 </ul>
                 <p>Accessories total: {{ d.accessoriesTotal | currency: 'GBP' }}</p>
               }
+              @if (d.tradeIn) {
+                <p>
+                  Trade-in taken in at {{ d.tradeIn.agreedValue | currency: 'GBP' }} —
+                  <a [routerLink]="['/used-cars', d.tradeIn.usedVehicleId]">view in stock</a>
+                </p>
+              }
               @if (d.pdfUrl) {
                 <a [href]="storageUrl(d.pdfUrl)" target="_blank" rel="noopener">View deal sheet document</a>
               }
@@ -163,14 +172,52 @@ interface UsedVehicleDetail {
                 <mat-label>Selling price (£)</mat-label>
                 <input matInput type="number" [(ngModel)]="dealSheetForm.sellingPrice" />
               </mat-form-field>
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Part-exchange value (£)</mat-label>
-                <input matInput type="number" [(ngModel)]="dealSheetForm.partExchangeValue" />
-              </mat-form-field>
+              @if (!hasTradeIn) {
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Part-exchange value (£)</mat-label>
+                  <input matInput type="number" [(ngModel)]="dealSheetForm.partExchangeValue" />
+                </mat-form-field>
+              }
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>Finance contribution (£)</mat-label>
                 <input matInput type="number" [(ngModel)]="dealSheetForm.financeContribution" />
               </mat-form-field>
+
+              <mat-checkbox [(ngModel)]="hasTradeIn">Customer is trading in a vehicle</mat-checkbox>
+              @if (hasTradeIn) {
+                <div class="row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Reg</mat-label>
+                    <input matInput [(ngModel)]="tradeInForm.reg" placeholder="AB12 CDE" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Make</mat-label>
+                    <input matInput [(ngModel)]="tradeInForm.make" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Model</mat-label>
+                    <input matInput [(ngModel)]="tradeInForm.model" />
+                  </mat-form-field>
+                </div>
+                <div class="row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Mileage</mat-label>
+                    <input matInput type="number" [(ngModel)]="tradeInForm.mileage" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Condition</mat-label>
+                    <input matInput [(ngModel)]="tradeInForm.condition" placeholder="e.g. Good, some wear" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Agreed value (£)</mat-label>
+                    <input matInput type="number" [(ngModel)]="tradeInForm.agreedValue" />
+                  </mat-form-field>
+                </div>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Damage notes</mat-label>
+                  <textarea matInput rows="2" [(ngModel)]="tradeInForm.damageNotes"></textarea>
+                </mat-form-field>
+              }
 
               <p class="accessories-label">Accessories</p>
               @for (line of accessoryLines(); track $index) {
@@ -196,7 +243,7 @@ interface UsedVehicleDetail {
               <button
                 mat-flat-button
                 color="primary"
-                [disabled]="!dealSheetForm.sellingPrice"
+                [disabled]="!dealSheetForm.sellingPrice || (hasTradeIn && !isTradeInValid())"
                 (click)="createDealSheet()"
               >
                 Generate deal sheet
@@ -306,6 +353,16 @@ export class UsedCarDetailComponent implements OnInit {
 
   appraisalForm = { condition: '', damageNotes: '', agreedValue: null as number | null };
   dealSheetForm = { sellingPrice: null as number | null, partExchangeValue: null as number | null, financeContribution: null as number | null };
+  hasTradeIn = false;
+  tradeInForm = {
+    reg: '',
+    make: '',
+    model: '',
+    mileage: null as number | null,
+    condition: '',
+    damageNotes: '',
+    agreedValue: null as number | null,
+  };
 
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
@@ -359,15 +416,23 @@ export class UsedCarDetailComponent implements OnInit {
     this.accessoryLines.update((lines) => lines.filter((_, i) => i !== index));
   }
 
+  isTradeInValid(): boolean {
+    return !!(this.tradeInForm.reg && this.tradeInForm.make && this.tradeInForm.model && this.tradeInForm.agreedValue != null);
+  }
+
   createDealSheet(): void {
     const accessories = this.accessoryLines()
       .filter((line) => line.description && line.price != null)
       .map((line) => ({ description: line.description, price: line.price }));
+    const tradeIn = this.hasTradeIn && this.isTradeInValid() ? this.tradeInForm : undefined;
 
     this.http
-      .post(`${environment.apiUrl}/used-vehicles/${this.vehicleId}/deal-sheet`, { ...this.dealSheetForm, accessories })
+      .post(`${environment.apiUrl}/used-vehicles/${this.vehicleId}/deal-sheet`, { ...this.dealSheetForm, accessories, tradeIn })
       .subscribe({
-        next: () => this.load(),
+        next: () => {
+          this.hasTradeIn = false;
+          this.load();
+        },
         error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not generate deal sheet', 'Dismiss', { duration: 4000 }),
       });
   }

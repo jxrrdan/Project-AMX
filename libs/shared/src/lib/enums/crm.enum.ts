@@ -76,6 +76,7 @@ export enum DocumentTemplateType {
   DEAL_SHEET = 'DEAL_SHEET',
   AFTERSALES_INVOICE = 'AFTERSALES_INVOICE',
   CUSTOMER_SUPPORT_INVOICE = 'CUSTOMER_SUPPORT_INVOICE',
+  NEW_CAR_SALE = 'NEW_CAR_SALE',
 }
 
 /** Mirrors the Prisma `DealSheetStatus` enum — ACTIVE until either a sale is signed (SIGNED,

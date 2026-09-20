@@ -9,7 +9,10 @@ export class CourtesyService {
   constructor(private readonly prisma: PrismaService) {}
 
   listFleet(dealerId: string) {
-    return this.prisma.courtesyVehicle.findMany({ where: { dealerId }, include: { bookings: true } });
+    return this.prisma.courtesyVehicle.findMany({
+      where: { dealerId },
+      include: { bookings: { include: { conditionReports: { include: { damageMarkers: true } } } } },
+    });
   }
 
   createVehicle(dealerId: string, dto: CreateCourtesyVehicleDto) {

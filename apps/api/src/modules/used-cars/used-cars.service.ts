@@ -5,6 +5,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { ActionTriggersService } from '../action-triggers/action-triggers.service';
 import { DocumentSequenceService } from '../dealers/document-sequence.service';
 import { DocumentTemplatesService } from '../document-templates/document-templates.service';
+import { TradeInService } from './trade-in.service';
 import {
   AddPhotosDto,
   CreateAppraisalDto,
@@ -48,6 +49,7 @@ export class UsedCarsService {
     private readonly documentSequences: DocumentSequenceService,
     private readonly documentTemplates: DocumentTemplatesService,
     private readonly actionTriggers: ActionTriggersService,
+    private readonly tradeInService: TradeInService,
   ) {}
 
   // --- Stock (§4.1) --------------------------------------------------------
@@ -67,7 +69,7 @@ export class UsedCarsService {
         photos: true,
         priceHistory: true,
         appraisal: true,
-        dealSheets: { orderBy: { createdAt: 'desc' }, include: { accessoryLines: true } },
+        dealSheets: { orderBy: { createdAt: 'desc' }, include: { accessoryLines: true, tradeIn: true } },
         leads: true,
       },
     });
@@ -205,12 +207,12 @@ export class UsedCarsService {
       dealerInvoiceFooterNote: dealer?.invoiceFooterNote,
     });
 
-    return this.prisma.dealSheet.create({
+    const dealSheet = await this.prisma.dealSheet.create({
       data: {
         usedVehicleId,
         status: DealSheetStatus.ACTIVE,
         sellingPrice: dto.sellingPrice,
-        partExchangeValue: dto.partExchangeValue,
+        partExchangeValue: dto.tradeIn?.agreedValue ?? dto.partExchangeValue,
         financeContribution: dto.financeContribution,
         accessoriesTotal,
         grossProfit,
@@ -219,6 +221,12 @@ export class UsedCarsService {
       },
       include: { accessoryLines: true },
     });
+
+    if (dto.tradeIn) {
+      await this.tradeInService.intake(dealerId, dto.tradeIn, { dealSheetId: dealSheet.id });
+    }
+
+    return dealSheet;
   }
 
   /**

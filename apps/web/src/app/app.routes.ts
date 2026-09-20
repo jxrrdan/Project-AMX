@@ -41,6 +41,10 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/vehicles/vehicle-pipeline.component').then((m) => m.VehiclePipelineComponent),
       },
       {
+        path: 'vehicles/:id',
+        loadComponent: () => import('./features/vehicles/vehicle-detail.component').then((m) => m.VehicleDetailComponent),
+      },
+      {
         path: 'parts',
         loadComponent: () => import('./features/parts/parts-list.component').then((m) => m.PartsListComponent),
       },

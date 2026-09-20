@@ -278,6 +278,30 @@ function, not just a scheduled feed":
   its conversation with the full `/ai` page (now just a dedicated, larger window onto the same
   thread and history) via a shared `AiAssistantService`.
 
+## New-car sales (retail/agency), trade-ins, and vehicle condition tracking
+
+- **New-car sales, retail or agency** (`/vehicles/:id`) — a new `NewCarSale` record (same
+  ACTIVE/SIGNED/INVALIDATED lifecycle as a used-car deal sheet) with a `SaleModel` of RETAIL (the
+  dealer buys/sells the vehicle and keeps its own margin — the traditional model) or AGENCY (the
+  OEM is the contracting seller; the dealer facilitates the order and earns a commission instead —
+  the model several manufacturers, BMW included, have been rolling out for some markets). Marking
+  the vehicle DELIVERED automatically flips its active sale to SIGNED, mirroring the used-car
+  deal-sheet/SOLD behaviour.
+- **Trade-ins, unified across used and new-car sales** — a customer's incoming trade-in vehicle is
+  always the dealer's own purchase, whether they're buying a used car (a deal sheet) or a new one
+  under either sale model (the OEM has no part in the trade-in even under agency). One shared
+  `TradeInService` intakes it as new used stock (source: PART_EX) and a linked appraisal in a single
+  step from either sale flow, replacing the old two-step "add the vehicle, then separately record
+  its appraisal" process — a deal sheet or new-car sale form now has an optional "customer is
+  trading in a vehicle" section that does both in one action.
+- **Vehicle condition/damage tracking** — a structured, itemised condition check
+  (`VehicleConditionReport` + `VehicleDamageMarker`: location, description, severity, shared by
+  courtesy/loan bookings and workshop job cards) replaces relying on a single free-text field.
+  A courtesy booking gets an INITIAL check when the car goes out and a FINAL one when it's
+  returned; a job card gets an INITIAL check at drop-off and a FINAL one at handback — the same
+  "who's liable for this damage" record either way, logged from the courtesy list and job-card
+  detail pages respectively.
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks
