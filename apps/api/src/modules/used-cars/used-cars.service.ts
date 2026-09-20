@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { UsedVehicleStatus } from '@project-amx/shared';
+import { DocumentTemplateType, UsedVehicleStatus } from '@project-amx/shared';
 import { PdfService } from '../../common/pdf/pdf.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { DocumentSequenceService } from '../dealers/document-sequence.service';
+import { DocumentTemplatesService } from '../document-templates/document-templates.service';
 import {
   AddPhotosDto,
   CreateAppraisalDto,
@@ -11,9 +13,14 @@ import {
   UpdateUsedVehicleStatusDto,
 } from './dto/used-car.dto';
 
-const DEAL_SHEET_TEMPLATE = `
+/** Used whenever a dealer hasn't authored their own DEAL_SHEET document template (Settings > Document templates). */
+const DEFAULT_DEAL_SHEET_TEMPLATE = `
 <html><body style="font-family:sans-serif">
-<h1>Deal Sheet</h1>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+{{#if dealerLogoUrl}}<img src="{{dealerLogoUrl}}" style="height:48px" />{{/if}}
+<div><h1 style="margin:0">{{dealerName}}</h1><p style="margin:0;font-size:12px">{{dealerAddress}}</p></div>
+</div>
+<h2>Deal Sheet — {{documentNumber}}</h2>
 <p>Vehicle: {{vehicle.make}} {{vehicle.model}} ({{vehicle.reg}})</p>
 <p>Selling price: £{{sellingPrice}}</p>
 <p>Part-exchange value: £{{partExchangeValue}}</p>
@@ -28,6 +35,7 @@ const DEAL_SHEET_TEMPLATE = `
 {{/if}}
 <p>Accessories total: £{{accessoriesTotal}}</p>
 <p><b>Gross profit: £{{grossProfit}}</b></p>
+{{#if dealerInvoiceFooterNote}}<p style="font-size:11px;color:#666">{{dealerInvoiceFooterNote}}</p>{{/if}}
 </body></html>`;
 
 @Injectable()
@@ -35,6 +43,8 @@ export class UsedCarsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pdf: PdfService,
+    private readonly documentSequences: DocumentSequenceService,
+    private readonly documentTemplates: DocumentTemplatesService,
   ) {}
 
   // --- Stock (§4.1) --------------------------------------------------------
@@ -132,12 +142,25 @@ export class UsedCarsService {
     // it isn't subtracted again here.
     const grossProfit = dto.sellingPrice - Number(vehicle.purchasePrice ?? 0) + accessoriesTotal;
 
-    const pdfUrl = await this.pdf.renderAndStore(dealerId, 'deal-sheets', `deal-${usedVehicleId}`, DEAL_SHEET_TEMPLATE, {
+    const [dealer, documentNumber, templateBody] = await Promise.all([
+      this.prisma.dealer.findUnique({ where: { id: dealerId } }),
+      this.documentSequences.nextNumber(dealerId, 'DEAL_SHEET'),
+      this.documentTemplates.getDefaultBody(dealerId, DocumentTemplateType.DEAL_SHEET, DEFAULT_DEAL_SHEET_TEMPLATE),
+    ]);
+
+    const pdfUrl = await this.pdf.renderAndStore(dealerId, 'deal-sheets', `deal-${usedVehicleId}`, templateBody, {
       vehicle,
       ...dto,
       accessories,
       accessoriesTotal: accessoriesTotal.toFixed(2),
       grossProfit: grossProfit.toFixed(2),
+      documentNumber,
+      documentDate: new Date().toLocaleDateString('en-GB'),
+      dealerName: dealer?.name,
+      dealerAddress: dealer?.address,
+      dealerLogoUrl: dealer?.logoUrl,
+      dealerVatNumber: dealer?.vatNumber,
+      dealerInvoiceFooterNote: dealer?.invoiceFooterNote,
     });
 
     return this.prisma.dealSheet.create({

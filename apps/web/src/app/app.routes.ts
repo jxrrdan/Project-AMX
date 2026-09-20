@@ -106,6 +106,15 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/users-list.component').then((m) => m.UsersListComponent),
       },
       {
+        path: 'admin/settings',
+        loadComponent: () => import('./features/admin/settings.component').then((m) => m.SettingsComponent),
+      },
+      {
+        path: 'admin/document-templates/:id',
+        loadComponent: () =>
+          import('./features/admin/document-template-editor.component').then((m) => m.DocumentTemplateEditorComponent),
+      },
+      {
         path: 'integrations',
         loadComponent: () =>
           import('./features/integrations/integrations-list.component').then((m) => m.IntegrationsListComponent),

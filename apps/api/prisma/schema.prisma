@@ -29,6 +29,9 @@ model Dealer {
   awpWebhookUrl  String?
   logoUrl        String?
   primaryColour  String?  @default("#0066B1")
+  secondaryColour String? @default("#1C69D4")
+  vatNumber      String?
+  invoiceFooterNote String?
   /// Unguessable, revocable access token for the public workshop TV board (§2.3) — deliberately
   /// NOT the dealer's own id, since that id is published elsewhere (embeddable widget URLs).
   workshopBoardToken String @unique @default(uuid())
@@ -68,6 +71,7 @@ model Dealer {
   integrationConnectors  IntegrationConnector[]
   customFieldDefinitions CustomFieldDefinition[]
   uiScreenDefinitions    UiScreenDefinition[]
+  batchJobRuns           BatchJobRun[]
 
   @@map("dealers")
 }
@@ -300,6 +304,29 @@ model DocumentSequence {
 
   @@unique([dealerId, docType, year])
   @@map("document_sequences")
+}
+
+enum BatchJobStatus {
+  RUNNING
+  SUCCESS
+  ERROR
+}
+
+/// Audit trail for scheduled maintenance jobs (nightly/monthly cron — see BatchJobsService),
+/// one row per dealer per run, same "run log" pattern as IntegrationRunLog.
+model BatchJobRun {
+  id        String         @id @default(uuid())
+  dealerId  String
+  dealer    Dealer         @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  jobName   String
+  status    BatchJobStatus @default(RUNNING)
+  summary   String?
+  errorMessage String?
+  startedAt DateTime       @default(now())
+  finishedAt DateTime?
+
+  @@index([dealerId, jobName, startedAt])
+  @@map("batch_job_runs")
 }
 
 // ---------------------------------------------------------------------------
@@ -1036,8 +1063,13 @@ enum DocumentTemplateType {
   PART_EXCHANGE_RECEIPT
   SERVICE_ESTIMATE
   HANDOVER_DOCUMENT
+  DEAL_SHEET
 }
 
+/// Dealer-authored document templates (variables/text/styling/logo) — see DOCUMENT_TEMPLATE_VARIABLES
+/// in @project-amx/shared for the mail-merge-style placeholders available per type. Only one
+/// template per (dealerId, type) may be flagged isDefault — enforced in DocumentTemplatesService,
+/// not the DB, so a dealer can keep drafts/alternates around without deleting them.
 model DocumentTemplate {
   id        String               @id @default(uuid())
   dealerId  String
@@ -1045,6 +1077,7 @@ model DocumentTemplate {
   type      DocumentTemplateType
   name      String
   bodyHtml  String
+  isDefault Boolean              @default(false)
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
 

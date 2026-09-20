@@ -177,6 +177,34 @@ can wire up a manufacturer/DMS feed without writing code — `/integrations`:
   broker is embedded locally (it's ESM-only and would hit the same Jest/CJS problem noted above);
   "send test data" covers the same code path.
 
+## Settings, batch jobs, and document templates (beyond the original spec)
+
+`/admin/settings` — dealer master data and scheduled maintenance, mirroring gaps a real
+multi-tenant SaaS product needs before go-live:
+
+- **Dealer profile & branding** — name, address, VAT number, invoice footer note, a logo upload
+  (base64 data URL → `StorageService`, no multipart pipeline needed), and primary/secondary
+  colours applied live across the app shell (toolbar, sidenav active state) via a `ThemeService`
+  that binds them as plain inline styles rather than fighting Angular Material's internal M3
+  design tokens.
+- **Document numbering** — per-dealer, per-document-type, per-year incrementing sequences (e.g.
+  `DS-2026-00001`), reserved atomically in a transaction (`DocumentSequenceService`).
+- **Batch jobs** — nightly stale-lead escalation and parts reorder alerts, plus a monthly courtesy
+  fleet expiry sweep, each run per-dealer via `@nestjs/schedule` and logged to `BatchJobRun` (same
+  audit-trail pattern as the Integration Hub's run logs). A "Run now" button demonstrates each job
+  without waiting for its schedule. Output lands in a new in-app **notification centre** (bell icon
+  in the toolbar) — the `Notification` table existed in the original schema but nothing wrote to
+  it until now.
+- **Document templates** — a dealer-authored HTML/CSS editor with an "insert variable" picker
+  (mail-merge-style `{{placeholders}}` for dealer/document data, `{{#each}}`/`{{#if}}` for line
+  items) and an approximate live preview. Wired end-to-end into the used-car deal sheet: if a
+  dealer sets a template as default for that document type, it's used instead of the built-in
+  fallback the next time a deal sheet is generated — proven with a real API call, not just UI.
+  Only `ModuleKey.ADMIN:EDIT` users (Dealer Principal / General Manager) can author these, which is
+  why rendering uses full Handlebars (like every other document in this app) rather than the
+  restricted placeholder substitution the CRM SMS free-text path uses — that fix (§ security
+  review) was specifically about a much lower-trust `CRM:CREATE` user submitting arbitrary text.
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks

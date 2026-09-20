@@ -5,13 +5,21 @@ function makePdf() {
   return { renderAndStore: jest.fn().mockResolvedValue('https://files.local/deal-sheets/deal-1.html') };
 }
 
+function makeDocumentSequences() {
+  return { nextNumber: jest.fn().mockResolvedValue('DS-2026-00001') };
+}
+
+function makeDocumentTemplates() {
+  return { getDefaultBody: jest.fn().mockResolvedValue('<html></html>') };
+}
+
 describe('UsedCarsService.createDealSheet', () => {
   const dealerId = 'dealer-1';
   const usedVehicleId = 'vehicle-1';
 
   it('throws when the vehicle does not belong to this dealer', async () => {
     const prisma = { usedVehicle: { findFirst: jest.fn().mockResolvedValue(null) } };
-    const service = new UsedCarsService(prisma as never, makePdf() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
     await expect(
       service.createDealSheet(dealerId, usedVehicleId, { sellingPrice: 15000 } as never),
     ).rejects.toThrow(NotFoundException);
@@ -22,8 +30,9 @@ describe('UsedCarsService.createDealSheet', () => {
     const prisma = {
       usedVehicle: { findFirst: jest.fn().mockResolvedValue({ id: usedVehicleId, purchasePrice: 12000 }) },
       dealSheet: { create },
+      dealer: { findUnique: jest.fn().mockResolvedValue({ id: dealerId, name: 'Test Dealer' }) },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
 
     const result = await service.createDealSheet(dealerId, usedVehicleId, {
       sellingPrice: 15000,
@@ -52,8 +61,9 @@ describe('UsedCarsService.createDealSheet', () => {
     const prisma = {
       usedVehicle: { findFirst: jest.fn().mockResolvedValue({ id: usedVehicleId, purchasePrice: 12000 }) },
       dealSheet: { create },
+      dealer: { findUnique: jest.fn().mockResolvedValue({ id: dealerId, name: 'Test Dealer' }) },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
 
     const result = await service.createDealSheet(dealerId, usedVehicleId, { sellingPrice: 15000 } as never);
 
@@ -66,8 +76,9 @@ describe('UsedCarsService.createDealSheet', () => {
     const prisma = {
       usedVehicle: { findFirst: jest.fn().mockResolvedValue({ id: usedVehicleId, purchasePrice: null }) },
       dealSheet: { create },
+      dealer: { findUnique: jest.fn().mockResolvedValue({ id: dealerId, name: 'Test Dealer' }) },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
 
     const result = await service.createDealSheet(dealerId, usedVehicleId, { sellingPrice: 15000 } as never);
 
@@ -82,7 +93,7 @@ describe('UsedCarsService.addPhotos', () => {
       usedVehicle: { findFirst: jest.fn().mockResolvedValue(null) },
       vehiclePhoto: { createMany },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
     await expect(
       service.addPhotos('dealer-1', 'other-dealer-vehicle', { urls: ['https://x/1.jpg'] } as never),
     ).rejects.toThrow(NotFoundException);
@@ -95,7 +106,7 @@ describe('UsedCarsService.addPhotos', () => {
       usedVehicle: { findFirst: jest.fn().mockResolvedValue({ id: 'vehicle-1' }) },
       vehiclePhoto: { createMany },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
     await service.addPhotos('dealer-1', 'vehicle-1', { urls: ['https://x/1.jpg', 'https://x/2.jpg'] } as never);
     expect(createMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -120,7 +131,7 @@ describe('UsedCarsService.daysInStockAlerts', () => {
         ]),
       },
     };
-    const service = new UsedCarsService(prisma as never, makePdf() as never);
+    const service = new UsedCarsService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
     const alerts = await service.daysInStockAlerts('dealer-1');
     expect(alerts.map((v) => v.id)).toEqual(['thirty', 'ninety']);
   });

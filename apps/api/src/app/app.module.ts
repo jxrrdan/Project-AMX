@@ -25,6 +25,8 @@ import { AccountingModule } from '../modules/accounting/accounting.module';
 import { DashboardModule } from '../modules/dashboard/dashboard.module';
 import { AiInsightsModule } from '../modules/ai-insights/ai-insights.module';
 import { IntegrationsModule } from '../modules/integrations/integrations.module';
+import { BatchJobsModule } from '../modules/batch-jobs/batch-jobs.module';
+import { DocumentTemplatesModule } from '../modules/document-templates/document-templates.module';
 
 @Module({
   imports: [
@@ -51,6 +53,8 @@ import { IntegrationsModule } from '../modules/integrations/integrations.module'
     DashboardModule,
     AiInsightsModule,
     IntegrationsModule,
+    BatchJobsModule,
+    DocumentTemplatesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

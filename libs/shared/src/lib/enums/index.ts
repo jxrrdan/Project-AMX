@@ -14,3 +14,4 @@ export * from './courtesy.enum';
 export * from './fi.enum';
 export * from './ai.enum';
 export * from './integration.enum';
+export * from './settings.enum';
