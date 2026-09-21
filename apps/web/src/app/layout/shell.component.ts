@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, OnInit, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatSidenavModule } from '@angular/material/sidenav';
@@ -6,8 +6,12 @@ import { MatListModule } from '@angular/material/list';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatBadgeModule } from '@angular/material/badge';
 import { ModuleKey, PermissionAction } from '@project-amx/shared';
 import { AuthService } from '../core/auth.service';
+import { ThemeService } from '../core/theme.service';
+import { AiAssistantDockComponent } from '../features/ai/ai-assistant-dock.component';
+import { NotificationsBellComponent } from '../features/notifications/notifications-bell.component';
 
 interface NavItem {
   path: string;
@@ -31,6 +35,8 @@ const NAV_ITEMS: NavItem[] = [
   { path: 'fi', label: 'Finance & Insurance', icon: 'account_balance', module: ModuleKey.FI },
   { path: 'ai', label: 'AI Assistant', icon: 'auto_awesome', module: ModuleKey.AI_INSIGHTS },
   { path: 'admin/users', label: 'Users & Roles', icon: 'admin_panel_settings', module: ModuleKey.ADMIN },
+  { path: 'admin/settings', label: 'Settings', icon: 'settings', module: ModuleKey.ADMIN },
+  { path: 'integrations', label: 'OEM Integration Hub', icon: 'hub', module: ModuleKey.OEM_INTEGRATIONS },
 ];
 
 @Component({
@@ -45,16 +51,28 @@ const NAV_ITEMS: NavItem[] = [
     MatIconModule,
     MatButtonModule,
     MatMenuModule,
+    MatBadgeModule,
+    NotificationsBellComponent,
+    AiAssistantDockComponent,
   ],
   template: `
-    <mat-toolbar color="primary" class="toolbar">
-      <span class="brand">AMS — {{ dealerName() }}</span>
+    <mat-toolbar class="toolbar" [style.background]="theme.primaryColour()" [style.color]="'#fff'">
+      @if (theme.logoUrl(); as logo) {
+        <img [src]="logo" alt="Dealer logo" class="brand-logo" />
+      } @else {
+        <span class="brand">AMS — {{ theme.dealerName() }}</span>
+      }
       <span class="spacer"></span>
+      <app-notifications-bell />
       <button mat-icon-button [matMenuTriggerFor]="userMenu">
         <mat-icon>account_circle</mat-icon>
       </button>
       <mat-menu #userMenu="matMenu">
         <div class="menu-user">{{ userName() }}</div>
+        <a mat-menu-item routerLink="/my-profile">
+          <mat-icon>person</mat-icon>
+          <span>My profile</span>
+        </a>
         <button mat-menu-item (click)="auth.logout()">
           <mat-icon>logout</mat-icon>
           <span>Sign out</span>
@@ -66,7 +84,12 @@ const NAV_ITEMS: NavItem[] = [
       <mat-sidenav mode="side" opened class="sidenav">
         <mat-nav-list>
           @for (item of visibleNavItems(); track item.path) {
-            <a mat-list-item [routerLink]="item.path" routerLinkActive="active-link">
+            <a
+              mat-list-item
+              [routerLink]="item.path"
+              routerLinkActive="active-link"
+              [style.--amx-active-bg]="activeLinkTint()"
+            >
               <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
               <span matListItemTitle>{{ item.label }}</span>
             </a>
@@ -77,6 +100,10 @@ const NAV_ITEMS: NavItem[] = [
         <router-outlet />
       </mat-sidenav-content>
     </mat-sidenav-container>
+
+    @if (auth.hasPermission(aiModule, viewAction)) {
+      <app-ai-assistant-dock />
+    }
   `,
   styles: [
     `
@@ -87,6 +114,11 @@ const NAV_ITEMS: NavItem[] = [
       }
       .brand {
         font-weight: 600;
+      }
+      .brand-logo {
+        height: 32px;
+        max-width: 160px;
+        object-fit: contain;
       }
       .spacer {
         flex: 1 1 auto;
@@ -102,7 +134,7 @@ const NAV_ITEMS: NavItem[] = [
         background: #f5f6f8;
       }
       .active-link {
-        background: rgba(0, 102, 177, 0.08);
+        background: var(--amx-active-bg, rgba(0, 102, 177, 0.08));
       }
       .menu-user {
         padding: 8px 16px;
@@ -112,10 +144,12 @@ const NAV_ITEMS: NavItem[] = [
     `,
   ],
 })
-export class ShellComponent {
+export class ShellComponent implements OnInit {
   readonly auth = inject(AuthService);
+  readonly theme = inject(ThemeService);
+  readonly aiModule = ModuleKey.AI_INSIGHTS;
+  readonly viewAction = PermissionAction.VIEW;
 
-  readonly dealerName = computed(() => this.auth.user()?.email.split('@')[1]?.split('.')[0] ?? 'Dealer');
   readonly userName = computed(() => {
     const user = this.auth.user();
     return user ? `${user.firstName} ${user.lastName}` : '';
@@ -124,4 +158,17 @@ export class ShellComponent {
   readonly visibleNavItems = computed(() =>
     NAV_ITEMS.filter((item) => this.auth.hasPermission(item.module, PermissionAction.VIEW)),
   );
+
+  readonly activeLinkTint = computed(() => hexToRgba(this.theme.primaryColour(), 0.1));
+
+  ngOnInit(): void {
+    this.theme.load();
+  }
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const match = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!match) return `rgba(0, 102, 177, ${alpha})`;
+  const [, r, g, b] = match;
+  return `rgba(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}, ${alpha})`;
 }

@@ -4,9 +4,11 @@ import type { AuthUser } from '@project-amx/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CompleteHandoverDto, CreateHandoverDto } from './dto/handover.dto';
+import { CreateNewCarSaleDto, InvalidateNewCarSaleDto } from './dto/new-car-sale.dto';
 import { SchedulePdiDto, SignOffPdiDto, UpdateChecklistItemDto } from './dto/pdi.dto';
 import { CreateVehicleDto, UpdateVehicleDto } from './dto/vehicle.dto';
 import { HandoverService } from './handover.service';
+import { NewCarSaleService } from './new-car-sale.service';
 import { PdiService } from './pdi.service';
 import { RisImportService } from './ris-import.service';
 import { VehiclesService } from './vehicles.service';
@@ -18,6 +20,7 @@ export class VehiclesController {
     private readonly pdiService: PdiService,
     private readonly handoverService: HandoverService,
     private readonly risImportService: RisImportService,
+    private readonly newCarSaleService: NewCarSaleService,
   ) {}
 
   @Get('vehicles')
@@ -90,5 +93,30 @@ export class VehiclesController {
   @RequirePermissions({ module: ModuleKey.NEW_CAR_PDI, action: PermissionAction.EDIT })
   completeHandover(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CompleteHandoverDto) {
     return this.handoverService.complete(user.dealerId, id, dto);
+  }
+
+  @Get('vehicles/:id/sales')
+  @RequirePermissions({ module: ModuleKey.NEW_CAR_PDI, action: PermissionAction.VIEW })
+  listSales(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.newCarSaleService.list(user.dealerId, id);
+  }
+
+  /** RETAIL or AGENCY new-car sale, with an optional one-step trade-in intake — see TradeInService. */
+  @Post('vehicles/:id/sales')
+  @RequirePermissions({ module: ModuleKey.NEW_CAR_PDI, action: PermissionAction.CREATE })
+  createSale(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CreateNewCarSaleDto) {
+    return this.newCarSaleService.create(user.dealerId, id, dto);
+  }
+
+  /** Voids a sale that fell through (no completed sale) so this vehicle can get a new one. */
+  @Post('vehicles/:id/sales/:saleId/invalidate')
+  @RequirePermissions({ module: ModuleKey.NEW_CAR_PDI, action: PermissionAction.EDIT })
+  invalidateSale(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('saleId') saleId: string,
+    @Body() dto: InvalidateNewCarSaleDto,
+  ) {
+    return this.newCarSaleService.invalidate(user.dealerId, id, saleId, dto);
   }
 }

@@ -19,6 +19,7 @@ export enum ModuleKey {
   AI_INSIGHTS = 'AI_INSIGHTS',
   AI_CHATBOT = 'AI_CHATBOT',
   GENERAL_LEDGER = 'GENERAL_LEDGER',
+  OEM_INTEGRATIONS = 'OEM_INTEGRATIONS',
 }
 
 export const MODULE_LABELS: Record<ModuleKey, string> = {
@@ -38,4 +39,5 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   [ModuleKey.AI_INSIGHTS]: 'AI Insights & Intelligence',
   [ModuleKey.AI_CHATBOT]: 'AI Customer Chatbot',
   [ModuleKey.GENERAL_LEDGER]: 'General Ledger',
+  [ModuleKey.OEM_INTEGRATIONS]: 'OEM Integration Hub',
 };

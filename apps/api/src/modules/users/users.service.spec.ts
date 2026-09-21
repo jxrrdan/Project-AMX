@@ -139,3 +139,25 @@ describe('UsersService.update — permission escalation guard', () => {
     ).rejects.toThrow(NotFoundException);
   });
 });
+
+describe('UsersService.updateMyProfile', () => {
+  it('only ever updates the calling user\'s own id, never a client-supplied one', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'user-1', phone: '+447700900000' });
+    const prisma = { user: { update } };
+    const service = new UsersService(prisma as never, {} as never, makeAudit() as never);
+
+    await service.updateMyProfile('user-1', { phone: '+447700900000' });
+
+    expect(update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { phone: '+447700900000' } });
+  });
+
+  it('clears the phone number when given null', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'user-1', phone: null });
+    const prisma = { user: { update } };
+    const service = new UsersService(prisma as never, {} as never, makeAudit() as never);
+
+    await service.updateMyProfile('user-1', { phone: null });
+
+    expect(update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { phone: null } });
+  });
+});

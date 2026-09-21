@@ -3,7 +3,7 @@ import { ModuleKey, PermissionAction } from '@project-amx/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
-import { AcceptInvitationDto, InviteUserDto, UpdateUserDto } from './dto/user.dto';
+import { AcceptInvitationDto, InviteUserDto, UpdateMyProfileDto, UpdateUserDto } from './dto/user.dto';
 import { UsersService } from './users.service';
 import type { AuthUser } from '@project-amx/shared';
 
@@ -27,6 +27,12 @@ export class UsersController {
   @Post('accept-invitation')
   acceptInvitation(@Body() dto: AcceptInvitationDto) {
     return this.usersService.acceptInvitation(dto);
+  }
+
+  /** Literal segment — must come before the ':id' wildcard route below. */
+  @Patch('me')
+  updateMyProfile(@CurrentUser() user: AuthUser, @Body() dto: UpdateMyProfileDto) {
+    return this.usersService.updateMyProfile(user.id, dto);
   }
 
   @Patch(':id')

@@ -11,7 +11,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { StockMovementType } from '@project-amx/shared';
+import { IntegrationTargetEntity, StockMovementType } from '@project-amx/shared';
+import { CustomFieldsPanelComponent } from '../integrations/custom-fields-panel.component';
 import { environment } from '../../../environments/environment';
 
 interface PartDetail {
@@ -46,6 +47,7 @@ interface JobCardOption {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    CustomFieldsPanelComponent,
   ],
   template: `
     @if (part(); as p) {
@@ -140,6 +142,8 @@ interface JobCardOption {
           </mat-card>
         </div>
       </div>
+
+      <app-custom-fields-panel [entity]="partEntity" [recordId]="p.id" />
     }
   `,
   styles: [
@@ -206,6 +210,7 @@ interface JobCardOption {
 export class PartDetailComponent implements OnInit {
   readonly part = signal<PartDetail | null>(null);
   readonly jobCards = signal<JobCardOption[]>([]);
+  readonly partEntity = IntegrationTargetEntity.PART;
 
   movementForm = { type: StockMovementType.GOODS_RECEIVED as string, quantity: null as number | null, reasonCode: '' };
   allocateForm = { jobCardId: '', quantity: null as number | null };

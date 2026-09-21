@@ -9,6 +9,7 @@ import {
   CreateAppraisalDto,
   CreateDealSheetDto,
   CreateUsedVehicleDto,
+  InvalidateDealSheetDto,
   SetAskingPriceDto,
   UpdateUsedVehicleStatusDto,
 } from './dto/used-car.dto';
@@ -44,6 +45,15 @@ export class UsedCarsController {
   @RequirePermissions({ module: ModuleKey.USED_CARS, action: PermissionAction.VIEW })
   dvlaLookup(@Param('reg') reg: string) {
     return this.dvlaService.lookup(reg);
+  }
+
+  /** Searches this dealer's own stock, plus any business-systems-manager-configured Action
+   * Trigger for USED_VEHICLE_REG_LOOKUP (Settings > Action Triggers) — a second, independently
+   * configurable "also call an OEM API" lookup alongside the built-in DVLA one above. */
+  @Get('reg-lookup/:reg')
+  @RequirePermissions({ module: ModuleKey.USED_CARS, action: PermissionAction.VIEW })
+  regLookup(@CurrentUser() user: AuthUser, @Param('reg') reg: string) {
+    return this.usedCarsService.regLookup(user.dealerId, reg);
   }
 
   @Get(':id')
@@ -86,5 +96,17 @@ export class UsedCarsController {
   @RequirePermissions({ module: ModuleKey.USED_CARS, action: PermissionAction.CREATE })
   createDealSheet(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CreateDealSheetDto) {
     return this.usedCarsService.createDealSheet(user.dealerId, id, dto);
+  }
+
+  /** Voids a deal sheet that fell through (no signed sale) so this vehicle can get a new one. */
+  @Post(':id/deal-sheet/:dealSheetId/invalidate')
+  @RequirePermissions({ module: ModuleKey.USED_CARS, action: PermissionAction.EDIT })
+  invalidateDealSheet(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('dealSheetId') dealSheetId: string,
+    @Body() dto: InvalidateDealSheetDto,
+  ) {
+    return this.usedCarsService.invalidateDealSheet(user.dealerId, id, dealSheetId, dto);
   }
 }

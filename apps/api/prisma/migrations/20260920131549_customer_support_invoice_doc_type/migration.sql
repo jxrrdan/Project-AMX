@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "DocumentTemplateType" ADD VALUE 'CUSTOMER_SUPPORT_INVOICE';

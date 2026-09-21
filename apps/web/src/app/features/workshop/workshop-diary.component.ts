@@ -1,6 +1,8 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CdkDragDrop, DragDropModule, transferArrayItem, moveItemInArray } from '@angular/cdk/drag-drop';
+import { RouterLink } from '@angular/router';
+import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
@@ -27,14 +29,20 @@ interface JobCard {
 
 @Component({
   selector: 'app-workshop-diary',
-  imports: [DragDropModule, MatCardModule, MatChipsModule, MatIconModule],
+  imports: [DragDropModule, RouterLink, MatButtonModule, MatCardModule, MatChipsModule, MatIconModule],
   template: `
     <div class="header">
       <h1>Workshop Diary</h1>
-      <span class="live-indicator" [class.connected]="wsConnected()">
-        <mat-icon>{{ wsConnected() ? 'wifi' : 'wifi_off' }}</mat-icon>
-        {{ wsConnected() ? 'Live' : 'Offline' }}
-      </span>
+      <div class="header-actions">
+        <a mat-stroked-button routerLink="/workshop/loading">
+          <mat-icon>bar_chart</mat-icon>
+          Loading &amp; parts
+        </a>
+        <span class="live-indicator" [class.connected]="wsConnected()">
+          <mat-icon>{{ wsConnected() ? 'wifi' : 'wifi_off' }}</mat-icon>
+          {{ wsConnected() ? 'Live' : 'Offline' }}
+        </span>
+      </div>
     </div>
 
     <div class="board" cdkDropListGroup>
@@ -44,7 +52,12 @@ interface JobCard {
           <div class="drop-list" cdkDropList [cdkDropListData]="byBay(bay.id)" [id]="bay.id" (cdkDropListDropped)="drop($event, bay.id)">
             @for (job of byBay(bay.id); track job.id) {
               <mat-card class="job-card" cdkDrag [style.border-left-color]="colourFor(job.jobType)">
-                <div class="job-type">{{ job.jobType }}</div>
+                <div class="job-card-header">
+                  <div class="job-type">{{ job.jobType }}</div>
+                  <a mat-icon-button [routerLink]="['/workshop/job-cards', job.id]" (click)="$event.stopPropagation()">
+                    <mat-icon>open_in_new</mat-icon>
+                  </a>
+                </div>
                 <div class="customer">{{ job.customerName }}</div>
                 @if (job.vehicleReg) {
                   <div class="reg">{{ job.vehicleReg }}</div>
@@ -80,6 +93,11 @@ interface JobCard {
         justify-content: space-between;
         align-items: center;
         margin-bottom: 16px;
+      }
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
       }
       .live-indicator {
         display: flex;
@@ -125,6 +143,16 @@ interface JobCard {
         padding: 12px;
         cursor: grab;
         border-left: 4px solid #0066b1;
+      }
+      .job-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .job-card-header a {
+        width: 24px;
+        height: 24px;
+        line-height: 24px;
       }
       .job-type {
         font-size: 11px;

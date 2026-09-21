@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ModuleKey, VehiclePipelineStatus } from '@project-amx/shared';
+import { DealSheetStatus, ModuleKey, VehiclePipelineStatus } from '@project-amx/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateVehicleDto, UpdateVehicleDto } from './dto/vehicle.dto';
@@ -28,7 +28,12 @@ export class VehiclesService {
   findOne(dealerId: string, id: string) {
     return this.prisma.vehicle.findFirst({
       where: { id, dealerId },
-      include: { allocatedAdvisor: true, pdiJobs: { include: { checklistItems: true } }, handoverAppointments: true },
+      include: {
+        allocatedAdvisor: true,
+        pdiJobs: { include: { checklistItems: true } },
+        handoverAppointments: true,
+        sales: { orderBy: { createdAt: 'desc' }, include: { tradeIn: true } },
+      },
     });
   }
 
@@ -71,6 +76,15 @@ export class VehiclesService {
         customerName: dto.customerName,
       },
     });
+
+    // The vehicle reaching DELIVERED means whichever sale was active for it resulted in a
+    // completed sale — record that on the sale itself, same as a used car going SOLD.
+    if (dto.status === VehiclePipelineStatus.DELIVERED) {
+      await this.prisma.newCarSale.updateMany({
+        where: { vehicleId: id, status: DealSheetStatus.ACTIVE },
+        data: { status: DealSheetStatus.SIGNED },
+      });
+    }
 
     await this.audit.record({
       dealerId,

@@ -1,6 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
@@ -34,7 +35,7 @@ const COLUMN_LABELS: Record<VehiclePipelineStatus, string> = {
 
 @Component({
   selector: 'app-vehicle-pipeline',
-  imports: [DatePipe, DragDropModule, MatCardModule, MatChipsModule, MatButtonModule, MatIconModule],
+  imports: [DatePipe, RouterLink, DragDropModule, MatCardModule, MatChipsModule, MatButtonModule, MatIconModule],
   template: `
     <div class="header">
       <h1>New Car Stock &amp; PDI Pipeline</h1>
@@ -57,7 +58,12 @@ const COLUMN_LABELS: Record<VehiclePipelineStatus, string> = {
           >
             @for (vehicle of byStatus(column); track vehicle.id) {
               <mat-card class="vehicle-card" cdkDrag>
-                <div class="vin">{{ vehicle.vin }}</div>
+                <div class="vin-row">
+                  <div class="vin">{{ vehicle.vin }}</div>
+                  <a mat-icon-button [routerLink]="['/vehicles', vehicle.id]" (click)="$event.stopPropagation()" title="Open">
+                    <mat-icon>open_in_new</mat-icon>
+                  </a>
+                </div>
                 <div class="model">{{ vehicle.model }}</div>
                 @if (vehicle.colour) {
                   <mat-chip-set><mat-chip>{{ vehicle.colour }}</mat-chip></mat-chip-set>
@@ -117,6 +123,21 @@ const COLUMN_LABELS: Record<VehiclePipelineStatus, string> = {
       .vehicle-card {
         padding: 12px;
         cursor: grab;
+      }
+      .vin-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .vin-row a {
+        width: 24px;
+        height: 24px;
+        line-height: 24px;
+      }
+      .vin-row .mat-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
       }
       .vin {
         font-size: 11px;

@@ -1,0 +1,129 @@
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { AftersalesInvoiceService } from './aftersales-invoice.service';
+
+function makePdf() {
+  return { renderAndStore: jest.fn().mockResolvedValue('https://files.local/aftersales-invoices/invoice-1.html') };
+}
+
+function makeDocumentSequences() {
+  return { nextNumber: jest.fn().mockResolvedValue('INV-2026-00001') };
+}
+
+function makeDocumentTemplates() {
+  return { getDefaultBody: jest.fn().mockResolvedValue('<html></html>') };
+}
+
+describe('AftersalesInvoiceService.generate', () => {
+  const dealerId = 'dealer-1';
+  const jobCardId = 'job-1';
+
+  it('throws when the job card does not belong to this dealer', async () => {
+    const prisma = { jobCard: { findFirst: jest.fn().mockResolvedValue(null) } };
+    const service = new AftersalesInvoiceService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
+    await expect(service.generate(dealerId, jobCardId)).rejects.toThrow(NotFoundException);
+  });
+
+  it('refuses to generate a second invoice for the same job card', async () => {
+    const prisma = {
+      jobCard: { findFirst: jest.fn().mockResolvedValue({ id: jobCardId, timeEntries: [], partAllocations: [] }) },
+      aftersalesInvoice: { findUnique: jest.fn().mockResolvedValue({ id: 'existing-invoice' }) },
+    };
+    const service = new AftersalesInvoiceService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
+    await expect(service.generate(dealerId, jobCardId)).rejects.toThrow(BadRequestException);
+  });
+
+  it('computes labour from clocked time when available, at the dealer\'s configured rate', async () => {
+    const clockOn = new Date('2026-09-20T09:00:00Z');
+    const clockOff = new Date('2026-09-20T11:00:00Z'); // 2 hours
+    const prisma = {
+      jobCard: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: jobCardId,
+          customerName: 'Jamie Smith',
+          vehicleReg: 'AB12CDE',
+          jobType: 'SERVICE',
+          estimatedHours: 1,
+          timeEntries: [{ clockOn, clockOff }],
+          partAllocations: [],
+        }),
+      },
+      aftersalesInvoice: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockImplementation(({ data }) => data) },
+      dealer: { findUnique: jest.fn().mockResolvedValue({ labourRatePerHour: 100, name: 'Test Dealer' }) },
+    };
+    const service = new AftersalesInvoiceService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
+
+    const result = await service.generate(dealerId, jobCardId);
+
+    // 2 hours clocked * £100/hr = £200 labour; no parts; VAT 20% of 200 = £40; total £240
+    expect(result.labourTotal).toBe(200);
+    expect(result.partsTotal).toBe(0);
+    expect(result.vatAmount).toBe(40);
+    expect(result.totalAmount).toBe(240);
+  });
+
+  it('falls back to the estimated hours when nobody clocked off', async () => {
+    const prisma = {
+      jobCard: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: jobCardId,
+          customerName: 'Jamie Smith',
+          vehicleReg: 'AB12CDE',
+          jobType: 'SERVICE',
+          estimatedHours: 3,
+          timeEntries: [],
+          partAllocations: [],
+        }),
+      },
+      aftersalesInvoice: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockImplementation(({ data }) => data) },
+      dealer: { findUnique: jest.fn().mockResolvedValue({ labourRatePerHour: 100 }) },
+    };
+    const service = new AftersalesInvoiceService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
+
+    const result = await service.generate(dealerId, jobCardId);
+
+    expect(result.labourTotal).toBe(300);
+  });
+
+  it('sums parts at cost price into partsTotal', async () => {
+    const prisma = {
+      jobCard: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: jobCardId,
+          customerName: 'Jamie Smith',
+          vehicleReg: 'AB12CDE',
+          jobType: 'SERVICE',
+          estimatedHours: 0,
+          timeEntries: [],
+          partAllocations: [
+            { quantity: 2, part: { description: 'Oil filter', costPrice: 10 } },
+            { quantity: 1, part: { description: 'Brake disc', costPrice: 45.5 } },
+          ],
+        }),
+      },
+      aftersalesInvoice: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockImplementation(({ data }) => data) },
+      dealer: { findUnique: jest.fn().mockResolvedValue({ labourRatePerHour: 100 }) },
+    };
+    const service = new AftersalesInvoiceService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
+
+    const result = await service.generate(dealerId, jobCardId);
+
+    // parts: 2*10 + 1*45.5 = 65.5
+    expect(result.partsTotal).toBe(65.5);
+  });
+});
+
+describe('AftersalesInvoiceService.get', () => {
+  it('throws when no invoice has been generated for this job card', async () => {
+    const prisma = { aftersalesInvoice: { findFirst: jest.fn().mockResolvedValue(null) } };
+    const service = new AftersalesInvoiceService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
+    await expect(service.get('dealer-1', 'job-1')).rejects.toThrow(NotFoundException);
+  });
+
+  it('scopes the lookup to the given dealer', async () => {
+    const findFirst = jest.fn().mockResolvedValue({ id: 'inv-1' });
+    const prisma = { aftersalesInvoice: { findFirst } };
+    const service = new AftersalesInvoiceService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
+    await service.get('dealer-1', 'job-1');
+    expect(findFirst).toHaveBeenCalledWith({ where: { jobCardId: 'job-1', dealerId: 'dealer-1' } });
+  });
+});

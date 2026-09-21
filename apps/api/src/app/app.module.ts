@@ -24,6 +24,12 @@ import { FiModule } from '../modules/fi/fi.module';
 import { AccountingModule } from '../modules/accounting/accounting.module';
 import { DashboardModule } from '../modules/dashboard/dashboard.module';
 import { AiInsightsModule } from '../modules/ai-insights/ai-insights.module';
+import { IntegrationsModule } from '../modules/integrations/integrations.module';
+import { BatchJobsModule } from '../modules/batch-jobs/batch-jobs.module';
+import { DocumentTemplatesModule } from '../modules/document-templates/document-templates.module';
+import { OrgModule } from '../modules/org/org.module';
+import { ActionTriggersModule } from '../modules/action-triggers/action-triggers.module';
+import { AftersalesModule } from '../modules/aftersales/aftersales.module';
 
 @Module({
   imports: [
@@ -49,6 +55,12 @@ import { AiInsightsModule } from '../modules/ai-insights/ai-insights.module';
     AccountingModule,
     DashboardModule,
     AiInsightsModule,
+    IntegrationsModule,
+    BatchJobsModule,
+    DocumentTemplatesModule,
+    OrgModule,
+    ActionTriggersModule,
+    AftersalesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

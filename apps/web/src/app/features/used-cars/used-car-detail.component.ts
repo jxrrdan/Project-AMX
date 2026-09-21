@@ -1,22 +1,37 @@
 import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { UsedVehicleStatus } from '@project-amx/shared';
+import { IntegrationTargetEntity, UsedVehicleStatus } from '@project-amx/shared';
+import { CustomFieldsPanelComponent } from '../integrations/custom-fields-panel.component';
 import { environment } from '../../../environments/environment';
 
 interface AccessoryLine {
   description: string;
   price: number | null;
+}
+
+interface DealSheetDetail {
+  id: string;
+  status: 'ACTIVE' | 'SIGNED' | 'INVALIDATED';
+  sellingPrice: number;
+  accessoriesTotal: number;
+  grossProfit: number | null;
+  pdfUrl: string | null;
+  invalidatedReason: string | null;
+  createdAt: string;
+  accessoryLines: { description: string; price: number }[];
+  tradeIn: { usedVehicleId: string; agreedValue: number } | null;
 }
 
 interface UsedVehicleDetail {
@@ -31,13 +46,7 @@ interface UsedVehicleDetail {
   status: UsedVehicleStatus;
   priceHistory: { price: number; changedAt: string }[];
   appraisal: { condition: string | null; mileage: number | null; damageNotes: string | null; agreedValue: number } | null;
-  dealSheet: {
-    sellingPrice: number;
-    accessoriesTotal: number;
-    grossProfit: number | null;
-    pdfUrl: string | null;
-    accessoryLines: { description: string; price: number }[];
-  } | null;
+  dealSheets: DealSheetDetail[];
 }
 
 @Component({
@@ -54,6 +63,8 @@ interface UsedVehicleDetail {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    MatCheckboxModule,
+    CustomFieldsPanelComponent,
   ],
   template: `
     @if (vehicle(); as v) {
@@ -127,7 +138,8 @@ interface UsedVehicleDetail {
         <div class="col">
           <mat-card>
             <h3>Deal sheet</h3>
-            @if (v.dealSheet; as d) {
+            @if (activeDealSheet(); as d) {
+              <mat-chip-set><mat-chip [class]="'status-' + d.status">{{ d.status }}</mat-chip></mat-chip-set>
               <p>Selling price: {{ d.sellingPrice | currency: 'GBP' }}</p>
               <p>Gross profit: {{ d.grossProfit | currency: 'GBP' }}</p>
               @if (d.accessoryLines.length) {
@@ -139,22 +151,73 @@ interface UsedVehicleDetail {
                 </ul>
                 <p>Accessories total: {{ d.accessoriesTotal | currency: 'GBP' }}</p>
               }
+              @if (d.tradeIn) {
+                <p>
+                  Trade-in taken in at {{ d.tradeIn.agreedValue | currency: 'GBP' }} —
+                  <a [routerLink]="['/used-cars', d.tradeIn.usedVehicleId]">view in stock</a>
+                </p>
+              }
               @if (d.pdfUrl) {
                 <a [href]="storageUrl(d.pdfUrl)" target="_blank" rel="noopener">View deal sheet document</a>
               }
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Reason (optional)</mat-label>
+                <input matInput [(ngModel)]="invalidateReason" placeholder="e.g. Buyer withdrew, finance fell through" />
+              </mat-form-field>
+              <button mat-stroked-button color="warn" (click)="invalidateDealSheet(d.id)">
+                Invalidate — deal didn't result in a signed sale
+              </button>
             } @else {
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>Selling price (£)</mat-label>
                 <input matInput type="number" [(ngModel)]="dealSheetForm.sellingPrice" />
               </mat-form-field>
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Part-exchange value (£)</mat-label>
-                <input matInput type="number" [(ngModel)]="dealSheetForm.partExchangeValue" />
-              </mat-form-field>
+              @if (!hasTradeIn) {
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Part-exchange value (£)</mat-label>
+                  <input matInput type="number" [(ngModel)]="dealSheetForm.partExchangeValue" />
+                </mat-form-field>
+              }
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>Finance contribution (£)</mat-label>
                 <input matInput type="number" [(ngModel)]="dealSheetForm.financeContribution" />
               </mat-form-field>
+
+              <mat-checkbox [(ngModel)]="hasTradeIn">Customer is trading in a vehicle</mat-checkbox>
+              @if (hasTradeIn) {
+                <div class="row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Reg</mat-label>
+                    <input matInput [(ngModel)]="tradeInForm.reg" placeholder="AB12 CDE" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Make</mat-label>
+                    <input matInput [(ngModel)]="tradeInForm.make" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Model</mat-label>
+                    <input matInput [(ngModel)]="tradeInForm.model" />
+                  </mat-form-field>
+                </div>
+                <div class="row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Mileage</mat-label>
+                    <input matInput type="number" [(ngModel)]="tradeInForm.mileage" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Condition</mat-label>
+                    <input matInput [(ngModel)]="tradeInForm.condition" placeholder="e.g. Good, some wear" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Agreed value (£)</mat-label>
+                    <input matInput type="number" [(ngModel)]="tradeInForm.agreedValue" />
+                  </mat-form-field>
+                </div>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Damage notes</mat-label>
+                  <textarea matInput rows="2" [(ngModel)]="tradeInForm.damageNotes"></textarea>
+                </mat-form-field>
+              }
 
               <p class="accessories-label">Accessories</p>
               @for (line of accessoryLines(); track $index) {
@@ -180,15 +243,33 @@ interface UsedVehicleDetail {
               <button
                 mat-flat-button
                 color="primary"
-                [disabled]="!dealSheetForm.sellingPrice"
+                [disabled]="!dealSheetForm.sellingPrice || (hasTradeIn && !isTradeInValid())"
                 (click)="createDealSheet()"
               >
                 Generate deal sheet
               </button>
             }
+
+            @if (pastDealSheets().length) {
+              <h4>Previous deal sheets</h4>
+              @for (d of pastDealSheets(); track d.id) {
+                <div class="line-item">
+                  <span>
+                    <mat-chip [class]="'status-' + d.status">{{ d.status }}</mat-chip>
+                    {{ d.sellingPrice | currency: 'GBP' }}
+                    @if (d.invalidatedReason) { — {{ d.invalidatedReason }} }
+                  </span>
+                  @if (d.pdfUrl) {
+                    <a [href]="storageUrl(d.pdfUrl)" target="_blank" rel="noopener">Document</a>
+                  }
+                </div>
+              }
+            }
           </mat-card>
         </div>
       </div>
+
+      <app-custom-fields-panel [entity]="usedVehicleEntity" [recordId]="v.id" />
     }
   `,
   styles: [
@@ -237,19 +318,51 @@ interface UsedVehicleDetail {
         font-weight: 600;
         margin: 8px 0 0;
       }
+      .line-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #eee;
+        padding: 6px 0;
+        font-size: 13px;
+      }
+      .status-ACTIVE {
+        background: #e3f2fd;
+      }
+      .status-SIGNED {
+        background: #e8f5e9;
+      }
+      .status-INVALIDATED {
+        background: #fbe9e7;
+        text-decoration: line-through;
+      }
     `,
   ],
 })
 export class UsedCarDetailComponent implements OnInit {
   readonly vehicle = signal<UsedVehicleDetail | null>(null);
   readonly statuses = Object.values(UsedVehicleStatus);
+  readonly usedVehicleEntity = IntegrationTargetEntity.USED_VEHICLE;
   readonly accessoryLines = signal<AccessoryLine[]>([{ description: '', price: null }]);
+  readonly activeDealSheet = computed(() => this.vehicle()?.dealSheets.find((d) => d.status === 'ACTIVE') ?? null);
+  readonly pastDealSheets = computed(() => this.vehicle()?.dealSheets.filter((d) => d.status !== 'ACTIVE') ?? []);
 
   statusValue: UsedVehicleStatus = UsedVehicleStatus.IN_STOCK;
   askingPriceValue: number | null = null;
+  invalidateReason = '';
 
   appraisalForm = { condition: '', damageNotes: '', agreedValue: null as number | null };
   dealSheetForm = { sellingPrice: null as number | null, partExchangeValue: null as number | null, financeContribution: null as number | null };
+  hasTradeIn = false;
+  tradeInForm = {
+    reg: '',
+    make: '',
+    model: '',
+    mileage: null as number | null,
+    condition: '',
+    damageNotes: '',
+    agreedValue: null as number | null,
+  };
 
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
@@ -303,13 +416,39 @@ export class UsedCarDetailComponent implements OnInit {
     this.accessoryLines.update((lines) => lines.filter((_, i) => i !== index));
   }
 
+  isTradeInValid(): boolean {
+    return !!(this.tradeInForm.reg && this.tradeInForm.make && this.tradeInForm.model && this.tradeInForm.agreedValue != null);
+  }
+
   createDealSheet(): void {
     const accessories = this.accessoryLines()
       .filter((line) => line.description && line.price != null)
       .map((line) => ({ description: line.description, price: line.price }));
+    const tradeIn = this.hasTradeIn && this.isTradeInValid() ? this.tradeInForm : undefined;
 
     this.http
-      .post(`${environment.apiUrl}/used-vehicles/${this.vehicleId}/deal-sheet`, { ...this.dealSheetForm, accessories })
-      .subscribe(() => this.load());
+      .post(`${environment.apiUrl}/used-vehicles/${this.vehicleId}/deal-sheet`, { ...this.dealSheetForm, accessories, tradeIn })
+      .subscribe({
+        next: () => {
+          this.hasTradeIn = false;
+          this.load();
+        },
+        error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not generate deal sheet', 'Dismiss', { duration: 4000 }),
+      });
+  }
+
+  invalidateDealSheet(dealSheetId: string): void {
+    this.http
+      .post(`${environment.apiUrl}/used-vehicles/${this.vehicleId}/deal-sheet/${dealSheetId}/invalidate`, {
+        reason: this.invalidateReason || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.invalidateReason = '';
+          this.snackBar.open('Deal sheet invalidated — this vehicle can now get a new one', 'Dismiss', { duration: 3000 });
+          this.load();
+        },
+        error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not invalidate deal sheet', 'Dismiss', { duration: 4000 }),
+      });
   }
 }

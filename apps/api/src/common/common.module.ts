@@ -6,10 +6,11 @@ import { AiService } from './ai/ai.service';
 import { AuditService } from './audit/audit.service';
 import { PdfService } from './pdf/pdf.service';
 import { DvlaService } from './dvla/dvla.service';
+import { TenancyScopeService } from './tenancy/tenancy-scope.service';
 
 @Global()
 @Module({
-  providers: [StorageService, EmailService, SmsService, AiService, AuditService, PdfService, DvlaService],
-  exports: [StorageService, EmailService, SmsService, AiService, AuditService, PdfService, DvlaService],
+  providers: [StorageService, EmailService, SmsService, AiService, AuditService, PdfService, DvlaService, TenancyScopeService],
+  exports: [StorageService, EmailService, SmsService, AiService, AuditService, PdfService, DvlaService, TenancyScopeService],
 })
 export class CommonModule {}

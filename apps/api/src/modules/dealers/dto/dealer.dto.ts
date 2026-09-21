@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { ModuleKey } from '@project-amx/shared';
 
 export class UpdateDealerDto {
@@ -32,6 +32,23 @@ export class UpdateDealerDto {
 
   @IsOptional()
   @IsString()
+  secondaryColour?: string;
+
+  @IsOptional()
+  @IsString()
+  vatNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  invoiceFooterNote?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  labourRatePerHour?: number;
+
+  @IsOptional()
+  @IsString()
   timeZone?: string;
 
   @IsOptional()
@@ -45,4 +62,22 @@ export class SetModuleLicenseDto {
 
   @IsBoolean()
   enabled!: boolean;
+}
+
+export class UploadLogoDto {
+  /** A `data:image/...;base64,...` URI — kept as a plain JSON field rather than multipart/form-data
+   * since no other endpoint in this app needs a file-upload pipeline yet (see StorageService). */
+  @IsString()
+  dataUrl!: string;
+}
+
+export class UpdateDocumentSequenceDto {
+  @IsOptional()
+  @IsString()
+  prefix?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  nextNumber?: number;
 }

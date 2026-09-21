@@ -31,6 +31,17 @@ interface DvlaVehicleSpec {
   yearOfManufacture: number;
 }
 
+interface ActionTriggerEnrichment {
+  triggerName: string;
+  columnValues: Record<string, unknown>;
+  customFieldValues: Record<string, unknown>;
+}
+
+interface RegLookupResult {
+  existingVehicle: UsedVehicle | null;
+  enrichment: ActionTriggerEnrichment | null;
+}
+
 @Component({
   selector: 'app-used-cars-list',
   imports: [
@@ -65,11 +76,25 @@ interface DvlaVehicleSpec {
             <mat-icon>search</mat-icon>
             Look up on DVLA
           </button>
+          <button mat-stroked-button [disabled]="!form.reg || oemLookupLoading()" (click)="lookupOem()">
+            <mat-icon>hub</mat-icon>
+            OEM lookup
+          </button>
         </div>
         @if (dvlaResult(); as d) {
           <p class="dvla-hint">
             DVLA says: {{ d.make }}, {{ d.colour }}, {{ d.fuelType }}, {{ d.transmission }}, {{ d.yearOfManufacture }}
           </p>
+        }
+        @if (oemLookupResult(); as r) {
+          @if (r.existingVehicle) {
+            <p class="dvla-hint">This registration is already in stock — see it in the list below instead of creating a duplicate.</p>
+          }
+          @if (r.enrichment) {
+            <p class="dvla-hint">{{ r.enrichment.triggerName }} says: {{ oemEnrichmentSummary(r.enrichment) }}</p>
+          } @else if (!r.existingVehicle) {
+            <p class="dvla-hint">No extra OEM data was returned for this lookup (no Action Trigger configured, or its API didn't respond) — only the DVLA lookup ran.</p>
+          }
         }
         <div class="row">
           <mat-form-field appearance="outline">
@@ -181,6 +206,8 @@ export class UsedCarsListComponent implements OnInit {
   readonly showForm = signal(false);
   readonly dvlaLoading = signal(false);
   readonly dvlaResult = signal<DvlaVehicleSpec | null>(null);
+  readonly oemLookupLoading = signal(false);
+  readonly oemLookupResult = signal<RegLookupResult | null>(null);
 
   form = {
     reg: '',
@@ -217,6 +244,34 @@ export class UsedCarsListComponent implements OnInit {
         this.snackBar.open('DVLA lookup failed for that registration', 'Dismiss', { duration: 3000 });
       },
     });
+  }
+
+  /** Searches this dealer's own stock AND any business-systems-manager-configured Action Trigger
+   * for this lookup (Settings > Action Triggers) — the "search a reg, it also calls an OEM API"
+   * capability, alongside the built-in DVLA lookup above. */
+  lookupOem(): void {
+    this.oemLookupLoading.set(true);
+    this.http.get<RegLookupResult>(`${environment.apiUrl}/used-vehicles/reg-lookup/${this.form.reg}`).subscribe({
+      next: (result) => {
+        this.oemLookupResult.set(result);
+        this.oemLookupLoading.set(false);
+        if (result.enrichment) {
+          const values = result.enrichment.columnValues as Partial<typeof this.form>;
+          this.form = { ...this.form, ...values };
+        }
+      },
+      error: () => {
+        this.oemLookupLoading.set(false);
+        this.snackBar.open('OEM lookup failed for that registration', 'Dismiss', { duration: 3000 });
+      },
+    });
+  }
+
+  oemEnrichmentSummary(enrichment: ActionTriggerEnrichment): string {
+    const entries = { ...enrichment.columnValues, ...enrichment.customFieldValues };
+    return Object.entries(entries)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(', ');
   }
 
   create(): void {
