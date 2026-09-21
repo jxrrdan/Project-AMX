@@ -81,6 +81,8 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<
     ...grant([ModuleKey.WORKSHOP], [PermissionAction.VIEW, PermissionAction.EDIT]),
     ...grant([ModuleKey.WARRANTY], [PermissionAction.VIEW, PermissionAction.EDIT]),
     ...grant([ModuleKey.VHC], [PermissionAction.VIEW, PermissionAction.CREATE, PermissionAction.EDIT]),
+    // Read-only so a technician can look up real part prices when quoting a VHC item (§ VHC auto-quote).
+    ...grant([ModuleKey.PARTS], READ_ONLY),
   ],
   [SystemRole.PARTS_MANAGER]: grant([ModuleKey.PARTS], FULL),
   [SystemRole.ACCOUNTS]: [

@@ -2,7 +2,13 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { JobType, VhcInspectionStatus, VhcRating } from '@project-amx/shared';
 import { EmailService } from '../../common/email/email.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { AddVhcItemDto, CreateVhcInspectionDto, RespondToItemDto } from './dto/vhc.dto';
+import { AddVhcItemDto, AddVhcItemPartDto, CreateVhcInspectionDto, RespondToItemDto } from './dto/vhc.dto';
+
+const ITEM_INCLUDE = { parts: { include: { part: true } } } as const;
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
 
 /** Module 9 — Digital Vehicle Health Check. */
 @Injectable()
@@ -26,7 +32,9 @@ export class VhcService {
     });
   }
 
-  /** Photo capture is mandatory for Amber/Red items (§9.1) — enforced here rather than only in the UI. */
+  /** Photo capture is mandatory for Amber/Red items (§9.1) — enforced here rather than only in the UI.
+   * Also computes an initial auto-quote (§ VHC auto-quote) from the dealer's labour rate and any
+   * manually-typed parts estimate, refined later once real parts are linked (see addItemPart). */
   async addItem(dealerId: string, inspectionId: string, dto: AddVhcItemDto) {
     const inspection = await this.prisma.vhcInspection.findFirst({ where: { id: inspectionId, dealerId } });
     if (!inspection) {
@@ -35,11 +43,68 @@ export class VhcService {
     if (dto.rating !== VhcRating.GREEN && (!dto.photoUrls || dto.photoUrls.length === 0)) {
       throw new Error('A photo is required for Amber/Red items');
     }
-    return this.prisma.vhcItem.create({ data: { inspectionId, ...dto } });
+    const item = await this.prisma.vhcItem.create({ data: { inspectionId, ...dto } });
+    return this.recomputeQuote(dealerId, item.id);
+  }
+
+  /** Links a real stocked part to an item, then recomputes its quote (§ VHC auto-quote) from that
+   * part's actual costPrice — a real price beats a typed-in guess the moment one is available. */
+  async addItemPart(dealerId: string, itemId: string, dto: AddVhcItemPartDto) {
+    const item = await this.prisma.vhcItem.findFirst({ where: { id: itemId, inspection: { dealerId } } });
+    if (!item) {
+      throw new NotFoundException('VHC item not found');
+    }
+    const part = await this.prisma.part.findFirst({ where: { id: dto.partId, dealerId } });
+    if (!part) {
+      throw new NotFoundException('Part not found');
+    }
+    await this.prisma.vhcItemPart.create({ data: { itemId, partId: dto.partId, quantity: dto.quantity ?? 1 } });
+    return this.recomputeQuote(dealerId, itemId);
+  }
+
+  async removeItemPart(dealerId: string, id: string) {
+    const link = await this.prisma.vhcItemPart.findFirst({ where: { id, item: { inspection: { dealerId } } } });
+    if (!link) {
+      throw new NotFoundException('Linked part not found');
+    }
+    await this.prisma.vhcItemPart.delete({ where: { id } });
+    return this.recomputeQuote(dealerId, link.itemId);
+  }
+
+  /**
+   * Auto-quote (§ VHC auto-quote): labour from the dealer's own labourRatePerHour (the same rate
+   * AftersalesInvoiceService bills at) times the item's estimated labour minutes, plus parts —
+   * from real linked Part.costPrice once any are linked, otherwise the technician's typed-in
+   * estimatedPartsCost as a fallback before a part has been matched.
+   */
+  private async recomputeQuote(dealerId: string, itemId: string) {
+    const [item, dealer] = await Promise.all([
+      this.prisma.vhcItem.findUnique({ where: { id: itemId }, include: ITEM_INCLUDE }),
+      this.prisma.dealer.findUnique({ where: { id: dealerId } }),
+    ]);
+    if (!item) {
+      throw new NotFoundException('VHC item not found');
+    }
+    const labourRate = Number(dealer?.labourRatePerHour ?? 95);
+    const quotedLabourCost = round2(((item.estimatedLabourMinutes ?? 0) / 60) * labourRate);
+    const quotedPartsCost =
+      item.parts.length > 0
+        ? round2(item.parts.reduce((sum, link) => sum + link.quantity * Number(link.part.costPrice), 0))
+        : round2(Number(item.estimatedPartsCost ?? 0));
+    const quotedTotal = round2(quotedLabourCost + quotedPartsCost);
+
+    return this.prisma.vhcItem.update({
+      where: { id: itemId },
+      data: { quotedLabourCost, quotedPartsCost, quotedTotal },
+      include: ITEM_INCLUDE,
+    });
   }
 
   findOne(dealerId: string, id: string) {
-    return this.prisma.vhcInspection.findFirst({ where: { id, dealerId }, include: { items: true } });
+    return this.prisma.vhcInspection.findFirst({
+      where: { id, dealerId },
+      include: { items: { include: ITEM_INCLUDE } },
+    });
   }
 
   /**
@@ -50,7 +115,7 @@ export class VhcService {
   findPublic(id: string) {
     return this.prisma.vhcInspection.findUnique({
       where: { id },
-      include: { items: true },
+      include: { items: { include: ITEM_INCLUDE } },
     });
   }
 
@@ -97,11 +162,11 @@ export class VhcService {
     const item = await this.prisma.vhcItem.update({
       where: { id: itemId },
       data: { approved: dto.approved, respondedAt: new Date() },
-      include: { inspection: { include: { jobCard: true } } },
+      include: { inspection: { include: { jobCard: true } }, parts: true },
     });
 
     if (dto.approved) {
-      await this.prisma.jobCard.create({
+      const jobCard = await this.prisma.jobCard.create({
         data: {
           dealerId: item.inspection.dealerId,
           customerName: item.inspection.jobCard.customerName,
@@ -114,6 +179,20 @@ export class VhcService {
           sourceVhcItemId: item.id,
         },
       });
+      // Carries the parts identified during the health check straight onto the new job's
+      // shortfall-tracking list (see WorkshopService.upcomingPartsShortfalls), rather than the
+      // advisor having to re-enter what the quote already knew was needed.
+      if (item.parts.length > 0) {
+        await this.prisma.jobCardPartRequirement.createMany({
+          data: item.parts.map((link) => ({
+            dealerId: item.inspection.dealerId,
+            jobCardId: jobCard.id,
+            partId: link.partId,
+            description: item.label,
+            quantity: link.quantity,
+          })),
+        });
+      }
     }
 
     const allItems = await this.prisma.vhcItem.findMany({ where: { inspectionId: item.inspectionId } });

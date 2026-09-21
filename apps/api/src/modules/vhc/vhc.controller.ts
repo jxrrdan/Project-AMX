@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ModuleKey, PermissionAction } from '@project-amx/shared';
 import type { AuthUser } from '@project-amx/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
-import { AddVhcItemDto, CreateVhcInspectionDto, RespondToItemDto } from './dto/vhc.dto';
+import { AddVhcItemDto, AddVhcItemPartDto, CreateVhcInspectionDto, RespondToItemDto } from './dto/vhc.dto';
 import { VhcService } from './vhc.service';
 
 @Controller('vhc')
@@ -40,6 +40,19 @@ export class VhcController {
   @RequirePermissions({ module: ModuleKey.VHC, action: PermissionAction.CREATE })
   addItem(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: AddVhcItemDto) {
     return this.vhcService.addItem(user.dealerId, id, dto);
+  }
+
+  /** Links a real stocked part to an item, refining its auto-quote (§ VHC auto-quote) from an actual price. */
+  @Post('items/:id/parts')
+  @RequirePermissions({ module: ModuleKey.VHC, action: PermissionAction.EDIT })
+  addItemPart(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: AddVhcItemPartDto) {
+    return this.vhcService.addItemPart(user.dealerId, id, dto);
+  }
+
+  @Delete('item-parts/:id')
+  @RequirePermissions({ module: ModuleKey.VHC, action: PermissionAction.EDIT })
+  removeItemPart(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.vhcService.removeItemPart(user.dealerId, id);
   }
 
   /** Technician sign-off — required before the report can be sent (§9.1 gap fix). */

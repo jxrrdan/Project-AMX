@@ -5,6 +5,7 @@ import { AuditService } from '../../common/audit/audit.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { WorkshopGateway } from '../../common/ws/workshop.gateway';
 import { CreateBayDto, CreateJobCardDto, SetCapacityDto, UpdateJobCardDto } from './dto/job-card.dto';
+import { CreateJobCardOperationLineDto } from './dto/operation-line.dto';
 import { CreatePartRequirementDto } from './dto/part-requirement.dto';
 import { CreateServiceBookingDto } from './dto/service-booking.dto';
 
@@ -183,6 +184,66 @@ export class WorkshopService {
     }
     await this.prisma.jobCardTimeEntry.update({ where: { id: openEntry.id }, data: { clockOff: new Date() } });
     const updated = await this.prisma.jobCard.findUnique({ where: { id: jobCardId }, include: { timeEntries: true } });
+    this.gateway.emitJobCardChanged(dealerId, updated);
+    return updated;
+  }
+
+  // --- Operation lines (per-line technician clocking) ---------------------
+
+  /**
+   * A job card's itemised lines of work — each independently clockable, mirroring the
+   * WarrantyOperationLine/WarrantyClockEntry pattern but for ordinary (retail/internal) workshop
+   * jobs. A job card that never gets any lines keeps using the older whole-job clockOn/clockOff
+   * above unchanged; see AftersalesInvoiceService.generate for how invoicing picks between them.
+   */
+  async addOperationLine(dealerId: string, jobCardId: string, dto: CreateJobCardOperationLineDto) {
+    const jobCard = await this.prisma.jobCard.findFirst({ where: { id: jobCardId, dealerId } });
+    if (!jobCard) {
+      throw new NotFoundException('Job card not found');
+    }
+    return this.prisma.jobCardOperationLine.create({ data: { jobCardId, ...dto } });
+  }
+
+  listOperationLines(dealerId: string, jobCardId: string) {
+    return this.prisma.jobCardOperationLine.findMany({
+      where: { jobCardId, jobCard: { dealerId } },
+      include: { clockEntries: { include: { technician: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async clockOnLine(dealerId: string, lineId: string, technicianId: string) {
+    const line = await this.prisma.jobCardOperationLine.findFirst({ where: { id: lineId, jobCard: { dealerId } } });
+    if (!line) {
+      throw new NotFoundException('Operation line not found');
+    }
+    await this.prisma.jobCardLineClockEntry.create({ data: { lineId, technicianId, clockOn: new Date() } });
+    const updated = await this.prisma.jobCard.update({
+      where: { id: line.jobCardId },
+      data: { status: JobCardStatus.IN_PROGRESS },
+      include: { operationLines: { include: { clockEntries: true } } },
+    });
+    this.gateway.emitJobCardChanged(dealerId, updated);
+    return updated;
+  }
+
+  async clockOffLine(dealerId: string, lineId: string, technicianId: string) {
+    const line = await this.prisma.jobCardOperationLine.findFirst({ where: { id: lineId, jobCard: { dealerId } } });
+    if (!line) {
+      throw new NotFoundException('Operation line not found');
+    }
+    const open = await this.prisma.jobCardLineClockEntry.findFirst({
+      where: { lineId, technicianId, clockOff: null },
+      orderBy: { clockOn: 'desc' },
+    });
+    if (!open) {
+      throw new NotFoundException('No open clocking found for this technician on this line');
+    }
+    await this.prisma.jobCardLineClockEntry.update({ where: { id: open.id }, data: { clockOff: new Date() } });
+    const updated = await this.prisma.jobCard.findUnique({
+      where: { id: line.jobCardId },
+      include: { operationLines: { include: { clockEntries: true } } },
+    });
     this.gateway.emitJobCardChanged(dealerId, updated);
     return updated;
   }

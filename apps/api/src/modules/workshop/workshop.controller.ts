@@ -7,6 +7,7 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { CreateConditionReportDto } from '../vehicle-condition/dto/condition-report.dto';
 import { VehicleConditionService } from '../vehicle-condition/vehicle-condition.service';
 import { CreateBayDto, CreateJobCardDto, SetCapacityDto, UpdateJobCardDto } from './dto/job-card.dto';
+import { CreateJobCardOperationLineDto } from './dto/operation-line.dto';
 import { CreatePartRequirementDto } from './dto/part-requirement.dto';
 import { CreateServiceBookingDto } from './dto/service-booking.dto';
 import { WorkshopService } from './workshop.service';
@@ -108,6 +109,30 @@ export class WorkshopController {
   @RequirePermissions({ module: ModuleKey.WORKSHOP, action: PermissionAction.EDIT })
   clockOff(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.workshopService.clockOff(user.dealerId, id, user.id);
+  }
+
+  @Get('job-cards/:id/operation-lines')
+  @RequirePermissions({ module: ModuleKey.WORKSHOP, action: PermissionAction.VIEW })
+  listOperationLines(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.workshopService.listOperationLines(user.dealerId, id);
+  }
+
+  @Post('job-cards/:id/operation-lines')
+  @RequirePermissions({ module: ModuleKey.WORKSHOP, action: PermissionAction.EDIT })
+  addOperationLine(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CreateJobCardOperationLineDto) {
+    return this.workshopService.addOperationLine(user.dealerId, id, dto);
+  }
+
+  @Post('operation-lines/:lineId/clock-on')
+  @RequirePermissions({ module: ModuleKey.WORKSHOP, action: PermissionAction.EDIT })
+  clockOnLine(@CurrentUser() user: AuthUser, @Param('lineId') lineId: string) {
+    return this.workshopService.clockOnLine(user.dealerId, lineId, user.id);
+  }
+
+  @Post('operation-lines/:lineId/clock-off')
+  @RequirePermissions({ module: ModuleKey.WORKSHOP, action: PermissionAction.EDIT })
+  clockOffLine(@CurrentUser() user: AuthUser, @Param('lineId') lineId: string) {
+    return this.workshopService.clockOffLine(user.dealerId, lineId, user.id);
   }
 
   /**

@@ -338,6 +338,30 @@ closed as follows:
   moment a claim moves to SUBMITTED, and a claim can be created already linked to a job card (it
   couldn't be, at all, before this).
 
+## Per-line technician clocking and VHC auto-quoting
+
+- **Per-line clocking on job cards** — a job card previously had only one whole-job
+  clock-on/clock-off (`JobCardTimeEntry`), same as the very first workshop module; there was no way
+  to break a job into its constituent tasks and clock each separately, unlike the Warranty module's
+  own per-line clocking. A new `JobCardOperationLine` + `JobCardLineClockEntry` (mirroring
+  `WarrantyOperationLine`/`WarrantyClockEntry`) lets a job card be itemised into lines — e.g. "Front
+  brake pads", "Diagnose coolant leak" — each independently clockable by whichever technician works
+  it, from a new "Operation lines" panel on the job-card detail page. A job card that's never given
+  any lines keeps using the old whole-job clocking unchanged; the moment it has lines,
+  `AftersalesInvoiceService.generate()` sums their clock entries for labour instead.
+- **VHC auto-quote from real labour rates and part prices** — a VHC item's cost used to be whatever
+  the technician typed into two free-text fields (`estimatedLabourMinutes`, `estimatedPartsCost`),
+  with no connection to what the dealer actually charges or what parts actually cost. Adding an item
+  now auto-computes `quotedLabourCost` from the item's labour minutes at the dealer's own
+  `labourRatePerHour` (the same rate `AftersalesInvoiceService` bills at), and a technician can link
+  the item to a real stocked `Part` (`VhcItemPart`) so `quotedPartsCost` is computed from its actual
+  `costPrice` rather than a guess — recomputed live as parts are added or removed. The customer-facing
+  report and the technician's inspection page both show the same computed quote breakdown
+  (labour + parts = total), and if the customer approves the item, the linked parts carry straight
+  onto the new job card's part-requirements list (feeding `upcomingPartsShortfalls`) instead of the
+  advisor re-entering what the quote already identified. Technicians were also granted read access to
+  the Parts module so they can look parts up while quoting.
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks

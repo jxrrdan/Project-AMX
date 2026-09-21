@@ -14,6 +14,12 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { VHC_INSPECTION_STATUS_LABELS, VhcInspectionStatus, VhcRating } from '@project-amx/shared';
 import { environment } from '../../../environments/environment';
 
+interface LinkedPart {
+  id: string;
+  quantity: number;
+  part: { id: string; partNumber: string; description: string; costPrice: number };
+}
+
 interface VhcItem {
   id: string;
   category: string;
@@ -23,7 +29,18 @@ interface VhcItem {
   photoUrls: string[];
   estimatedLabourMinutes: number | null;
   estimatedPartsCost: number | null;
+  quotedLabourCost: number | null;
+  quotedPartsCost: number | null;
+  quotedTotal: number | null;
+  parts: LinkedPart[];
   approved: boolean | null;
+}
+
+interface PartOption {
+  id: string;
+  partNumber: string;
+  description: string;
+  costPrice: number;
 }
 
 interface InspectionDetail {
@@ -141,11 +158,35 @@ interface InspectionDetail {
             @if (item.description) {
               <p>{{ item.description }}</p>
             }
-            @if (item.estimatedPartsCost || item.estimatedLabourMinutes) {
+            @if (item.quotedTotal !== null) {
               <p class="estimate">
-                {{ item.estimatedLabourMinutes }} min labour · {{ item.estimatedPartsCost | currency: 'GBP' }} parts
+                Quote: {{ item.quotedLabourCost | currency: 'GBP' }} labour + {{ item.quotedPartsCost | currency: 'GBP' }} parts =
+                <b>{{ item.quotedTotal | currency: 'GBP' }}</b>
               </p>
             }
+            @for (link of item.parts; track link.id) {
+              <div class="line-item">
+                <span>{{ link.part.partNumber }} — {{ link.part.description }} x{{ link.quantity }}</span>
+                <button mat-icon-button (click)="removeItemPart(link.id)"><mat-icon>close</mat-icon></button>
+              </div>
+            }
+            <div class="row part-picker">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Link a real part (uses its actual price in the quote)</mat-label>
+                <mat-select [(ngModel)]="partFormFor(item.id).partId">
+                  @for (p of availableParts(); track p.id) {
+                    <mat-option [value]="p.id">{{ p.partNumber }} — {{ p.description }} ({{ p.costPrice | currency: 'GBP' }})</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="qty">
+                <mat-label>Qty</mat-label>
+                <input matInput type="number" [(ngModel)]="partFormFor(item.id).quantity" />
+              </mat-form-field>
+              <button mat-icon-button [disabled]="!partFormFor(item.id).partId" (click)="addItemPart(item.id)">
+                <mat-icon>add</mat-icon>
+              </button>
+            </div>
             @if (item.approved === true) {
               <mat-chip>Approved by customer</mat-chip>
             } @else if (item.approved === false) {
@@ -223,13 +264,30 @@ interface InspectionDetail {
         font-size: 12px;
         color: rgba(0, 0, 0, 0.6);
       }
+      .line-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #eee;
+        padding: 4px 0;
+        font-size: 12px;
+      }
+      .part-picker {
+        margin-top: 4px;
+      }
+      .qty {
+        width: 70px;
+      }
     `,
   ],
 })
 export class VhcInspectionDetailComponent implements OnInit {
   readonly inspection = signal<InspectionDetail | null>(null);
+  readonly availableParts = signal<PartOption[]>([]);
   readonly statusLabels = VHC_INSPECTION_STATUS_LABELS;
   customerEmail = '';
+
+  private readonly partForms = new Map<string, { partId: string; quantity: number }>();
 
   itemForm = {
     category: '',
@@ -249,6 +307,16 @@ export class VhcInspectionDetailComponent implements OnInit {
   ngOnInit(): void {
     this.inspectionId = this.route.snapshot.paramMap.get('id') ?? '';
     this.load();
+    this.http.get<PartOption[]>(`${environment.apiUrl}/parts`).subscribe((data) => this.availableParts.set(data));
+  }
+
+  partFormFor(itemId: string): { partId: string; quantity: number } {
+    let form = this.partForms.get(itemId);
+    if (!form) {
+      form = { partId: '', quantity: 1 };
+      this.partForms.set(itemId, form);
+    }
+    return form;
   }
 
   load(): void {
@@ -286,6 +354,27 @@ export class VhcInspectionDetailComponent implements OnInit {
         },
         error: () => this.snackBar.open('A photo is required for Amber/Red items', 'Dismiss', { duration: 3000 }),
       });
+  }
+
+  addItemPart(itemId: string): void {
+    const form = this.partFormFor(itemId);
+    if (!form.partId) return;
+    this.http
+      .post(`${environment.apiUrl}/vhc/items/${itemId}/parts`, { partId: form.partId, quantity: form.quantity || 1 })
+      .subscribe({
+        next: () => {
+          this.partForms.delete(itemId);
+          this.load();
+        },
+        error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not link part', 'Dismiss', { duration: 4000 }),
+      });
+  }
+
+  removeItemPart(linkId: string): void {
+    this.http.delete(`${environment.apiUrl}/vhc/item-parts/${linkId}`).subscribe({
+      next: () => this.load(),
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not remove part', 'Dismiss', { duration: 4000 }),
+    });
   }
 
   completeInspection(): void {

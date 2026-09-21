@@ -17,6 +17,9 @@ interface VhcItem {
   photoUrls: string[];
   estimatedLabourMinutes: number | null;
   estimatedPartsCost: number | null;
+  quotedLabourCost: number | null;
+  quotedPartsCost: number | null;
+  quotedTotal: number | null;
   approved: boolean | null;
 }
 
@@ -56,9 +59,10 @@ interface VhcInspectionPublic {
                 <img [src]="item.photoUrls[0]" alt="Condition photo" class="photo" />
               }
               @if (item.rating !== 'GREEN') {
-                @if (item.estimatedPartsCost || item.estimatedLabourMinutes) {
+                @if (item.quotedTotal !== null) {
                   <p class="estimate">
-                    Estimated: {{ item.estimatedLabourMinutes }} min labour + {{ item.estimatedPartsCost | currency: 'GBP' }} parts
+                    Quote: {{ item.quotedLabourCost | currency: 'GBP' }} labour + {{ item.quotedPartsCost | currency: 'GBP' }} parts =
+                    <b>{{ item.quotedTotal | currency: 'GBP' }}</b>
                   </p>
                 }
                 @if (item.approved === null) {

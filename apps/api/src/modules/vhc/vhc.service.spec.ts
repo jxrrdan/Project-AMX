@@ -9,7 +9,12 @@ function makeEmail() {
 function makePrisma(overrides: Record<string, unknown> = {}) {
   return {
     vhcInspection: { findFirst: jest.fn().mockResolvedValue({ id: 'inspection-1', dealerId: 'dealer-1' }) },
-    vhcItem: { create: jest.fn().mockResolvedValue({ id: 'item-1' }) },
+    vhcItem: {
+      create: jest.fn().mockResolvedValue({ id: 'item-1' }),
+      findUnique: jest.fn().mockResolvedValue({ id: 'item-1', estimatedLabourMinutes: null, estimatedPartsCost: null, parts: [] }),
+      update: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'item-1', ...data })),
+    },
+    dealer: { findUnique: jest.fn().mockResolvedValue({ labourRatePerHour: 95 }) },
     ...overrides,
   };
 }
@@ -60,6 +65,77 @@ describe('VhcService.addItem', () => {
   });
 });
 
+describe('VhcService.addItemPart / removeItemPart / auto-quote', () => {
+  it('addItemPart refuses an item outside the caller\'s dealer', async () => {
+    const prisma = makePrisma({ vhcItem: { findFirst: jest.fn().mockResolvedValue(null) } });
+    const service = new VhcService(prisma as never, makeEmail() as never);
+    await expect(service.addItemPart('dealer-1', 'other-dealer-item', { partId: 'part-1' })).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('addItemPart refuses a part outside the caller\'s dealer', async () => {
+    const prisma = makePrisma({
+      vhcItem: { findFirst: jest.fn().mockResolvedValue({ id: 'item-1' }) },
+      part: { findFirst: jest.fn().mockResolvedValue(null) },
+    });
+    const service = new VhcService(prisma as never, makeEmail() as never);
+    await expect(service.addItemPart('dealer-1', 'item-1', { partId: 'other-dealer-part' })).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('computes the quote from labour minutes at the dealer rate plus linked parts at their real cost price', async () => {
+    const prisma = makePrisma({
+      vhcItem: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'item-1' }),
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'item-1',
+          estimatedLabourMinutes: 60,
+          estimatedPartsCost: null,
+          parts: [{ quantity: 2, part: { costPrice: 15 } }],
+        }),
+        update: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'item-1', ...data })),
+      },
+      part: { findFirst: jest.fn().mockResolvedValue({ id: 'part-1' }) },
+      vhcItemPart: { create: jest.fn().mockResolvedValue({}) },
+      dealer: { findUnique: jest.fn().mockResolvedValue({ labourRatePerHour: 80 }) },
+    });
+    const service = new VhcService(prisma as never, makeEmail() as never);
+
+    const result = await service.addItemPart('dealer-1', 'item-1', { partId: 'part-1', quantity: 2 });
+
+    // 60 min @ £80/hr = £80 labour; 2 * £15 = £30 parts; total £110.
+    expect(result).toEqual(expect.objectContaining({ quotedLabourCost: 80, quotedPartsCost: 30, quotedTotal: 110 }));
+  });
+
+  it('falls back to the manually-typed estimatedPartsCost while no real part is linked', async () => {
+    const prisma = makePrisma({
+      vhcItem: {
+        create: jest.fn().mockResolvedValue({ id: 'item-1' }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'item-1', estimatedLabourMinutes: 30, estimatedPartsCost: 25, parts: [] }),
+        update: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'item-1', ...data })),
+      },
+      dealer: { findUnique: jest.fn().mockResolvedValue({ labourRatePerHour: 100 }) },
+    });
+    const service = new VhcService(prisma as never, makeEmail() as never);
+
+    const item = await service.addItem('dealer-1', 'inspection-1', {
+      rating: VhcRating.GREEN,
+      label: 'Wipers',
+    } as never);
+
+    // 30 min @ £100/hr = £50 labour; no linked part -> falls back to the typed £25 estimate; total £75.
+    expect(item).toEqual(expect.objectContaining({ quotedLabourCost: 50, quotedPartsCost: 25, quotedTotal: 75 }));
+  });
+
+  it('removeItemPart refuses a link outside the caller\'s dealer', async () => {
+    const prisma = makePrisma({ vhcItemPart: { findFirst: jest.fn().mockResolvedValue(null) } });
+    const service = new VhcService(prisma as never, makeEmail() as never);
+    await expect(service.removeItemPart('dealer-1', 'other-dealer-link')).rejects.toThrow(NotFoundException);
+  });
+});
+
 describe('VhcService.respondToItem', () => {
   function makeRespondPrisma(overrides: Record<string, unknown> = {}) {
     return {
@@ -70,6 +146,7 @@ describe('VhcService.respondToItem', () => {
           label: 'Brake pads',
           description: 'Worn to 2mm',
           estimatedLabourMinutes: 90,
+          parts: [],
           inspection: {
             dealerId: 'dealer-1',
             vehicleReg: 'AB12CDE',
@@ -78,7 +155,8 @@ describe('VhcService.respondToItem', () => {
         }),
         findMany: jest.fn().mockResolvedValue([{ respondedAt: new Date() }]),
       },
-      jobCard: { create: jest.fn().mockResolvedValue({}) },
+      jobCard: { create: jest.fn().mockResolvedValue({ id: 'new-job-1' }) },
+      jobCardPartRequirement: { createMany: jest.fn().mockResolvedValue({}) },
       vhcInspection: { update: jest.fn().mockResolvedValue({}) },
       ...overrides,
     };
@@ -102,6 +180,28 @@ describe('VhcService.respondToItem', () => {
         }),
       }),
     );
+  });
+
+  it('carries any linked parts onto the new job card as part requirements', async () => {
+    const prisma = makeRespondPrisma({
+      vhcItem: {
+        update: jest.fn().mockResolvedValue({
+          id: 'item-1',
+          inspectionId: 'inspection-1',
+          label: 'Brake pads',
+          estimatedLabourMinutes: 90,
+          parts: [{ partId: 'part-1', quantity: 2 }],
+          inspection: { dealerId: 'dealer-1', vehicleReg: 'AB12CDE', jobCard: { customerName: 'Jamie Smith' } },
+        }),
+        findMany: jest.fn().mockResolvedValue([{ respondedAt: new Date() }]),
+      },
+    });
+    const service = new VhcService(prisma as never, makeEmail() as never);
+    await service.respondToItem('item-1', { approved: true });
+
+    expect(prisma.jobCardPartRequirement.createMany).toHaveBeenCalledWith({
+      data: [{ dealerId: 'dealer-1', jobCardId: 'new-job-1', partId: 'part-1', description: 'Brake pads', quantity: 2 }],
+    });
   });
 
   it('does not create a job card when the customer declines the item', async () => {

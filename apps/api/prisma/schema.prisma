@@ -257,21 +257,22 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  roles                  UserRole[]
-  moduleOverrides        UserModuleOverride[]
-  sessions               UserSession[]
-  loginAudits            LoginAudit[]
-  auditLogs              AuditLog[]
-  notifications          Notification[]
-  assignedVehicles       Vehicle[]                @relation("AllocatedAdvisor")
-  technicianJobCards     JobCard[]                @relation("AssignedTechnician")
-  advisorJobCards        JobCard[]                @relation("ServiceAdvisor")
-  timeEntries            JobCardTimeEntry[]
-  assignedLeads          Lead[]                   @relation("AssignedSalesperson")
-  tasks                  CrmTask[]                @relation("TaskAssignee")
-  warrantyClockEntries   WarrantyClockEntry[]
-  technicianSkills       TechnicianSkill[]
-  technicianAvailability TechnicianAvailability[]
+  roles                   UserRole[]
+  moduleOverrides         UserModuleOverride[]
+  sessions                UserSession[]
+  loginAudits             LoginAudit[]
+  auditLogs               AuditLog[]
+  notifications           Notification[]
+  assignedVehicles        Vehicle[]                @relation("AllocatedAdvisor")
+  technicianJobCards      JobCard[]                @relation("AssignedTechnician")
+  advisorJobCards         JobCard[]                @relation("ServiceAdvisor")
+  timeEntries             JobCardTimeEntry[]
+  jobCardLineClockEntries JobCardLineClockEntry[]  @relation("JobCardLineClockEntries")
+  assignedLeads           Lead[]                   @relation("AssignedSalesperson")
+  tasks                   CrmTask[]                @relation("TaskAssignee")
+  warrantyClockEntries    WarrantyClockEntry[]
+  technicianSkills        TechnicianSkill[]
+  technicianAvailability  TechnicianAvailability[]
 
   @@unique([dealerId, email])
   @@map("users")
@@ -681,6 +682,7 @@ model JobCard {
   updatedAt            DateTime       @updatedAt
 
   timeEntries       JobCardTimeEntry[]
+  operationLines    JobCardOperationLine[]
   partAllocations   PartAllocation[]
   partRequirements  JobCardPartRequirement[]
   pdiJob            PdiJob?
@@ -690,6 +692,38 @@ model JobCard {
   conditionReports  VehicleConditionReport[]
 
   @@map("job_cards")
+}
+
+/// An itemised line of work within a job card (e.g. "Front brake pads", "Diagnose coolant leak"),
+/// each independently clockable by whichever technician works it — the per-line breakdown a single
+/// whole-job JobCardTimeEntry can't give you. A job card with no lines still uses the older
+/// whole-job clocking (JobCardTimeEntry) unchanged; once it has lines, invoicing sums clocked time
+/// from lines instead (see AftersalesInvoiceService.generate). For a WARRANTY-billed job, OEM claim
+/// paperwork still goes through WarrantyOperationLine on the linked WarrantyClaim — this model is
+/// for the workshop floor's own labour tracking, not the claim submission itself.
+model JobCardOperationLine {
+  id               String   @id @default(uuid())
+  jobCardId        String
+  jobCard          JobCard  @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  description      String
+  estimatedMinutes Int?
+  createdAt        DateTime @default(now())
+
+  clockEntries JobCardLineClockEntry[]
+
+  @@map("job_card_operation_lines")
+}
+
+model JobCardLineClockEntry {
+  id           String               @id @default(uuid())
+  lineId       String
+  line         JobCardOperationLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  technicianId String
+  technician   User                 @relation("JobCardLineClockEntries", fields: [technicianId], references: [id], onDelete: Cascade)
+  clockOn      DateTime
+  clockOff     DateTime?
+
+  @@map("job_card_line_clock_entries")
 }
 
 /// A customer-facing invoice for a completed workshop job — labour (from JobCardTimeEntry) plus
@@ -856,6 +890,7 @@ model Part {
   allocations         PartAllocation[]
   poLines             PurchaseOrderLine[]
   jobCardRequirements JobCardPartRequirement[]
+  vhcItemParts        VhcItemPart[]
 
   @@unique([dealerId, partNumber])
   @@map("parts")
@@ -1530,15 +1565,40 @@ model VhcItem {
   description            String?
   photoUrls              String[]
   estimatedLabourMinutes Int?
+  /// Manual fallback parts estimate — only used while no real Part is linked via `parts` below.
+  /// Once a part is linked, the quote is computed from its actual costPrice instead (see
+  /// VhcService.recomputeQuote), which is more accurate than a typed-in guess.
   estimatedPartsCost     Decimal?      @db.Decimal(10, 2)
+  /// Auto-quote (§ VHC auto-quote), recomputed by VhcService whenever labour minutes or linked
+  /// parts change — looked up from the dealer's own labourRatePerHour and each Part's costPrice,
+  /// rather than the technician typing in a guessed price.
+  quotedLabourCost       Decimal?      @db.Decimal(10, 2)
+  quotedPartsCost        Decimal?      @db.Decimal(10, 2)
+  quotedTotal            Decimal?      @db.Decimal(10, 2)
   approved               Boolean?
   respondedAt            DateTime?
+
+  parts VhcItemPart[]
 
   /// The job card auto-created when the customer approves this item (see VhcService.respondToItem) —
   /// the reverse side of JobCard.sourceVhcItemId, closing what was previously a one-way, unlinked spin-off.
   followUpJobCard JobCard?
 
   @@map("vhc_items")
+}
+
+/// Links a VHC item to a real stocked Part so its cost feeds the auto-quote from an actual price
+/// rather than a typed-in guess (see VhcService.recomputeQuote) — the same real-price principle
+/// AftersalesInvoiceService already applies to PartAllocation.
+model VhcItemPart {
+  id       String  @id @default(uuid())
+  itemId   String
+  item     VhcItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  partId   String
+  part     Part    @relation(fields: [partId], references: [id], onDelete: Cascade)
+  quantity Int     @default(1)
+
+  @@map("vhc_item_parts")
 }
 
 // ---------------------------------------------------------------------------

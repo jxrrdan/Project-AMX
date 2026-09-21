@@ -28,6 +28,13 @@ interface JobCard {
   partRequirements: { id: string; description: string; quantity: number; part: { partNumber: string } | null }[];
 }
 
+interface JobCardOperationLine {
+  id: string;
+  description: string;
+  estimatedMinutes: number | null;
+  clockEntries: { id: string; clockOn: string; clockOff: string | null; technician: { firstName: string; lastName: string } }[];
+}
+
 interface DamageMarker {
   location: string;
   description: string;
@@ -97,6 +104,43 @@ interface Invoice {
           } @empty {
             <p class="hint">No time clocked yet — the invoice will use the {{ jc.estimatedHours }}h estimate.</p>
           }
+
+          <h3>Operation lines</h3>
+          <p class="hint">Once a job is broken into lines, invoicing sums their clocked time instead of the whole-job entries above.</p>
+          @for (line of operationLines(); track line.id) {
+            <div class="op-line">
+              <div class="op-line-header">
+                <span>{{ line.description }}</span>
+                @if (line.estimatedMinutes) { <span class="hint">{{ line.estimatedMinutes }} min est.</span> }
+              </div>
+              @for (e of line.clockEntries; track e.id) {
+                <div class="line-item">
+                  <span>{{ e.technician.firstName }} {{ e.technician.lastName }}</span>
+                  <span>{{ e.clockOn | date: 'HH:mm' }} – {{ e.clockOff ? (e.clockOff | date: 'HH:mm') : 'still on' }}</span>
+                </div>
+              }
+              <div class="row">
+                @if (openClockEntry(line)) {
+                  <button mat-stroked-button (click)="clockOffLine(line.id)">Clock off</button>
+                } @else {
+                  <button mat-stroked-button (click)="clockOnLine(line.id)">Clock on</button>
+                }
+              </div>
+            </div>
+          } @empty {
+            <p class="hint">No operation lines yet.</p>
+          }
+          <div class="row">
+            <mat-form-field appearance="outline" class="grow">
+              <mat-label>Line description</mat-label>
+              <input matInput [(ngModel)]="lineForm.description" placeholder="e.g. Front brake pads" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Est. minutes</mat-label>
+              <input matInput type="number" [(ngModel)]="lineForm.estimatedMinutes" />
+            </mat-form-field>
+            <button mat-stroked-button [disabled]="!lineForm.description" (click)="addLine()">+ Add line</button>
+          </div>
 
           <h3>Parts allocated</h3>
           @for (a of jc.partAllocations; track a.id) {
@@ -283,12 +327,23 @@ interface Invoice {
         background: #fbe9e7;
         font-size: 11px;
       }
+      .op-line {
+        border-bottom: 1px solid #eee;
+        padding: 6px 0;
+      }
+      .op-line-header {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
     `,
   ],
 })
 export class JobCardDetailComponent implements OnInit {
   readonly jobCard = signal<JobCard | null>(null);
   readonly partRequirements = signal<JobCard['partRequirements']>([]);
+  readonly operationLines = signal<JobCardOperationLine[]>([]);
   readonly invoice = signal<Invoice | null>(null);
   readonly conditionReports = signal<ConditionReport[]>([]);
   readonly damageMarkers = signal<DamageMarker[]>([]);
@@ -301,6 +356,7 @@ export class JobCardDetailComponent implements OnInit {
 
   requirementDescription = '';
   requirementQuantity: number | null = 1;
+  lineForm: { description: string; estimatedMinutes: number | null } = { description: '', estimatedMinutes: null };
   conditionForm: { stage: 'INITIAL' | 'FINAL'; mileage: number | null; notes: string } = {
     stage: 'INITIAL',
     mileage: null,
@@ -318,6 +374,7 @@ export class JobCardDetailComponent implements OnInit {
     this.load();
     this.loadInvoice();
     this.loadConditionReports();
+    this.loadOperationLines();
   }
 
   load(): void {
@@ -395,6 +452,40 @@ export class JobCardDetailComponent implements OnInit {
         },
         error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not log condition check', 'Dismiss', { duration: 4000 }),
       });
+  }
+
+  loadOperationLines(): void {
+    this.http
+      .get<JobCardOperationLine[]>(`${environment.apiUrl}/job-cards/${this.jobCardId}/operation-lines`)
+      .subscribe((data) => this.operationLines.set(data));
+  }
+
+  openClockEntry(line: JobCardOperationLine): boolean {
+    return line.clockEntries.some((e) => !e.clockOff);
+  }
+
+  addLine(): void {
+    this.http.post(`${environment.apiUrl}/job-cards/${this.jobCardId}/operation-lines`, this.lineForm).subscribe({
+      next: () => {
+        this.lineForm = { description: '', estimatedMinutes: null };
+        this.loadOperationLines();
+      },
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not add line', 'Dismiss', { duration: 4000 }),
+    });
+  }
+
+  clockOnLine(lineId: string): void {
+    this.http.post(`${environment.apiUrl}/operation-lines/${lineId}/clock-on`, {}).subscribe({
+      next: () => this.loadOperationLines(),
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not clock on', 'Dismiss', { duration: 4000 }),
+    });
+  }
+
+  clockOffLine(lineId: string): void {
+    this.http.post(`${environment.apiUrl}/operation-lines/${lineId}/clock-off`, {}).subscribe({
+      next: () => this.loadOperationLines(),
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not clock off', 'Dismiss', { duration: 4000 }),
+    });
   }
 
   storageUrl(path: string): string {

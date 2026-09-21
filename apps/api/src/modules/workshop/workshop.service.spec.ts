@@ -123,6 +123,74 @@ describe('WorkshopService part requirements', () => {
   });
 });
 
+describe('WorkshopService operation lines (per-line clocking)', () => {
+  const dealerId = 'dealer-1';
+
+  it('addOperationLine refuses to add a line to another dealer\'s job card', async () => {
+    const create = jest.fn();
+    const prisma = { jobCard: { findFirst: jest.fn().mockResolvedValue(null) }, jobCardOperationLine: { create } };
+    const service = makeService(prisma);
+    await expect(service.addOperationLine(dealerId, 'other-dealer-job', { description: 'Front brake pads' })).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('addOperationLine creates a line against the job card', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'line-1' });
+    const prisma = { jobCard: { findFirst: jest.fn().mockResolvedValue({ id: 'job-1' }) }, jobCardOperationLine: { create } };
+    const service = makeService(prisma);
+    await service.addOperationLine(dealerId, 'job-1', { description: 'Front brake pads', estimatedMinutes: 45 });
+    expect(create).toHaveBeenCalledWith({ data: { jobCardId: 'job-1', description: 'Front brake pads', estimatedMinutes: 45 } });
+  });
+
+  it('clockOnLine refuses to clock on a line belonging to another dealer', async () => {
+    const prisma = {
+      jobCardOperationLine: { findFirst: jest.fn().mockResolvedValue(null) },
+      jobCardLineClockEntry: { create: jest.fn() },
+    };
+    const service = makeService(prisma);
+    await expect(service.clockOnLine(dealerId, 'other-dealer-line', 'tech-1')).rejects.toThrow(NotFoundException);
+    expect(prisma.jobCardLineClockEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('clockOnLine creates a clock entry and marks the job card in progress', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'job-1', status: 'IN_PROGRESS' });
+    const prisma = {
+      jobCardOperationLine: { findFirst: jest.fn().mockResolvedValue({ id: 'line-1', jobCardId: 'job-1' }) },
+      jobCardLineClockEntry: { create: jest.fn().mockResolvedValue({}) },
+      jobCard: { update },
+    };
+    const service = makeService(prisma);
+    await service.clockOnLine(dealerId, 'line-1', 'tech-1');
+    expect(prisma.jobCardLineClockEntry.create).toHaveBeenCalledWith({
+      data: { lineId: 'line-1', technicianId: 'tech-1', clockOn: expect.any(Date) },
+    });
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'job-1' }, data: { status: 'IN_PROGRESS' } }));
+  });
+
+  it('clockOffLine throws when there is no open clocking for that technician on the line', async () => {
+    const prisma = {
+      jobCardOperationLine: { findFirst: jest.fn().mockResolvedValue({ id: 'line-1', jobCardId: 'job-1' }) },
+      jobCardLineClockEntry: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const service = makeService(prisma);
+    await expect(service.clockOffLine(dealerId, 'line-1', 'tech-1')).rejects.toThrow(NotFoundException);
+  });
+
+  it('clockOffLine closes the most recent open clocking entry for that technician', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'clock-1', clockOff: new Date() });
+    const prisma = {
+      jobCardOperationLine: { findFirst: jest.fn().mockResolvedValue({ id: 'line-1', jobCardId: 'job-1' }) },
+      jobCardLineClockEntry: { findFirst: jest.fn().mockResolvedValue({ id: 'clock-1', clockOff: null }), update },
+      jobCard: { findUnique: jest.fn().mockResolvedValue({ id: 'job-1' }) },
+    };
+    const service = makeService(prisma);
+    await service.clockOffLine(dealerId, 'line-1', 'tech-1');
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'clock-1' }, data: { clockOff: expect.any(Date) } }));
+  });
+});
+
 describe('WorkshopService.upcomingPartsShortfalls', () => {
   const dealerId = 'dealer-1';
 

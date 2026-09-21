@@ -47,3 +47,15 @@ export class RespondToItemDto {
   @IsBoolean()
   approved!: boolean;
 }
+
+/** Links a VHC item to a real stocked part so the auto-quote (§ VHC auto-quote) uses its actual
+ * costPrice instead of a typed-in estimate. */
+export class AddVhcItemPartDto {
+  @IsString()
+  partId!: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  quantity?: number;
+}

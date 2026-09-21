@@ -58,7 +58,11 @@ export class AftersalesInvoiceService {
   async generate(dealerId: string, jobCardId: string) {
     const jobCard = await this.prisma.jobCard.findFirst({
       where: { id: jobCardId, dealerId },
-      include: { timeEntries: true, partAllocations: { include: { part: true } } },
+      include: {
+        timeEntries: true,
+        operationLines: { include: { clockEntries: true } },
+        partAllocations: { include: { part: true } },
+      },
     });
     if (!jobCard) {
       throw new NotFoundException('Job card not found');
@@ -78,10 +82,19 @@ export class AftersalesInvoiceService {
     const isInternal = jobCard.billingType === JobBillingType.INTERNAL;
     const recipient = isInternal ? `${dealer?.name ?? 'Dealer'} — internal accounts` : jobCard.customerName;
 
-    const clockedHours = jobCard.timeEntries.reduce((sum, entry) => {
-      if (!entry.clockOff) return sum;
-      return sum + (entry.clockOff.getTime() - entry.clockOn.getTime()) / 3_600_000;
-    }, 0);
+    const sumClockedHours = (entries: { clockOn: Date; clockOff: Date | null }[]) =>
+      entries.reduce((sum, entry) => {
+        if (!entry.clockOff) return sum;
+        return sum + (entry.clockOff.getTime() - entry.clockOn.getTime()) / 3_600_000;
+      }, 0);
+
+    // Once a job card has itemised operation lines, its labour is the sum of their clock entries
+    // (per-line technician clocking — see WorkshopService.clockOnLine); a job with no lines still
+    // uses the older whole-job JobCardTimeEntry clocking unchanged.
+    const clockedHours =
+      jobCard.operationLines.length > 0
+        ? sumClockedHours(jobCard.operationLines.flatMap((line) => line.clockEntries))
+        : sumClockedHours(jobCard.timeEntries);
     const hours = clockedHours > 0 ? clockedHours : Number(jobCard.estimatedHours);
     const labourRate = Number(dealer?.labourRatePerHour ?? 95);
     const labourTotal = round2(hours * labourRate);
