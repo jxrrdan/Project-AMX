@@ -302,6 +302,42 @@ function, not just a scheduled feed":
   "who's liable for this damage" record either way, logged from the courtesy list and job-card
   detail pages respectively.
 
+## Technician capacity, job billing routing, and VHC/warranty process gaps closed
+
+A gap-analysis pass over the workshop, VHC, and warranty processes surfaced four concrete gaps —
+closed as follows:
+
+- **Technician skills + calendar-driven capacity** (`/technicians`, its own left-nav entry) — the
+  workshop's only capacity model was bay slots vs. `JobCard.estimatedHours`
+  (`WorkshopService.loadingReport`), with zero concept of a technician's skillset or whether they
+  were even in that day. A new `JobCategory` enum (Mechanical, EV/Hybrid, Diagnostics, Bodyshop,
+  Tyres & Alignment, MOT Testing, Valeting, General) tags each `JobCard`. A `TechnicianSkill` model
+  records which categories each technician is qualified for, and a `TechnicianAvailability` model is
+  the day-by-day rota — who's in, on leave, off sick, training, or off shift, and how many minutes
+  they have that day (defaulting to a standard 480-minute day so the calendar only needs touching to
+  record an *exception*). `TechniciansService.capacityReport` computes, per category per day, the
+  sum of skilled + available technicians' minutes against booked job-card hours — the number that
+  answers "do we have enough EV-qualified hours on Thursday for what's booked in," which bay
+  occupancy alone can't answer.
+- **Job billing classification** — a new `JobBillingType` (RETAIL/WARRANTY/INTERNAL) on `JobCard`
+  decides who is actually billed, decoupled from `JobType` (which just describes the visit).
+  `AftersalesInvoiceService.generate()` now refuses to invoice a WARRANTY job at all (it must be
+  claimed via the Warranty module instead) and brands an INTERNAL job's invoice as a dealer-absorbed
+  cost record — billed to the dealer's own internal accounts, flagged "not customer payable" on both
+  the PDF and the job-card screen — rather than silently billing every job card to whatever name was
+  typed into `customerName`. Linking a `WarrantyClaim` to a job card auto-sets its billing type to
+  WARRANTY, so an advisor doesn't have to flag it twice.
+- **VHC technician sign-off and follow-up linkage** — an inspection previously had no overall status
+  and no gate between "items added" and "sent to the customer"; a customer-approved item also spun
+  off a brand-new job card with a hardcoded customer name and no link back to what recommended it. A
+  `VhcInspectionStatus` (Draft → Complete → Sent → Closed) plus `completedAt`/`completedById` now
+  require a technician to explicitly sign an inspection off before it can be emailed, and the
+  follow-up job card it creates carries the real customer/contact/vehicle from the original visit
+  plus a `sourceVhcItemId` link back to the item that recommended it.
+- **Warranty OEM submission tracking** — `WarrantyClaim.submittedAt` is now set automatically the
+  moment a claim moves to SUBMITTED, and a claim can be created already linked to a job card (it
+  couldn't be, at all, before this).
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks

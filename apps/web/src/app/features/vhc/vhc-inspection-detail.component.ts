@@ -11,7 +11,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { VhcRating } from '@project-amx/shared';
+import { VHC_INSPECTION_STATUS_LABELS, VhcInspectionStatus, VhcRating } from '@project-amx/shared';
 import { environment } from '../../../environments/environment';
 
 interface VhcItem {
@@ -30,6 +30,8 @@ interface InspectionDetail {
   id: string;
   vehicleReg: string;
   mileage: number | null;
+  status: VhcInspectionStatus;
+  completedAt: string | null;
   sentAt: string | null;
   items: VhcItem[];
 }
@@ -52,7 +54,7 @@ interface InspectionDetail {
     @if (inspection(); as i) {
       <div class="header">
         <div>
-          <h1>VHC — {{ i.vehicleReg }}</h1>
+          <h1>VHC — {{ i.vehicleReg }} <mat-chip>{{ statusLabels[i.status] }}</mat-chip></h1>
           <p class="meta">{{ i.mileage }} miles @if (i.sentAt) {<span> · Report sent</span>}</p>
         </div>
         <a mat-stroked-button routerLink="/vhc">
@@ -107,13 +109,21 @@ interface InspectionDetail {
       </mat-card>
 
       <mat-card class="send-card">
+        <h3>Technician sign-off</h3>
+        @if (i.completedAt) {
+          <p class="hint">Signed off — ready to send.</p>
+        } @else {
+          <p class="hint">Sign off once every item has been added — required before the report can be sent.</p>
+          <button mat-stroked-button [disabled]="!i.items.length" (click)="completeInspection()">Sign off inspection</button>
+        }
+
         <h3>Send report to customer</h3>
         <div class="row">
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>Customer email</mat-label>
             <input matInput type="email" [(ngModel)]="customerEmail" />
           </mat-form-field>
-          <button mat-flat-button color="primary" [disabled]="!customerEmail" (click)="sendReport()">Send</button>
+          <button mat-flat-button color="primary" [disabled]="!customerEmail || !i.completedAt" (click)="sendReport()">Send</button>
         </div>
         <p class="hint">
           Public report link: <button mat-button (click)="copyLink()">{{ reportUrl() }}</button>
@@ -218,6 +228,7 @@ interface InspectionDetail {
 })
 export class VhcInspectionDetailComponent implements OnInit {
   readonly inspection = signal<InspectionDetail | null>(null);
+  readonly statusLabels = VHC_INSPECTION_STATUS_LABELS;
   customerEmail = '';
 
   itemForm = {
@@ -277,10 +288,20 @@ export class VhcInspectionDetailComponent implements OnInit {
       });
   }
 
+  completeInspection(): void {
+    this.http.post(`${environment.apiUrl}/vhc/inspections/${this.inspectionId}/complete`, {}).subscribe({
+      next: () => this.load(),
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not sign off inspection', 'Dismiss', { duration: 4000 }),
+    });
+  }
+
   sendReport(): void {
-    this.http.post(`${environment.apiUrl}/vhc/inspections/${this.inspectionId}/send`, { customerEmail: this.customerEmail }).subscribe(() => {
-      this.snackBar.open('Report sent (see the console-log email adapter output)', 'Dismiss', { duration: 4000 });
-      this.load();
+    this.http.post(`${environment.apiUrl}/vhc/inspections/${this.inspectionId}/send`, { customerEmail: this.customerEmail }).subscribe({
+      next: () => {
+        this.snackBar.open('Report sent (see the console-log email adapter output)', 'Dismiss', { duration: 4000 });
+        this.load();
+      },
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not send report', 'Dismiss', { duration: 4000 }),
     });
   }
 }

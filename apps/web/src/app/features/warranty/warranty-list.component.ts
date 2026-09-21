@@ -9,6 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { environment } from '../../../environments/environment';
 
 interface WarrantyClaim {
@@ -55,6 +56,10 @@ interface VehicleOption {
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Fault description</mat-label>
           <textarea matInput rows="2" [(ngModel)]="form.faultDescription"></textarea>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Linked job card ID (optional)</mat-label>
+          <input matInput [(ngModel)]="form.jobCardId" placeholder="Routes the job's billing to this claim, not a customer invoice" />
         </mat-form-field>
         <button mat-flat-button color="primary" [disabled]="!form.vehicleId || !form.customerName" (click)="create()">
           Create claim
@@ -121,9 +126,10 @@ export class WarrantyListComponent implements OnInit {
   readonly columns = ['vehicle', 'customer', 'fault', 'lines', 'status'];
   readonly showForm = signal(false);
 
-  form = { vehicleId: '', customerName: '', faultDescription: '' };
+  form = { vehicleId: '', customerName: '', faultDescription: '', jobCardId: '' };
 
   private readonly http = inject(HttpClient);
+  private readonly snackBar = inject(MatSnackBar);
 
   ngOnInit(): void {
     this.load();
@@ -135,10 +141,14 @@ export class WarrantyListComponent implements OnInit {
   }
 
   create(): void {
-    this.http.post(`${environment.apiUrl}/warranty-claims`, this.form).subscribe(() => {
-      this.showForm.set(false);
-      this.form = { vehicleId: '', customerName: '', faultDescription: '' };
-      this.load();
+    const { jobCardId, ...rest } = this.form;
+    this.http.post(`${environment.apiUrl}/warranty-claims`, { ...rest, jobCardId: jobCardId || undefined }).subscribe({
+      next: () => {
+        this.showForm.set(false);
+        this.form = { vehicleId: '', customerName: '', faultDescription: '', jobCardId: '' };
+        this.load();
+      },
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not create claim', 'Dismiss', { duration: 4000 }),
     });
   }
 }

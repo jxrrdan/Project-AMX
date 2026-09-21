@@ -167,6 +167,8 @@ model Dealer {
   vehicleModelMetadata    VehicleModelMetadata[]
   newCarSales             NewCarSale[]
   vehicleConditionReports VehicleConditionReport[]
+  technicianSkills        TechnicianSkill[]
+  technicianAvailability  TechnicianAvailability[]
 
   @@map("dealers")
 }
@@ -255,19 +257,21 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  roles                UserRole[]
-  moduleOverrides      UserModuleOverride[]
-  sessions             UserSession[]
-  loginAudits          LoginAudit[]
-  auditLogs            AuditLog[]
-  notifications        Notification[]
-  assignedVehicles     Vehicle[]            @relation("AllocatedAdvisor")
-  technicianJobCards   JobCard[]            @relation("AssignedTechnician")
-  advisorJobCards      JobCard[]            @relation("ServiceAdvisor")
-  timeEntries          JobCardTimeEntry[]
-  assignedLeads        Lead[]               @relation("AssignedSalesperson")
-  tasks                CrmTask[]            @relation("TaskAssignee")
-  warrantyClockEntries WarrantyClockEntry[]
+  roles                  UserRole[]
+  moduleOverrides        UserModuleOverride[]
+  sessions               UserSession[]
+  loginAudits            LoginAudit[]
+  auditLogs              AuditLog[]
+  notifications          Notification[]
+  assignedVehicles       Vehicle[]                @relation("AllocatedAdvisor")
+  technicianJobCards     JobCard[]                @relation("AssignedTechnician")
+  advisorJobCards        JobCard[]                @relation("ServiceAdvisor")
+  timeEntries            JobCardTimeEntry[]
+  assignedLeads          Lead[]                   @relation("AssignedSalesperson")
+  tasks                  CrmTask[]                @relation("TaskAssignee")
+  warrantyClockEntries   WarrantyClockEntry[]
+  technicianSkills       TechnicianSkill[]
+  technicianAvailability TechnicianAvailability[]
 
   @@unique([dealerId, email])
   @@map("users")
@@ -611,6 +615,30 @@ enum JobType {
   MOT
 }
 
+/// The skill/specialism a job requires — drives technician capacity planning (see
+/// TechnicianSkill/TechnicianAvailability below), independent of JobType (which describes the
+/// nature of the visit, not who is qualified to do it).
+enum JobCategory {
+  MECHANICAL
+  EV
+  DIAGNOSTICS
+  BODYSHOP
+  TYRES_AND_ALIGNMENT
+  MOT_TESTING
+  VALETING
+  GENERAL
+}
+
+/// Who ultimately pays for a job card — decides invoicing routing (§AftersalesInvoiceService):
+/// RETAIL bills the customer, WARRANTY is claimed from the OEM via WarrantyClaim (never a customer
+/// invoice), INTERNAL is a dealer-absorbed cost (goodwill, pre-delivery prep, demo damage) billed to
+/// nobody externally.
+enum JobBillingType {
+  RETAIL
+  WARRANTY
+  INTERNAL
+}
+
 enum JobCardStatus {
   CREATED
   SCHEDULED
@@ -621,30 +649,36 @@ enum JobCardStatus {
 }
 
 model JobCard {
-  id                   String        @id @default(uuid())
+  id                   String         @id @default(uuid())
   dealerId             String
-  dealer               Dealer        @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  dealer               Dealer         @relation(fields: [dealerId], references: [id], onDelete: Cascade)
   customerName         String
   contactId            String?
-  contact              Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contact              Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
   vehicleId            String?
-  vehicle              Vehicle?      @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  vehicle              Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   vehicleReg           String?
   jobType              JobType
+  category             JobCategory    @default(GENERAL)
+  billingType          JobBillingType @default(RETAIL)
   description          String?
-  estimatedHours       Decimal       @default(0) @db.Decimal(6, 2)
-  status               JobCardStatus @default(CREATED)
+  estimatedHours       Decimal        @default(0) @db.Decimal(6, 2)
+  status               JobCardStatus  @default(CREATED)
   bayId                String?
-  bay                  Bay?          @relation(fields: [bayId], references: [id], onDelete: SetNull)
+  bay                  Bay?           @relation(fields: [bayId], references: [id], onDelete: SetNull)
   assignedTechnicianId String?
-  assignedTechnician   User?         @relation("AssignedTechnician", fields: [assignedTechnicianId], references: [id], onDelete: SetNull)
+  assignedTechnician   User?          @relation("AssignedTechnician", fields: [assignedTechnicianId], references: [id], onDelete: SetNull)
   serviceAdvisorId     String?
-  serviceAdvisor       User?         @relation("ServiceAdvisor", fields: [serviceAdvisorId], references: [id], onDelete: SetNull)
+  serviceAdvisor       User?          @relation("ServiceAdvisor", fields: [serviceAdvisorId], references: [id], onDelete: SetNull)
   scheduledStart       DateTime?
   scheduledEnd         DateTime?
   awpJobRef            String?
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+  /// Set when this job card was auto-created from a customer approving a VHC upsell item —
+  /// closes the loop back to the inspection that recommended the work (see VhcService.respondToItem).
+  sourceVhcItemId      String?        @unique
+  sourceVhcItem        VhcItem?       @relation(fields: [sourceVhcItemId], references: [id], onDelete: SetNull)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   timeEntries       JobCardTimeEntry[]
   partAllocations   PartAllocation[]
@@ -669,6 +703,13 @@ model AftersalesInvoice {
   jobCardId     String   @unique
   jobCard       JobCard  @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
   invoiceNumber String
+  /// True for a JobBillingType.INTERNAL job — a dealer-absorbed cost record, never sent to or
+  /// payable by a customer. Warranty jobs never reach this model at all (see AftersalesInvoiceService.generate).
+  isInternal    Boolean  @default(false)
+  /// Who this bills — the customer's name for a RETAIL job, or the dealer's own internal accounts
+  /// department for an INTERNAL one. Kept separate from JobCard.customerName so the invoice record
+  /// is self-contained even if the job card is later changed.
+  recipient     String?
   labourTotal   Decimal  @default(0) @db.Decimal(10, 2)
   partsTotal    Decimal  @default(0) @db.Decimal(10, 2)
   vatAmount     Decimal  @default(0) @db.Decimal(10, 2)
@@ -723,6 +764,50 @@ model CapacityBlock {
 
   @@unique([bayId, date])
   @@map("capacity_blocks")
+}
+
+/// A technician's qualification to work a given JobCategory (e.g. a tech can be MECHANICAL +
+/// DIAGNOSTICS but not EV). Drives which technicians' hours count toward a category's capacity in
+/// TechniciansService.capacityReport — a job needing EV skill can't be covered by a mechanical-only
+/// technician's spare hours, however available they are.
+model TechnicianSkill {
+  id       String      @id @default(uuid())
+  dealerId String
+  dealer   Dealer      @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category JobCategory
+
+  @@unique([userId, category])
+  @@map("technician_skills")
+}
+
+enum TechnicianAvailabilityStatus {
+  AVAILABLE
+  LEAVE
+  SICKNESS
+  TRAINING
+  OFF_SHIFT
+}
+
+/// The technician calendar/rota (§ "who's in / who's isn't") — one row per technician per day.
+/// availableMinutes is only meaningful when status is AVAILABLE; a booked day off, sick day, or
+/// training day contributes zero hours to that day's capacity regardless of what's set here.
+model TechnicianAvailability {
+  id               String                       @id @default(uuid())
+  dealerId         String
+  dealer           Dealer                       @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date             DateTime                     @db.Date
+  status           TechnicianAvailabilityStatus @default(AVAILABLE)
+  availableMinutes Int                          @default(480)
+  note             String?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+
+  @@unique([userId, date])
+  @@map("technician_availability")
 }
 
 enum ServiceBookingStatus {
@@ -1015,6 +1100,9 @@ model WarrantyClaim {
   symptomCode         String?
   status              WarrantyClaimStatus @default(DRAFT)
   awpAuthorisationRef String?
+  /// Set automatically the moment the claim moves to SUBMITTED (see WarrantyService.updateStatus) —
+  /// the only record of when it was actually sent to the OEM/AWP, distinct from createdAt.
+  submittedAt         DateTime?
   rejectionReason     String?
   expectedPayment     Decimal?            @db.Decimal(10, 2)
   actualPayment       Decimal?            @db.Decimal(10, 2)
@@ -1394,18 +1482,32 @@ model WorkflowEnrollment {
 // Module 9 — Digital Vehicle Health Check (VHC)
 // ---------------------------------------------------------------------------
 
+/// DRAFT: technician still adding items. COMPLETE: technician has signed off (see VhcService.completeInspection) —
+/// a report can only be sent to the customer once here. SENT: emailed, awaiting customer responses.
+/// CLOSED: every item has been responded to (approved or declined).
+enum VhcInspectionStatus {
+  DRAFT
+  COMPLETE
+  SENT
+  CLOSED
+}
+
 model VhcInspection {
-  id           String    @id @default(uuid())
-  dealerId     String
-  dealer       Dealer    @relation(fields: [dealerId], references: [id], onDelete: Cascade)
-  jobCardId    String
-  jobCard      JobCard   @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
-  technicianId String
-  vehicleReg   String
-  mileage      Int?
-  reportUrl    String?
-  sentAt       DateTime?
-  createdAt    DateTime  @default(now())
+  id            String              @id @default(uuid())
+  dealerId      String
+  dealer        Dealer              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  jobCardId     String
+  jobCard       JobCard             @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  technicianId  String
+  vehicleReg    String
+  mileage       Int?
+  status        VhcInspectionStatus @default(DRAFT)
+  /// Technician sign-off — distinct from item creation, gates whether the report can be sent (§9.1 gap fix).
+  completedAt   DateTime?
+  completedById String?
+  reportUrl     String?
+  sentAt        DateTime?
+  createdAt     DateTime            @default(now())
 
   items VhcItem[]
 
@@ -1431,6 +1533,10 @@ model VhcItem {
   estimatedPartsCost     Decimal?      @db.Decimal(10, 2)
   approved               Boolean?
   respondedAt            DateTime?
+
+  /// The job card auto-created when the customer approves this item (see VhcService.respondToItem) —
+  /// the reverse side of JobCard.sourceVhcItemId, closing what was previously a one-way, unlinked spin-off.
+  followUpJobCard JobCard?
 
   @@map("vhc_items")
 }

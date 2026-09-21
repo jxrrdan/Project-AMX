@@ -5,6 +5,10 @@ export class CreateWarrantyClaimDto {
   @IsString()
   vehicleId!: string;
 
+  @IsOptional()
+  @IsString()
+  jobCardId?: string;
+
   @IsString()
   customerName!: string;
 

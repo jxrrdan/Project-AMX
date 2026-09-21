@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { WarrantyClaimStatus } from '@project-amx/shared';
+import { JobBillingType, WarrantyClaimStatus } from '@project-amx/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import {
   CreateOperationLineDto,
@@ -28,8 +28,22 @@ export class WarrantyService {
     });
   }
 
-  create(dealerId: string, dto: CreateWarrantyClaimDto) {
-    return this.prisma.warrantyClaim.create({ data: { dealerId, ...dto } });
+  /** Linking a job card auto-routes its invoicing to the OEM claim rather than a customer invoice
+   * (see AftersalesInvoiceService.generate) — the advisor doesn't need to remember to flag it twice. */
+  async create(dealerId: string, dto: CreateWarrantyClaimDto) {
+    if (dto.jobCardId) {
+      const jobCard = await this.prisma.jobCard.findFirst({ where: { id: dto.jobCardId, dealerId } });
+      if (!jobCard) {
+        throw new NotFoundException('Job card not found');
+      }
+    }
+    const [claim] = await this.prisma.$transaction([
+      this.prisma.warrantyClaim.create({ data: { dealerId, ...dto } }),
+      ...(dto.jobCardId
+        ? [this.prisma.jobCard.update({ where: { id: dto.jobCardId }, data: { billingType: JobBillingType.WARRANTY } })]
+        : []),
+    ]);
+    return claim;
   }
 
   async addOperationLine(dealerId: string, warrantyClaimId: string, dto: CreateOperationLineDto) {
@@ -115,7 +129,12 @@ export class WarrantyService {
 
     return this.prisma.warrantyClaim.update({
       where: { id },
-      data: { status: dto.status, rejectionReason: dto.rejectionReason, actualPayment: dto.actualPayment },
+      data: {
+        status: dto.status,
+        rejectionReason: dto.rejectionReason,
+        actualPayment: dto.actualPayment,
+        submittedAt: dto.status === WarrantyClaimStatus.SUBMITTED && !claim.submittedAt ? new Date() : undefined,
+      },
     });
   }
 

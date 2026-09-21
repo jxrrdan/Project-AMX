@@ -37,6 +37,10 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/workshop/job-card-detail.component').then((m) => m.JobCardDetailComponent),
       },
       {
+        path: 'technicians',
+        loadComponent: () => import('./features/technicians/technicians.component').then((m) => m.TechniciansComponent),
+      },
+      {
         path: 'vehicles',
         loadComponent: () => import('./features/vehicles/vehicle-pipeline.component').then((m) => m.VehiclePipelineComponent),
       },

@@ -1,4 +1,4 @@
-import { JobCardStatus, JobType } from '@project-amx/shared';
+import { JobBillingType, JobCardStatus, JobCategory, JobType } from '@project-amx/shared';
 import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateJobCardDto {
@@ -19,6 +19,14 @@ export class CreateJobCardDto {
 
   @IsEnum(JobType)
   jobType!: JobType;
+
+  @IsOptional()
+  @IsEnum(JobCategory)
+  category?: JobCategory;
+
+  @IsOptional()
+  @IsEnum(JobBillingType)
+  billingType?: JobBillingType;
 
   @IsOptional()
   @IsString()
@@ -54,6 +62,14 @@ export class UpdateJobCardDto {
   @IsOptional()
   @IsEnum(JobCardStatus)
   status?: JobCardStatus;
+
+  @IsOptional()
+  @IsEnum(JobCategory)
+  category?: JobCategory;
+
+  @IsOptional()
+  @IsEnum(JobBillingType)
+  billingType?: JobBillingType;
 
   @IsOptional()
   @IsString()

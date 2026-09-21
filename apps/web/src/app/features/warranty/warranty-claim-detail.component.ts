@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Component, OnInit, inject, signal } from '@angular/core';
@@ -32,6 +33,7 @@ interface ClaimDetail {
   customerName: string;
   faultDescription: string;
   status: WarrantyClaimStatus;
+  submittedAt: string | null;
   rejectionReason: string | null;
   actualPayment: number | null;
   vehicle: { vin: string; model: string };
@@ -41,6 +43,7 @@ interface ClaimDetail {
 @Component({
   selector: 'app-warranty-claim-detail',
   imports: [
+    DatePipe,
     RouterLink,
     FormsModule,
     MatCardModule,
@@ -87,6 +90,9 @@ interface ClaimDetail {
           </mat-form-field>
         }
         <button mat-flat-button color="primary" [disabled]="!nextStatus" (click)="updateStatus()">Update status</button>
+        @if (c.submittedAt) {
+          <p class="meta">Submitted to OEM: {{ c.submittedAt | date: 'dd MMM yyyy HH:mm' }}</p>
+        }
         @if (c.rejectionReason) {
           <p class="rejection">Rejected: {{ c.rejectionReason }}</p>
         }

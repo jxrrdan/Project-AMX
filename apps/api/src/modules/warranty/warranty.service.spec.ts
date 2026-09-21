@@ -23,6 +23,45 @@ function makePrisma(claim: Record<string, unknown> | null) {
   };
 }
 
+describe('WarrantyService.create', () => {
+  const dealerId = 'dealer-1';
+
+  it('creates a standalone claim when no job card is linked', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'claim-1' });
+    const prisma = {
+      warrantyClaim: { create },
+      $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
+    };
+    const service = new WarrantyService(prisma as never);
+    await service.create(dealerId, { vehicleId: 'veh-1', customerName: 'Jamie', faultDescription: 'Rattle' });
+    expect(create).toHaveBeenCalled();
+  });
+
+  it('refuses to link a job card that belongs to another dealer', async () => {
+    const prisma = {
+      jobCard: { findFirst: jest.fn().mockResolvedValue(null) },
+      warrantyClaim: { create: jest.fn() },
+      $transaction: jest.fn(),
+    };
+    const service = new WarrantyService(prisma as never);
+    await expect(
+      service.create(dealerId, { vehicleId: 'veh-1', jobCardId: 'other-dealer-job', customerName: 'Jamie', faultDescription: 'Rattle' }),
+    ).rejects.toThrow(NotFoundException);
+    expect(prisma.warrantyClaim.create).not.toHaveBeenCalled();
+  });
+
+  it('auto-routes a linked job card\'s billing to WARRANTY so it is never invoiced to the customer', async () => {
+    const prisma = {
+      jobCard: { findFirst: jest.fn().mockResolvedValue({ id: 'job-1', dealerId }), update: jest.fn() },
+      warrantyClaim: { create: jest.fn().mockResolvedValue({ id: 'claim-1' }) },
+      $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
+    };
+    const service = new WarrantyService(prisma as never);
+    await service.create(dealerId, { vehicleId: 'veh-1', jobCardId: 'job-1', customerName: 'Jamie', faultDescription: 'Rattle' });
+    expect(prisma.jobCard.update).toHaveBeenCalledWith({ where: { id: 'job-1' }, data: { billingType: 'WARRANTY' } });
+  });
+});
+
 describe('WarrantyService.updateStatus', () => {
   const dealerId = 'dealer-1';
 
@@ -58,11 +97,24 @@ describe('WarrantyService.updateStatus', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('allows submission once every line is approved and has a full 3Cs write-up', async () => {
-    const prisma = makePrisma({ id: 'claim-1', operationLines: [makeLine(), makeLine({ id: 'line-2' })] });
+  it('allows submission once every line is approved and has a full 3Cs write-up, and records submittedAt', async () => {
+    const prisma = makePrisma({ id: 'claim-1', operationLines: [makeLine(), makeLine({ id: 'line-2' })], submittedAt: null });
     const service = new WarrantyService(prisma as never);
     const result = await service.updateStatus(dealerId, 'claim-1', { status: WarrantyClaimStatus.SUBMITTED });
     expect(result.status).toBe(WarrantyClaimStatus.SUBMITTED);
+    expect(result.submittedAt).toBeInstanceOf(Date);
+  });
+
+  it('does not overwrite submittedAt on a later, unrelated status update', async () => {
+    const firstSubmittedAt = new Date('2026-01-01T00:00:00Z');
+    const prisma = makePrisma({
+      id: 'claim-1',
+      submittedAt: firstSubmittedAt,
+      operationLines: [makeLine(), makeLine({ id: 'line-2' })],
+    });
+    const service = new WarrantyService(prisma as never);
+    const result = await service.updateStatus(dealerId, 'claim-1', { status: WarrantyClaimStatus.SUBMITTED });
+    expect(result.submittedAt).toBeUndefined();
   });
 
   it('does not gate a non-submission transition on the 3Cs (e.g. moving a draft to rejected)', async () => {

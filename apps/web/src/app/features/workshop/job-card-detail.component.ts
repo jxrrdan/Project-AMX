@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
@@ -11,7 +11,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { DamageSeverity } from '@project-amx/shared';
+import { DamageSeverity, JOB_BILLING_TYPE_LABELS, JOB_CATEGORY_LABELS, JobBillingType, JobCategory } from '@project-amx/shared';
 import { environment } from '../../../environments/environment';
 
 interface JobCard {
@@ -19,6 +19,8 @@ interface JobCard {
   customerName: string;
   vehicleReg: string | null;
   jobType: string;
+  category: JobCategory;
+  billingType: JobBillingType;
   status: string;
   estimatedHours: number;
   timeEntries: { id: string; clockOn: string; clockOff: string | null; technician: { firstName: string; lastName: string } }[];
@@ -42,6 +44,8 @@ interface ConditionReport {
 
 interface Invoice {
   invoiceNumber: string;
+  isInternal: boolean;
+  recipient: string | null;
   labourTotal: number;
   partsTotal: number;
   vatAmount: number;
@@ -51,7 +55,7 @@ interface Invoice {
 
 @Component({
   selector: 'app-job-card-detail',
-  imports: [DatePipe, FormsModule, MatButtonModule, MatCardModule, MatChipsModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule],
+  imports: [DatePipe, FormsModule, RouterLink, MatButtonModule, MatCardModule, MatChipsModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule],
   template: `
     @if (jobCard(); as jc) {
       <div class="header">
@@ -62,6 +66,25 @@ interface Invoice {
         </div>
       </div>
       <p class="subtitle">{{ jc.jobType }} @if (jc.vehicleReg) { · {{ jc.vehicleReg }} }</p>
+
+      <div class="row classification">
+        <mat-form-field appearance="outline">
+          <mat-label>Job category</mat-label>
+          <mat-select [(ngModel)]="jc.category" (selectionChange)="updateClassification(jc)">
+            @for (c of categories; track c) {
+              <mat-option [value]="c">{{ categoryLabels[c] }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Billed to</mat-label>
+          <mat-select [(ngModel)]="jc.billingType" (selectionChange)="updateClassification(jc)">
+            @for (b of billingTypes; track b) {
+              <mat-option [value]="b">{{ billingTypeLabels[b] }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
 
       <div class="columns">
         <mat-card class="col">
@@ -112,15 +135,24 @@ interface Invoice {
           </div>
 
           <h3>Aftersales invoice</h3>
-          @if (invoice(); as inv) {
-            <p>Invoice {{ inv.invoiceNumber }}</p>
+          @if (jc.billingType === 'WARRANTY') {
+            <p class="hint">Warranty job — claimed from the OEM, not invoiced to the customer.</p>
+            <a mat-stroked-button routerLink="/warranty">Go to Warranty</a>
+          } @else if (invoice(); as inv) {
+            <p>
+              {{ inv.isInternal ? 'Internal cost record' : 'Invoice' }} {{ inv.invoiceNumber }}
+              @if (inv.isInternal) { <mat-chip class="internal-chip">Internal — not customer payable</mat-chip> }
+            </p>
+            @if (inv.recipient) { <p class="hint">Billed to: {{ inv.recipient }}</p> }
             <p>Labour: £{{ inv.labourTotal }} · Parts: £{{ inv.partsTotal }} · VAT: £{{ inv.vatAmount }}</p>
             <p><b>Total: £{{ inv.totalAmount }}</b></p>
             @if (inv.pdfUrl) {
               <a [href]="storageUrl(inv.pdfUrl)" target="_blank" rel="noopener">View invoice document</a>
             }
           } @else {
-            <button mat-flat-button color="primary" (click)="generateInvoice()">Generate invoice</button>
+            <button mat-flat-button color="primary" (click)="generateInvoice()">
+              {{ jc.billingType === 'INTERNAL' ? 'Generate internal cost record' : 'Generate invoice' }}
+            </button>
           }
         </mat-card>
 
@@ -244,6 +276,13 @@ interface Invoice {
         align-items: center;
         margin: 8px 0;
       }
+      .classification {
+        margin-left: 40px;
+      }
+      .internal-chip {
+        background: #fbe9e7;
+        font-size: 11px;
+      }
     `,
   ],
 })
@@ -254,6 +293,10 @@ export class JobCardDetailComponent implements OnInit {
   readonly conditionReports = signal<ConditionReport[]>([]);
   readonly damageMarkers = signal<DamageMarker[]>([]);
   readonly severities = Object.values(DamageSeverity);
+  readonly categories = Object.values(JobCategory);
+  readonly billingTypes = Object.values(JobBillingType);
+  readonly categoryLabels = JOB_CATEGORY_LABELS;
+  readonly billingTypeLabels = JOB_BILLING_TYPE_LABELS;
   readonly apiUrl = environment.apiUrl;
 
   requirementDescription = '';
@@ -306,6 +349,17 @@ export class JobCardDetailComponent implements OnInit {
 
   removeRequirement(id: string): void {
     this.http.delete(`${environment.apiUrl}/part-requirements/${id}`).subscribe(() => this.load());
+  }
+
+  updateClassification(jc: JobCard): void {
+    this.http
+      .patch(`${environment.apiUrl}/job-cards/${this.jobCardId}`, { category: jc.category, billingType: jc.billingType })
+      .subscribe({
+        error: (err) => {
+          this.snackBar.open(err?.error?.message ?? 'Could not update job classification', 'Dismiss', { duration: 4000 });
+          this.load();
+        },
+      });
   }
 
   generateInvoice(): void {

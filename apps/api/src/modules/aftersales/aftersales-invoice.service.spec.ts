@@ -23,6 +23,41 @@ describe('AftersalesInvoiceService.generate', () => {
     await expect(service.generate(dealerId, jobCardId)).rejects.toThrow(NotFoundException);
   });
 
+  it('refuses to invoice a warranty job — that goes through a warranty claim instead', async () => {
+    const prisma = {
+      jobCard: { findFirst: jest.fn().mockResolvedValue({ id: jobCardId, billingType: 'WARRANTY', timeEntries: [], partAllocations: [] }) },
+      aftersalesInvoice: { findUnique: jest.fn() },
+    };
+    const service = new AftersalesInvoiceService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
+    await expect(service.generate(dealerId, jobCardId)).rejects.toThrow(BadRequestException);
+    expect(prisma.aftersalesInvoice.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('bills an internal job to the dealer\'s own accounts, not the customer, and flags it as such', async () => {
+    const prisma = {
+      jobCard: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: jobCardId,
+          billingType: 'INTERNAL',
+          customerName: 'Jamie Smith',
+          vehicleReg: 'AB12CDE',
+          jobType: 'PDI',
+          estimatedHours: 1,
+          timeEntries: [],
+          partAllocations: [],
+        }),
+      },
+      aftersalesInvoice: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockImplementation(({ data }) => data) },
+      dealer: { findUnique: jest.fn().mockResolvedValue({ labourRatePerHour: 100, name: 'Test Dealer' }) },
+    };
+    const service = new AftersalesInvoiceService(prisma as never, makePdf() as never, makeDocumentSequences() as never, makeDocumentTemplates() as never);
+
+    const result = await service.generate(dealerId, jobCardId);
+
+    expect(result.isInternal).toBe(true);
+    expect(result.recipient).toBe('Test Dealer — internal accounts');
+  });
+
   it('refuses to generate a second invoice for the same job card', async () => {
     const prisma = {
       jobCard: { findFirst: jest.fn().mockResolvedValue({ id: jobCardId, timeEntries: [], partAllocations: [] }) },

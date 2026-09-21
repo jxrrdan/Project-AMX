@@ -42,6 +42,13 @@ export class VhcController {
     return this.vhcService.addItem(user.dealerId, id, dto);
   }
 
+  /** Technician sign-off — required before the report can be sent (§9.1 gap fix). */
+  @Post('inspections/:id/complete')
+  @RequirePermissions({ module: ModuleKey.VHC, action: PermissionAction.EDIT })
+  completeInspection(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.vhcService.completeInspection(user.dealerId, id, user.id);
+  }
+
   @Post('inspections/:id/send')
   @RequirePermissions({ module: ModuleKey.VHC, action: PermissionAction.EDIT })
   sendReport(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body('customerEmail') customerEmail: string) {

@@ -15,3 +15,4 @@ export * from './fi.enum';
 export * from './ai.enum';
 export * from './integration.enum';
 export * from './settings.enum';
+export * from './technician.enum';

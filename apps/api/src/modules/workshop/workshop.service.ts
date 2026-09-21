@@ -92,6 +92,8 @@ export class WorkshopService {
         vehicleId: dto.vehicleId,
         vehicleReg: dto.vehicleReg,
         jobType: dto.jobType,
+        category: dto.category,
+        billingType: dto.billingType,
         description: dto.description,
         estimatedHours: dto.estimatedHours ?? 0,
         bayId: dto.bayId,
@@ -127,6 +129,8 @@ export class WorkshopService {
       where: { id },
       data: {
         status: dto.status,
+        category: dto.category,
+        billingType: dto.billingType,
         bayId: dto.bayId,
         assignedTechnicianId: dto.assignedTechnicianId,
         scheduledStart: dto.scheduledStart ? new Date(dto.scheduledStart) : undefined,

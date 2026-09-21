@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { DocumentTemplateType } from '@project-amx/shared';
+import { DocumentTemplateType, JobBillingType } from '@project-amx/shared';
 import { PdfService } from '../../common/pdf/pdf.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { DocumentSequenceService } from '../dealers/document-sequence.service';
@@ -13,7 +13,8 @@ const DEFAULT_AFTERSALES_INVOICE_TEMPLATE = `
 <div><h1 style="margin:0">{{dealerName}}</h1><p style="margin:0;font-size:12px">{{dealerAddress}}</p></div>
 </div>
 <h2>Invoice {{invoiceNumber}}</h2>
-<p>Customer: {{customerName}}</p>
+{{#if isInternal}}<p style="color:#C62828;font-weight:bold">INTERNAL COST RECORD — not payable by a customer</p>{{/if}}
+<p>{{#if isInternal}}Billed to{{else}}Customer{{/if}}: {{recipient}}</p>
 <p>Vehicle: {{vehicleReg}}</p>
 <p>Job type: {{jobType}}</p>
 <p>Labour: £{{labourTotal}}</p>
@@ -62,6 +63,11 @@ export class AftersalesInvoiceService {
     if (!jobCard) {
       throw new NotFoundException('Job card not found');
     }
+    if (jobCard.billingType === JobBillingType.WARRANTY) {
+      throw new BadRequestException(
+        'This is a warranty job — it is claimed from the OEM via a warranty claim, not invoiced to a customer. Use the Warranty module instead.',
+      );
+    }
 
     const existing = await this.prisma.aftersalesInvoice.findUnique({ where: { jobCardId } });
     if (existing) {
@@ -69,6 +75,8 @@ export class AftersalesInvoiceService {
     }
 
     const dealer = await this.prisma.dealer.findUnique({ where: { id: dealerId } });
+    const isInternal = jobCard.billingType === JobBillingType.INTERNAL;
+    const recipient = isInternal ? `${dealer?.name ?? 'Dealer'} — internal accounts` : jobCard.customerName;
 
     const clockedHours = jobCard.timeEntries.reduce((sum, entry) => {
       if (!entry.clockOff) return sum;
@@ -94,7 +102,8 @@ export class AftersalesInvoiceService {
 
     const pdfUrl = await this.pdf.renderAndStore(dealerId, 'aftersales-invoices', `invoice-${jobCardId}`, templateBody, {
       invoiceNumber,
-      customerName: jobCard.customerName,
+      recipient,
+      isInternal,
       vehicleReg: jobCard.vehicleReg,
       jobType: jobCard.jobType,
       labourTotal: labourTotal.toFixed(2),
@@ -111,7 +120,7 @@ export class AftersalesInvoiceService {
     });
 
     return this.prisma.aftersalesInvoice.create({
-      data: { dealerId, jobCardId, invoiceNumber, labourTotal, partsTotal, vatAmount, totalAmount, pdfUrl },
+      data: { dealerId, jobCardId, invoiceNumber, isInternal, recipient, labourTotal, partsTotal, vatAmount, totalAmount, pdfUrl },
     });
   }
 
