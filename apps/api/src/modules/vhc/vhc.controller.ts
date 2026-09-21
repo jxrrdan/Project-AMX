@@ -4,7 +4,14 @@ import type { AuthUser } from '@project-amx/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
-import { AddVhcItemDto, AddVhcItemPartDto, CreateVhcInspectionDto, RespondToItemDto } from './dto/vhc.dto';
+import {
+  AddVhcItemDto,
+  AddVhcItemPartDto,
+  CreateVhcInspectionDto,
+  LogPhoneContactDto,
+  RecordInspectionDto,
+  RespondToItemDto,
+} from './dto/vhc.dto';
 import { VhcService } from './vhc.service';
 
 @Controller('vhc')
@@ -55,11 +62,12 @@ export class VhcController {
     return this.vhcService.removeItemPart(user.dealerId, id);
   }
 
-  /** Technician sign-off — required before the report can be sent (§9.1 gap fix). */
-  @Post('inspections/:id/complete')
+  /** Technician sign-off — marks the inspection recorded/videoed, required before the report can
+   * be sent, and notifies the job card's assigned service advisor (§ VHC advisor workflow). */
+  @Post('inspections/:id/record')
   @RequirePermissions({ module: ModuleKey.VHC, action: PermissionAction.EDIT })
-  completeInspection(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.vhcService.completeInspection(user.dealerId, id, user.id);
+  recordInspection(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: RecordInspectionDto) {
+    return this.vhcService.recordInspection(user.dealerId, id, user.id, dto);
   }
 
   @Post('inspections/:id/send')
@@ -68,11 +76,32 @@ export class VhcController {
     return this.vhcService.sendReport(user.dealerId, id, customerEmail);
   }
 
-  /** Customer approves/declines on the report page — no login required (§9.3). */
+  /** Advisor rang the customer instead of emailing (§ VHC advisor workflow). */
+  @Post('inspections/:id/log-call')
+  @RequirePermissions({ module: ModuleKey.VHC, action: PermissionAction.EDIT })
+  logPhoneContact(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: LogPhoneContactDto) {
+    return this.vhcService.logPhoneContact(user.dealerId, id, dto);
+  }
+
+  /** Customer approves/declines/defers on the public report page — no login required (§9.3). */
   @Public()
   @Patch('items/:id/respond')
   respondToItem(@Param('id') id: string, @Body() dto: RespondToItemDto) {
     return this.vhcService.respondToItem(id, dto);
+  }
+
+  /** Same tri-state response, but for an advisor logging the customer's verbal decision from a phone call. */
+  @Patch('items/:id/advisor-respond')
+  @RequirePermissions({ module: ModuleKey.VHC, action: PermissionAction.EDIT })
+  respondToItemAsAdvisor(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: RespondToItemDto) {
+    return this.vhcService.respondToItemAsAdvisor(user.dealerId, id, dto);
+  }
+
+  /** Deletes an item logged in error — only while still pending (§ VHC defer/delete). */
+  @Delete('items/:id')
+  @RequirePermissions({ module: ModuleKey.VHC, action: PermissionAction.EDIT })
+  removeItem(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.vhcService.removeItem(user.dealerId, id);
   }
 
   @Get('reports/conversion-rate')

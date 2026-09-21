@@ -362,6 +362,44 @@ closed as follows:
   advisor re-entering what the quote already identified. Technicians were also granted read access to
   the Parts module so they can look parts up while quoting.
 
+## VHC advisor review workflow, Red/Amber grouping, and defer/delete
+
+A real BMW-retailer VHC process is a handover between two people — the technician who carries it
+out on the ramp, and the service advisor who prices it and speaks to the customer — which nothing
+in the previous wave modelled: signing an inspection off and sending its report were both actions
+the same person could do back-to-back, with no notification in between and no way to see a "not
+now" from a "no."
+
+- **Technician records → advisor is notified** — `VhcInspectionStatus.COMPLETE` is renamed
+  `RECORDED` (`VhcInspection.completedAt`/`completedById` → `recordedAt`/`recordedById`) and gains a
+  `videoUrl` field for the recording the technician made on the ramp. The moment an inspection is
+  marked recorded, `VhcService.recordInspection()` notifies the job card's assigned service advisor
+  (`NotificationsService`, in-app + email) that it's ready for them to review, price up, and contact
+  the customer — a no-op rather than an error if no advisor is assigned to the job, since that's a
+  data-entry gap elsewhere, not a reason to block the technician. `VhcInspection.notifiedServiceAdvisorAt`
+  records whether that actually happened, and the inspection page shows either "Service advisor
+  notified" or a clear warning that nobody was, rather than implying silently that someone was.
+- **Advisor prices up, then sends or rings** — the auto-quote from the previous wave is exactly what
+  the advisor uses to price the job; once an inspection is `RECORDED`, they can either email the
+  report (unchanged) or `VhcService.logPhoneContact()` to log that they rang the customer instead —
+  a distinct `CONTACTED` status (with `contactMethod`/`contactNotes`) from `SENT`, so a dealer can see
+  the split of email vs. phone outreach rather than assuming everything went out by email. The
+  **Service Advisor** system role, which had no VHC permissions at all until now, was granted
+  view/edit access — the person the whole workflow revolves around previously couldn't open the module.
+- **Red and Amber work, itemised and totalled separately** — the technician/advisor inspection page
+  and the customer-facing report now group items into Red ("action required"), Amber ("advisory"),
+  and Green ("passed") sections, each Red/Amber group showing its own subtotal of identified work —
+  answering "how much is the safety-critical stuff vs. the advisory stuff" at a glance instead of
+  reading down a flat list.
+- **Defer or delete identified work** — a customer (or the advisor, logging their verbal decision
+  from a phone call via the new authenticated `PATCH /vhc/items/:id/advisor-respond`) can now
+  **defer** an item instead of only approving or declining it — `VhcItem.approved: Boolean?` becomes
+  `response: VhcItemResponseStatus` (PENDING/APPROVED/DECLINED/DEFERRED), so "not now, maybe next
+  service" is recorded distinctly from "no." A technician or advisor can also **delete** an item
+  logged in error, but only while it's still `PENDING` — once a real decision has been recorded
+  (especially an approval, which has already spawned a follow-up job card) it can't vanish from the
+  audit trail.
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks

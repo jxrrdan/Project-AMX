@@ -1520,29 +1520,52 @@ model WorkflowEnrollment {
 /// DRAFT: technician still adding items. COMPLETE: technician has signed off (see VhcService.completeInspection) —
 /// a report can only be sent to the customer once here. SENT: emailed, awaiting customer responses.
 /// CLOSED: every item has been responded to (approved or declined).
+/// DRAFT: technician still adding items. RECORDED: technician has finished recording/videoing and
+/// signed off — gates the report from being sent, and triggers a notification to the job card's
+/// assigned service advisor to review, price up, and action it (see VhcService.recordInspection).
+/// SENT: advisor emailed the report to the customer. CONTACTED: advisor rang the customer instead
+/// (see VhcService.logPhoneContact) — a distinct outcome from SENT so a dealer can see the split of
+/// email vs phone outreach. CLOSED: every item has been resolved (approved/declined/deferred).
 enum VhcInspectionStatus {
   DRAFT
-  COMPLETE
+  RECORDED
   SENT
+  CONTACTED
   CLOSED
 }
 
+enum VhcContactMethod {
+  EMAIL
+  PHONE
+}
+
 model VhcInspection {
-  id            String              @id @default(uuid())
-  dealerId      String
-  dealer        Dealer              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
-  jobCardId     String
-  jobCard       JobCard             @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
-  technicianId  String
-  vehicleReg    String
-  mileage       Int?
-  status        VhcInspectionStatus @default(DRAFT)
+  id                       String              @id @default(uuid())
+  dealerId                 String
+  dealer                   Dealer              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  jobCardId                String
+  jobCard                  JobCard             @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  technicianId             String
+  vehicleReg               String
+  mileage                  Int?
+  status                   VhcInspectionStatus @default(DRAFT)
   /// Technician sign-off — distinct from item creation, gates whether the report can be sent (§9.1 gap fix).
-  completedAt   DateTime?
-  completedById String?
-  reportUrl     String?
-  sentAt        DateTime?
-  createdAt     DateTime            @default(now())
+  recordedAt               DateTime?
+  recordedById             String?
+  /// A link to the recording/video the technician made while carrying out the health check —
+  /// what the service advisor reviews before pricing and contacting the customer.
+  videoUrl                 String?
+  /// Set when the assigned service advisor was notified that this inspection is ready for their
+  /// review (see VhcService.recordInspection) — null if no advisor was assigned to the job card,
+  /// so the UI can flag "nobody was notified" rather than implying silently that someone was.
+  notifiedServiceAdvisorAt DateTime?
+  reportUrl                String?
+  sentAt                   DateTime?
+  /// Set when the advisor rang the customer directly instead of (or as well as) emailing the report.
+  contactedAt              DateTime?
+  contactMethod            VhcContactMethod?
+  contactNotes             String?
+  createdAt                DateTime            @default(now())
 
   items VhcItem[]
 
@@ -1555,10 +1578,20 @@ enum VhcRating {
   RED
 }
 
+/// PENDING: awaiting a decision. APPROVED: customer wants the work done — spawns a follow-up
+/// JobCard (see VhcService.respondToItem). DECLINED: customer doesn't want it. DEFERRED: neither —
+/// held over for a future visit rather than declined outright, without spawning any job card.
+enum VhcItemResponseStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  DEFERRED
+}
+
 model VhcItem {
-  id                     String        @id @default(uuid())
+  id                     String                @id @default(uuid())
   inspectionId           String
-  inspection             VhcInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  inspection             VhcInspection         @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
   category               String
   label                  String
   rating                 VhcRating
@@ -1568,14 +1601,14 @@ model VhcItem {
   /// Manual fallback parts estimate — only used while no real Part is linked via `parts` below.
   /// Once a part is linked, the quote is computed from its actual costPrice instead (see
   /// VhcService.recomputeQuote), which is more accurate than a typed-in guess.
-  estimatedPartsCost     Decimal?      @db.Decimal(10, 2)
+  estimatedPartsCost     Decimal?              @db.Decimal(10, 2)
   /// Auto-quote (§ VHC auto-quote), recomputed by VhcService whenever labour minutes or linked
   /// parts change — looked up from the dealer's own labourRatePerHour and each Part's costPrice,
   /// rather than the technician typing in a guessed price.
-  quotedLabourCost       Decimal?      @db.Decimal(10, 2)
-  quotedPartsCost        Decimal?      @db.Decimal(10, 2)
-  quotedTotal            Decimal?      @db.Decimal(10, 2)
-  approved               Boolean?
+  quotedLabourCost       Decimal?              @db.Decimal(10, 2)
+  quotedPartsCost        Decimal?              @db.Decimal(10, 2)
+  quotedTotal            Decimal?              @db.Decimal(10, 2)
+  response               VhcItemResponseStatus @default(PENDING)
   respondedAt            DateTime?
 
   parts VhcItemPart[]

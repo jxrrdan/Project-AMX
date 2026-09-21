@@ -76,6 +76,9 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<
       PermissionAction.EDIT,
     ]),
     ...grant([ModuleKey.PARTS], READ_ONLY),
+    // The advisor reviews a recorded VHC, prices up parts/labour, and sends/logs contact with the
+    // customer (§ VHC advisor workflow) — without this the role had no access to the module at all.
+    ...grant([ModuleKey.VHC], [PermissionAction.VIEW, PermissionAction.EDIT]),
   ],
   [SystemRole.TECHNICIAN]: [
     ...grant([ModuleKey.WORKSHOP], [PermissionAction.VIEW, PermissionAction.EDIT]),

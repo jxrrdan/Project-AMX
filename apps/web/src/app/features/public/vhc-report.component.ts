@@ -5,7 +5,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatButtonModule } from '@angular/material/button';
-import { VhcRating } from '@project-amx/shared';
+import { VHC_ITEM_RESPONSE_LABELS, VhcItemResponseStatus, VhcRating } from '@project-amx/shared';
 import { environment } from '../../../environments/environment';
 
 interface VhcItem {
@@ -20,7 +20,7 @@ interface VhcItem {
   quotedLabourCost: number | null;
   quotedPartsCost: number | null;
   quotedTotal: number | null;
-  approved: boolean | null;
+  response: VhcItemResponseStatus;
 }
 
 interface VhcInspectionPublic {
@@ -33,7 +33,7 @@ interface VhcInspectionPublic {
 /**
  * The customer-facing VHC report (Feature Spec §9.2-9.3) — "delivered via email link ... no
  * login required". A customer clicks the link from their health-check email and lands here to
- * approve or decline each flagged item; approved items are added as job lines automatically.
+ * approve, decline, or defer each flagged item; approved items are added as job lines automatically.
  */
 @Component({
   selector: 'app-vhc-report',
@@ -44,6 +44,17 @@ interface VhcInspectionPublic {
         @if (inspection(); as i) {
           <h1>Your Vehicle Health Check</h1>
           <p class="subtitle">{{ i.vehicleReg }} · {{ i.mileage }} miles</p>
+
+          @if (redItems(i).length || amberItems(i).length) {
+            <div class="summary">
+              @if (redItems(i).length) {
+                <p>{{ redItems(i).length }} item(s) need attention now — {{ ratingTotal(redItems(i)) | currency: 'GBP' }}</p>
+              }
+              @if (amberItems(i).length) {
+                <p>{{ amberItems(i).length }} advisory item(s) — {{ ratingTotal(amberItems(i)) | currency: 'GBP' }}</p>
+              }
+            </div>
+          }
 
           @for (item of i.items; track item.id) {
             <mat-card [class]="'item-card rating-' + item.rating.toLowerCase()">
@@ -65,13 +76,14 @@ interface VhcInspectionPublic {
                     <b>{{ item.quotedTotal | currency: 'GBP' }}</b>
                   </p>
                 }
-                @if (item.approved === null) {
+                @if (item.response === 'PENDING') {
                   <div class="actions">
-                    <button mat-flat-button color="primary" (click)="respond(item, true)">Approve</button>
-                    <button mat-stroked-button (click)="respond(item, false)">Decline</button>
+                    <button mat-flat-button color="primary" (click)="respond(item, Response.APPROVED)">Approve</button>
+                    <button mat-stroked-button (click)="respond(item, Response.DECLINED)">Decline</button>
+                    <button mat-button (click)="respond(item, Response.DEFERRED)">Not now</button>
                   </div>
                 } @else {
-                  <p class="responded">{{ item.approved ? 'You approved this item' : 'You declined this item' }}</p>
+                  <p class="responded">{{ responseLabels[item.response] }}</p>
                 }
               }
             </mat-card>
@@ -98,6 +110,17 @@ interface VhcInspectionPublic {
       .subtitle {
         color: rgba(0, 0, 0, 0.6);
         margin-top: -8px;
+      }
+      .summary {
+        background: #fff;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .summary p {
+        margin: 4px 0;
       }
       mat-card {
         padding: 16px;
@@ -151,6 +174,8 @@ interface VhcInspectionPublic {
 export class VhcReportComponent implements OnInit {
   readonly inspection = signal<VhcInspectionPublic | null>(null);
   readonly notFound = signal(false);
+  readonly responseLabels = VHC_ITEM_RESPONSE_LABELS;
+  readonly Response = VhcItemResponseStatus;
 
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
@@ -163,9 +188,21 @@ export class VhcReportComponent implements OnInit {
     });
   }
 
-  respond(item: VhcItem, approved: boolean): void {
-    this.http.patch(`${environment.apiUrl}/vhc/items/${item.id}/respond`, { approved }).subscribe(() => {
-      item.approved = approved;
+  redItems(i: VhcInspectionPublic): VhcItem[] {
+    return i.items.filter((item) => item.rating === VhcRating.RED);
+  }
+
+  amberItems(i: VhcInspectionPublic): VhcItem[] {
+    return i.items.filter((item) => item.rating === VhcRating.AMBER);
+  }
+
+  ratingTotal(items: VhcItem[]): number {
+    return items.reduce((sum, item) => sum + (item.quotedTotal ?? 0), 0);
+  }
+
+  respond(item: VhcItem, response: VhcItemResponseStatus): void {
+    this.http.patch(`${environment.apiUrl}/vhc/items/${item.id}/respond`, { response }).subscribe(() => {
+      item.response = response;
     });
   }
 }

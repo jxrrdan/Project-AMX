@@ -1,4 +1,4 @@
-import { CurrencyPipe } from '@angular/common';
+import { CurrencyPipe, DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Component, OnInit, inject, signal } from '@angular/core';
@@ -11,7 +11,15 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { VHC_INSPECTION_STATUS_LABELS, VhcInspectionStatus, VhcRating } from '@project-amx/shared';
+import {
+  VHC_CONTACT_METHOD_LABELS,
+  VHC_INSPECTION_STATUS_LABELS,
+  VHC_ITEM_RESPONSE_LABELS,
+  VhcContactMethod,
+  VhcInspectionStatus,
+  VhcItemResponseStatus,
+  VhcRating,
+} from '@project-amx/shared';
 import { environment } from '../../../environments/environment';
 
 interface LinkedPart {
@@ -33,7 +41,7 @@ interface VhcItem {
   quotedPartsCost: number | null;
   quotedTotal: number | null;
   parts: LinkedPart[];
-  approved: boolean | null;
+  response: VhcItemResponseStatus;
 }
 
 interface PartOption {
@@ -48,15 +56,26 @@ interface InspectionDetail {
   vehicleReg: string;
   mileage: number | null;
   status: VhcInspectionStatus;
-  completedAt: string | null;
+  recordedAt: string | null;
+  videoUrl: string | null;
+  notifiedServiceAdvisorAt: string | null;
   sentAt: string | null;
+  contactedAt: string | null;
+  contactMethod: VhcContactMethod | null;
+  contactNotes: string | null;
   items: VhcItem[];
 }
 
+/** Technician/advisor-facing VHC workflow: technician records items + video, which notifies the
+ * job card's assigned service advisor; the advisor prices up parts/labour (already surfaced as an
+ * auto-quote per item) and either emails the report or logs a phone call; either the customer (on
+ * the public report) or the advisor (on the customer's behalf over the phone) can then approve,
+ * decline, or defer each Amber/Red item. */
 @Component({
   selector: 'app-vhc-inspection-detail',
   imports: [
     CurrencyPipe,
+    DatePipe,
     RouterLink,
     FormsModule,
     MatCardModule,
@@ -72,7 +91,11 @@ interface InspectionDetail {
       <div class="header">
         <div>
           <h1>VHC — {{ i.vehicleReg }} <mat-chip>{{ statusLabels[i.status] }}</mat-chip></h1>
-          <p class="meta">{{ i.mileage }} miles @if (i.sentAt) {<span> · Report sent</span>}</p>
+          <p class="meta">
+            {{ i.mileage }} miles
+            @if (i.sentAt) {<span> · Emailed {{ i.sentAt | date: 'dd MMM HH:mm' }}</span>}
+            @if (i.contactedAt) {<span> · Phoned {{ i.contactedAt | date: 'dd MMM HH:mm' }}</span>}
+          </p>
         </div>
         <a mat-stroked-button routerLink="/vhc">
           <mat-icon>arrow_back</mat-icon>
@@ -126,75 +149,114 @@ interface InspectionDetail {
       </mat-card>
 
       <mat-card class="send-card">
-        <h3>Technician sign-off</h3>
-        @if (i.completedAt) {
-          <p class="hint">Signed off — ready to send.</p>
+        <h3>Record inspection</h3>
+        @if (i.recordedAt) {
+          <p class="hint">Recorded {{ i.recordedAt | date: 'dd MMM HH:mm' }}.</p>
+          @if (i.videoUrl) {
+            <p class="hint">Video: <a [href]="i.videoUrl" target="_blank" rel="noopener">{{ i.videoUrl }}</a></p>
+          }
+          @if (i.notifiedServiceAdvisorAt) {
+            <p class="hint advisor-ok">Service advisor notified {{ i.notifiedServiceAdvisorAt | date: 'dd MMM HH:mm' }}.</p>
+          } @else {
+            <p class="hint advisor-warn">No service advisor assigned to this job — nobody was notified. Assign one on the job card.</p>
+          }
         } @else {
-          <p class="hint">Sign off once every item has been added — required before the report can be sent.</p>
-          <button mat-stroked-button [disabled]="!i.items.length" (click)="completeInspection()">Sign off inspection</button>
+          <p class="hint">Mark as recorded once the video and every item has been added — this notifies the assigned service advisor and is required before the report can be sent.</p>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Video link (optional)</mat-label>
+            <input matInput [(ngModel)]="videoUrl" placeholder="https://..." />
+          </mat-form-field>
+          <button mat-stroked-button [disabled]="!i.items.length" (click)="recordInspection()">Mark as recorded</button>
         }
 
-        <h3>Send report to customer</h3>
+        <h3>Contact the customer</h3>
         <div class="row">
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>Customer email</mat-label>
             <input matInput type="email" [(ngModel)]="customerEmail" />
           </mat-form-field>
-          <button mat-flat-button color="primary" [disabled]="!customerEmail || !i.completedAt" (click)="sendReport()">Send</button>
+          <button mat-flat-button color="primary" [disabled]="!customerEmail || !i.recordedAt" (click)="sendReport()">Email report</button>
         </div>
+        <div class="row">
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Or log a phone call instead</mat-label>
+            <textarea matInput rows="2" [(ngModel)]="callNotes" placeholder="What was discussed/agreed on the call"></textarea>
+          </mat-form-field>
+          <button mat-stroked-button [disabled]="!i.recordedAt" (click)="logPhoneContact()">Log call</button>
+        </div>
+        @if (i.contactMethod) {
+          <p class="hint">Last contacted by {{ contactMethodLabels[i.contactMethod] }}. @if (i.contactNotes) { — "{{ i.contactNotes }}" }</p>
+        }
         <p class="hint">
           Public report link: <button mat-button (click)="copyLink()">{{ reportUrl() }}</button>
         </p>
       </mat-card>
 
-      <div class="items-grid">
-        @for (item of i.items; track item.id) {
-          <mat-card [class]="'item-card rating-' + item.rating.toLowerCase()">
-            <div class="item-header">
-              <span class="category">{{ item.category }}</span>
-              <mat-chip>{{ item.rating }}</mat-chip>
-            </div>
-            <div class="label">{{ item.label }}</div>
-            @if (item.description) {
-              <p>{{ item.description }}</p>
+      @for (rating of ratingOrder; track rating) {
+        @if (itemsByRating(i, rating).length) {
+          <div class="rating-group-header">
+            <h3>{{ ratingHeading[rating] }}</h3>
+            @if (rating !== 'GREEN') {
+              <span class="subtotal">Identified work: {{ ratingSubtotal(i, rating) | currency: 'GBP' }}</span>
             }
-            @if (item.quotedTotal !== null) {
-              <p class="estimate">
-                Quote: {{ item.quotedLabourCost | currency: 'GBP' }} labour + {{ item.quotedPartsCost | currency: 'GBP' }} parts =
-                <b>{{ item.quotedTotal | currency: 'GBP' }}</b>
-              </p>
+          </div>
+          <div class="items-grid">
+            @for (item of itemsByRating(i, rating); track item.id) {
+              <mat-card [class]="'item-card rating-' + item.rating.toLowerCase()">
+                <div class="item-header">
+                  <span class="category">{{ item.category }}</span>
+                  <mat-chip>{{ item.rating }}</mat-chip>
+                </div>
+                <div class="label">{{ item.label }}</div>
+                @if (item.description) {
+                  <p>{{ item.description }}</p>
+                }
+                @if (item.quotedTotal !== null) {
+                  <p class="estimate">
+                    Quote: {{ item.quotedLabourCost | currency: 'GBP' }} labour + {{ item.quotedPartsCost | currency: 'GBP' }} parts =
+                    <b>{{ item.quotedTotal | currency: 'GBP' }}</b>
+                  </p>
+                }
+                @for (link of item.parts; track link.id) {
+                  <div class="line-item">
+                    <span>{{ link.part.partNumber }} — {{ link.part.description }} x{{ link.quantity }}</span>
+                    <button mat-icon-button (click)="removeItemPart(link.id)"><mat-icon>close</mat-icon></button>
+                  </div>
+                }
+                <div class="row part-picker">
+                  <mat-form-field appearance="outline" class="full-width">
+                    <mat-label>Link a real part (uses its actual price in the quote)</mat-label>
+                    <mat-select [(ngModel)]="partFormFor(item.id).partId">
+                      @for (p of availableParts(); track p.id) {
+                        <mat-option [value]="p.id">{{ p.partNumber }} — {{ p.description }} ({{ p.costPrice | currency: 'GBP' }})</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="qty">
+                    <mat-label>Qty</mat-label>
+                    <input matInput type="number" [(ngModel)]="partFormFor(item.id).quantity" />
+                  </mat-form-field>
+                  <button mat-icon-button [disabled]="!partFormFor(item.id).partId" (click)="addItemPart(item.id)">
+                    <mat-icon>add</mat-icon>
+                  </button>
+                </div>
+                @if (item.response !== 'PENDING') {
+                  <mat-chip [class]="'response-' + item.response.toLowerCase()">{{ responseLabels[item.response] }}</mat-chip>
+                } @else {
+                  <div class="response-actions">
+                    <button mat-button (click)="respond(item.id, Response.APPROVED)">Approve</button>
+                    <button mat-button (click)="respond(item.id, Response.DECLINED)">Decline</button>
+                    <button mat-button (click)="respond(item.id, Response.DEFERRED)">Defer</button>
+                    <button mat-icon-button (click)="removeItem(item.id)" title="Delete — logged in error">
+                      <mat-icon>delete</mat-icon>
+                    </button>
+                  </div>
+                }
+              </mat-card>
             }
-            @for (link of item.parts; track link.id) {
-              <div class="line-item">
-                <span>{{ link.part.partNumber }} — {{ link.part.description }} x{{ link.quantity }}</span>
-                <button mat-icon-button (click)="removeItemPart(link.id)"><mat-icon>close</mat-icon></button>
-              </div>
-            }
-            <div class="row part-picker">
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Link a real part (uses its actual price in the quote)</mat-label>
-                <mat-select [(ngModel)]="partFormFor(item.id).partId">
-                  @for (p of availableParts(); track p.id) {
-                    <mat-option [value]="p.id">{{ p.partNumber }} — {{ p.description }} ({{ p.costPrice | currency: 'GBP' }})</mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
-              <mat-form-field appearance="outline" class="qty">
-                <mat-label>Qty</mat-label>
-                <input matInput type="number" [(ngModel)]="partFormFor(item.id).quantity" />
-              </mat-form-field>
-              <button mat-icon-button [disabled]="!partFormFor(item.id).partId" (click)="addItemPart(item.id)">
-                <mat-icon>add</mat-icon>
-              </button>
-            </div>
-            @if (item.approved === true) {
-              <mat-chip>Approved by customer</mat-chip>
-            } @else if (item.approved === false) {
-              <mat-chip>Declined by customer</mat-chip>
-            }
-          </mat-card>
+          </div>
         }
-      </div>
+      }
     }
   `,
   styles: [
@@ -230,10 +292,28 @@ interface InspectionDetail {
         color: rgba(0, 0, 0, 0.5);
         word-break: break-all;
       }
+      .advisor-ok {
+        color: #2e7d32;
+      }
+      .advisor-warn {
+        color: #c62828;
+      }
+      .rating-group-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin: 8px 0;
+      }
+      .subtotal {
+        font-size: 13px;
+        font-weight: 600;
+        color: rgba(0, 0, 0, 0.7);
+      }
       .items-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
         gap: 16px;
+        margin-bottom: 16px;
       }
       .item-card {
         border-left: 4px solid #ccc;
@@ -278,6 +358,21 @@ interface InspectionDetail {
       .qty {
         width: 70px;
       }
+      .response-actions {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        margin-top: 4px;
+      }
+      .response-approved {
+        background: #e8f5e9;
+      }
+      .response-declined {
+        background: #fbe9e7;
+      }
+      .response-deferred {
+        background: #fff8e1;
+      }
     `,
   ],
 })
@@ -285,7 +380,18 @@ export class VhcInspectionDetailComponent implements OnInit {
   readonly inspection = signal<InspectionDetail | null>(null);
   readonly availableParts = signal<PartOption[]>([]);
   readonly statusLabels = VHC_INSPECTION_STATUS_LABELS;
+  readonly responseLabels = VHC_ITEM_RESPONSE_LABELS;
+  readonly Response = VhcItemResponseStatus;
+  readonly contactMethodLabels = VHC_CONTACT_METHOD_LABELS;
+  readonly ratingOrder: VhcRating[] = [VhcRating.RED, VhcRating.AMBER, VhcRating.GREEN];
+  readonly ratingHeading: Record<VhcRating, string> = {
+    [VhcRating.RED]: 'Red work — action required',
+    [VhcRating.AMBER]: 'Amber work — advisory',
+    [VhcRating.GREEN]: 'Passed',
+  };
   customerEmail = '';
+  videoUrl = '';
+  callNotes = '';
 
   private readonly partForms = new Map<string, { partId: string; quantity: number }>();
 
@@ -317,6 +423,14 @@ export class VhcInspectionDetailComponent implements OnInit {
       this.partForms.set(itemId, form);
     }
     return form;
+  }
+
+  itemsByRating(i: InspectionDetail, rating: VhcRating): VhcItem[] {
+    return i.items.filter((item) => item.rating === rating);
+  }
+
+  ratingSubtotal(i: InspectionDetail, rating: VhcRating): number {
+    return this.itemsByRating(i, rating).reduce((sum, item) => sum + (item.quotedTotal ?? 0), 0);
   }
 
   load(): void {
@@ -377,11 +491,13 @@ export class VhcInspectionDetailComponent implements OnInit {
     });
   }
 
-  completeInspection(): void {
-    this.http.post(`${environment.apiUrl}/vhc/inspections/${this.inspectionId}/complete`, {}).subscribe({
-      next: () => this.load(),
-      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not sign off inspection', 'Dismiss', { duration: 4000 }),
-    });
+  recordInspection(): void {
+    this.http
+      .post(`${environment.apiUrl}/vhc/inspections/${this.inspectionId}/record`, { videoUrl: this.videoUrl || undefined })
+      .subscribe({
+        next: () => this.load(),
+        error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not record inspection', 'Dismiss', { duration: 4000 }),
+      });
   }
 
   sendReport(): void {
@@ -391,6 +507,31 @@ export class VhcInspectionDetailComponent implements OnInit {
         this.load();
       },
       error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not send report', 'Dismiss', { duration: 4000 }),
+    });
+  }
+
+  logPhoneContact(): void {
+    this.http.post(`${environment.apiUrl}/vhc/inspections/${this.inspectionId}/log-call`, { notes: this.callNotes || undefined }).subscribe({
+      next: () => {
+        this.callNotes = '';
+        this.snackBar.open('Phone call logged', 'Dismiss', { duration: 3000 });
+        this.load();
+      },
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not log call', 'Dismiss', { duration: 4000 }),
+    });
+  }
+
+  respond(itemId: string, response: VhcItemResponseStatus): void {
+    this.http.patch(`${environment.apiUrl}/vhc/items/${itemId}/advisor-respond`, { response }).subscribe({
+      next: () => this.load(),
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not save response', 'Dismiss', { duration: 4000 }),
+    });
+  }
+
+  removeItem(itemId: string): void {
+    this.http.delete(`${environment.apiUrl}/vhc/items/${itemId}`).subscribe({
+      next: () => this.load(),
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not delete item', 'Dismiss', { duration: 4000 }),
     });
   }
 }

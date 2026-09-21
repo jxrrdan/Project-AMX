@@ -1,5 +1,5 @@
-import { VhcRating } from '@project-amx/shared';
-import { IsArray, IsBoolean, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { VhcItemResponseStatus, VhcRating } from '@project-amx/shared';
+import { IsArray, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateVhcInspectionDto {
   @IsString()
@@ -44,8 +44,22 @@ export class AddVhcItemDto {
 }
 
 export class RespondToItemDto {
-  @IsBoolean()
-  approved!: boolean;
+  @IsEnum(VhcItemResponseStatus)
+  response!: VhcItemResponseStatus;
+}
+
+/** Technician sign-off — marks the inspection as recorded/videoed and ready for the assigned
+ * service advisor to review (§ VHC advisor workflow). */
+export class RecordInspectionDto {
+  @IsOptional()
+  @IsString()
+  videoUrl?: string;
+}
+
+export class LogPhoneContactDto {
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }
 
 /** Links a VHC item to a real stocked part so the auto-quote (§ VHC auto-quote) uses its actual
