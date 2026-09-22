@@ -9,6 +9,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 import { environment } from '../../../environments/environment';
 
 interface PoLine {
@@ -19,16 +20,21 @@ interface PoLine {
   part: { partNumber: string; description: string };
 }
 
+interface Supplier {
+  id: string;
+  name: string;
+}
+
 interface PurchaseOrder {
   id: string;
-  supplier: string;
+  supplier: Supplier;
   status: string;
   lines: PoLine[];
 }
 
 @Component({
   selector: 'app-purchase-orders',
-  imports: [CurrencyPipe, RouterLink, FormsModule, MatCardModule, MatChipsModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule],
+  imports: [CurrencyPipe, RouterLink, FormsModule, MatCardModule, MatChipsModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
     <div class="header">
       <h1>Purchase Orders</h1>
@@ -43,16 +49,20 @@ interface PurchaseOrder {
       <div class="row">
         <mat-form-field appearance="outline">
           <mat-label>Supplier</mat-label>
-          <input matInput [(ngModel)]="supplier" placeholder="BMW Parts" />
+          <mat-select [(ngModel)]="supplierId">
+            @for (s of suppliers(); track s.id) {
+              <mat-option [value]="s.id">{{ s.name }}</mat-option>
+            }
+          </mat-select>
         </mat-form-field>
-        <button mat-flat-button color="primary" [disabled]="!supplier" (click)="generate()">Generate suggested PO</button>
+        <button mat-flat-button color="primary" [disabled]="!supplierId" (click)="generate()">Generate suggested PO</button>
       </div>
     </mat-card>
 
     @for (po of orders(); track po.id) {
       <mat-card class="po-card">
         <div class="po-header">
-          <span class="supplier">{{ po.supplier }}</span>
+          <span class="supplier">{{ po.supplier.name }}</span>
           <mat-chip>{{ po.status }}</mat-chip>
           @if (po.status === 'DRAFT') {
             <button mat-button (click)="send(po.id)">Send to supplier</button>
@@ -112,12 +122,14 @@ interface PurchaseOrder {
 })
 export class PurchaseOrdersComponent implements OnInit {
   readonly orders = signal<PurchaseOrder[]>([]);
-  supplier = '';
+  readonly suppliers = signal<Supplier[]>([]);
+  supplierId = '';
 
   private readonly http = inject(HttpClient);
 
   ngOnInit(): void {
     this.load();
+    this.http.get<Supplier[]>(`${environment.apiUrl}/suppliers`).subscribe((data) => this.suppliers.set(data));
   }
 
   load(): void {
@@ -125,8 +137,8 @@ export class PurchaseOrdersComponent implements OnInit {
   }
 
   generate(): void {
-    this.http.post(`${environment.apiUrl}/purchase-orders/suggested`, { supplier: this.supplier }).subscribe(() => {
-      this.supplier = '';
+    this.http.post(`${environment.apiUrl}/purchase-orders/suggested`, { supplierId: this.supplierId }).subscribe(() => {
+      this.supplierId = '';
       this.load();
     });
   }

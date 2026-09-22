@@ -54,7 +54,21 @@ const NAV_ENTRIES: NavEntry[] = [
   { path: 'used-cars', label: 'Used Cars', icon: 'car_repair', module: ModuleKey.USED_CARS },
   { path: 'crm', label: 'CRM', icon: 'contacts', module: ModuleKey.CRM },
   { path: 'listings', label: 'Stock Listings', icon: 'storefront', module: ModuleKey.LISTINGS },
-  { path: 'accounting', label: 'Accounting', icon: 'receipt_long', module: ModuleKey.ACCOUNTING },
+  {
+    label: 'Accounting',
+    icon: 'receipt_long',
+    children: [
+      { path: 'ledger', label: 'Nominal Ledger', icon: 'menu_book', module: ModuleKey.GENERAL_LEDGER },
+      { path: 'ledger/purchase', label: 'Purchase Ledger', icon: 'local_shipping', module: ModuleKey.GENERAL_LEDGER },
+      {
+        path: 'ledger/manufacturer-payments',
+        label: 'Manufacturer Payments',
+        icon: 'request_quote',
+        module: ModuleKey.GENERAL_LEDGER,
+      },
+      { path: 'accounting', label: 'Integrations & Sync', icon: 'sync', module: ModuleKey.ACCOUNTING },
+    ],
+  },
   { path: 'fi', label: 'Finance & Insurance', icon: 'account_balance', module: ModuleKey.FI },
   { path: 'ai', label: 'AI Assistant', icon: 'auto_awesome', module: ModuleKey.AI_INSIGHTS },
   { path: 'admin/users', label: 'Users & Roles', icon: 'admin_panel_settings', module: ModuleKey.ADMIN },

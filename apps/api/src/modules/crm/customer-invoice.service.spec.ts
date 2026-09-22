@@ -6,6 +6,7 @@ function makeDeps() {
     pdf: { renderAndStore: jest.fn().mockResolvedValue('https://files.local/customer-invoices/invoice-1.html') },
     documentSequences: { nextNumber: jest.fn().mockResolvedValue('CSI-2026-00001') },
     documentTemplates: { getDefaultBody: jest.fn().mockResolvedValue('<html></html>') },
+    ledger: { postSafely: jest.fn() },
   };
 }
 
@@ -16,7 +17,7 @@ describe('CustomerInvoiceService.create', () => {
   it('throws when the contact does not belong to this dealer', async () => {
     const deps = makeDeps();
     const prisma = { contact: { findFirst: jest.fn().mockResolvedValue(null) }, customerInvoice: { create: jest.fn() } };
-    const service = new CustomerInvoiceService(prisma as never, deps.pdf as never, deps.documentSequences as never, deps.documentTemplates as never);
+    const service = new CustomerInvoiceService(prisma as never, deps.pdf as never, deps.documentSequences as never, deps.documentTemplates as never, deps.ledger as never);
 
     await expect(service.create(dealerId, contactId, { description: 'Lost key charge', amount: 100 })).rejects.toThrow(
       NotFoundException,
@@ -32,7 +33,7 @@ describe('CustomerInvoiceService.create', () => {
       dealer: { findUnique: jest.fn().mockResolvedValue({ id: dealerId, name: 'Test Dealer' }) },
       customerInvoice: { create },
     };
-    const service = new CustomerInvoiceService(prisma as never, deps.pdf as never, deps.documentSequences as never, deps.documentTemplates as never);
+    const service = new CustomerInvoiceService(prisma as never, deps.pdf as never, deps.documentSequences as never, deps.documentTemplates as never, deps.ledger as never);
 
     const result = await service.create(dealerId, contactId, { description: 'Lost key charge', amount: 100 });
 
@@ -55,7 +56,7 @@ describe('CustomerInvoiceService.list', () => {
     const deps = makeDeps();
     const findMany = jest.fn().mockResolvedValue([]);
     const prisma = { customerInvoice: { findMany } };
-    const service = new CustomerInvoiceService(prisma as never, deps.pdf as never, deps.documentSequences as never, deps.documentTemplates as never);
+    const service = new CustomerInvoiceService(prisma as never, deps.pdf as never, deps.documentSequences as never, deps.documentTemplates as never, deps.ledger as never);
 
     await service.list('dealer-1', 'contact-1');
 

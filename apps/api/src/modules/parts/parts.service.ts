@@ -96,18 +96,26 @@ export class PartsService {
   // --- Purchase orders (§3.3) ---------------------------------------------
 
   listPurchaseOrders(dealerId: string) {
-    return this.prisma.purchaseOrder.findMany({ where: { dealerId }, include: { lines: { include: { part: true } } }, orderBy: { createdAt: 'desc' } });
+    return this.prisma.purchaseOrder.findMany({
+      where: { dealerId },
+      include: { supplier: true, lines: { include: { part: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /** Generates a suggested PO from every part currently at/below reorder level. */
   async generateSuggestedPurchaseOrder(dealerId: string, dto: CreatePurchaseOrderDto) {
+    const supplier = await this.prisma.supplier.findFirst({ where: { id: dto.supplierId, dealerId } });
+    if (!supplier) {
+      throw new NotFoundException('Supplier not found');
+    }
     const allParts = await this.prisma.part.findMany({ where: { dealerId } });
     const lowStock = allParts.filter((part) => part.quantityOnHand <= part.reorderLevel);
 
     return this.prisma.purchaseOrder.create({
       data: {
         dealerId,
-        supplier: dto.supplier,
+        supplierId: dto.supplierId,
         lines: {
           create: lowStock.map((part) => ({
             partId: part.id,

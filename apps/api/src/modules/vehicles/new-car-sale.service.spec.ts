@@ -8,12 +8,20 @@ function makeDeps() {
     documentSequences: { nextNumber: jest.fn().mockResolvedValue('NCS-2026-00001') },
     documentTemplates: { getDefaultBody: jest.fn().mockResolvedValue('<html></html>') },
     tradeIn: { intake: jest.fn().mockResolvedValue({ usedVehicle: { id: 'trade-in-vehicle' }, appraisal: { id: 'appraisal-1' } }) },
+    ledger: { postSafely: jest.fn() },
   };
 }
 
 function makeService(prisma: Record<string, unknown>, deps = makeDeps()) {
   return {
-    service: new NewCarSaleService(prisma as never, deps.pdf as never, deps.documentSequences as never, deps.documentTemplates as never, deps.tradeIn as never),
+    service: new NewCarSaleService(
+      prisma as never,
+      deps.pdf as never,
+      deps.documentSequences as never,
+      deps.documentTemplates as never,
+      deps.tradeIn as never,
+      deps.ledger as never,
+    ),
     deps,
   };
 }

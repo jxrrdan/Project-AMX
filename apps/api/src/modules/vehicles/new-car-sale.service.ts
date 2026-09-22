@@ -1,9 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { JournalSourceType } from '@prisma/client';
 import { DealSheetStatus, DocumentTemplateType, SaleModel } from '@project-amx/shared';
 import { PdfService } from '../../common/pdf/pdf.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { DocumentSequenceService } from '../dealers/document-sequence.service';
 import { DocumentTemplatesService } from '../document-templates/document-templates.service';
+import { CONTROL_ACCOUNT_CODES } from '../ledger/ledger.constants';
+import { LedgerService } from '../ledger/ledger.service';
 import { TradeInService } from '../used-cars/trade-in.service';
 import { CreateNewCarSaleDto, InvalidateNewCarSaleDto } from './dto/new-car-sale.dto';
 
@@ -42,6 +45,7 @@ export class NewCarSaleService {
     private readonly documentSequences: DocumentSequenceService,
     private readonly documentTemplates: DocumentTemplatesService,
     private readonly tradeInService: TradeInService,
+    private readonly ledgerService: LedgerService,
   ) {}
 
   async create(dealerId: string, vehicleId: string, dto: CreateNewCarSaleDto) {
@@ -95,6 +99,22 @@ export class NewCarSaleService {
 
     if (dto.tradeIn) {
       await this.tradeInService.intake(dealerId, dto.tradeIn, { newCarSaleId: sale.id });
+    }
+
+    // RETAIL: the dealer is the contracting seller, so the full price is its own vehicle income.
+    // AGENCY: the OEM is the contracting seller — only the dealer's commission is its income.
+    const dealerIncome = dto.saleModel === SaleModel.AGENCY ? dto.agencyCommission ?? 0 : dto.sellingPrice;
+    if (dealerIncome > 0) {
+      await this.ledgerService.postSafely(dealerId, {
+        reference: sale.id,
+        description: `New car sale — ${vehicle.vin}${dto.saleModel === SaleModel.AGENCY ? ' (agency commission)' : ''}`,
+        sourceType: JournalSourceType.VEHICLE_SALE,
+        sourceId: sale.id,
+        lines: [
+          { accountCode: CONTROL_ACCOUNT_CODES.DEBTORS_CONTROL, debit: dealerIncome },
+          { accountCode: CONTROL_ACCOUNT_CODES.VEHICLE_SALES, credit: dealerIncome },
+        ],
+      });
     }
 
     return sale;

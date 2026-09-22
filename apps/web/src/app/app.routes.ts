@@ -107,6 +107,19 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/accounting/accounting-list.component').then((m) => m.AccountingListComponent),
       },
       {
+        path: 'ledger',
+        loadComponent: () => import('./features/ledger/ledger-overview.component').then((m) => m.LedgerOverviewComponent),
+      },
+      {
+        path: 'ledger/purchase',
+        loadComponent: () => import('./features/ledger/purchase-ledger.component').then((m) => m.PurchaseLedgerComponent),
+      },
+      {
+        path: 'ledger/manufacturer-payments',
+        loadComponent: () =>
+          import('./features/ledger/manufacturer-payments.component').then((m) => m.ManufacturerPaymentsComponent),
+      },
+      {
         path: 'courtesy',
         loadComponent: () => import('./features/courtesy/courtesy-list.component').then((m) => m.CourtesyListComponent),
       },

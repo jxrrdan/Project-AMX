@@ -1,9 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { DocumentTemplateType, JobBillingType } from '@project-amx/shared';
+import { JournalSourceType } from '@prisma/client';
+import { DocumentTemplateType, JobBillingType, VAT_RATES, VatCode } from '@project-amx/shared';
 import { PdfService } from '../../common/pdf/pdf.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { DocumentSequenceService } from '../dealers/document-sequence.service';
 import { DocumentTemplatesService } from '../document-templates/document-templates.service';
+import { CONTROL_ACCOUNT_CODES } from '../ledger/ledger.constants';
+import { LedgerService } from '../ledger/ledger.service';
 
 /** Used whenever a dealer hasn't authored their own AFTERSALES_INVOICE document template. */
 const DEFAULT_AFTERSALES_INVOICE_TEMPLATE = `
@@ -33,7 +36,8 @@ const DEFAULT_AFTERSALES_INVOICE_TEMPLATE = `
 {{#if dealerInvoiceFooterNote}}<p style="font-size:11px;color:#666">{{dealerInvoiceFooterNote}}</p>{{/if}}
 </body></html>`;
 
-const VAT_RATE = 0.2;
+/** Single source of truth for VAT rates — see VAT_RATES in @project-amx/shared. */
+const VAT_RATE = VAT_RATES[VatCode.STANDARD];
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -53,6 +57,7 @@ export class AftersalesInvoiceService {
     private readonly pdf: PdfService,
     private readonly documentSequences: DocumentSequenceService,
     private readonly documentTemplates: DocumentTemplatesService,
+    private readonly ledgerService: LedgerService,
   ) {}
 
   async generate(dealerId: string, jobCardId: string) {
@@ -132,9 +137,24 @@ export class AftersalesInvoiceService {
       dealerInvoiceFooterNote: dealer?.invoiceFooterNote,
     });
 
-    return this.prisma.aftersalesInvoice.create({
+    const invoice = await this.prisma.aftersalesInvoice.create({
       data: { dealerId, jobCardId, invoiceNumber, isInternal, recipient, labourTotal, partsTotal, vatAmount, totalAmount, pdfUrl },
     });
+
+    await this.ledgerService.postSafely(dealerId, {
+      reference: invoiceNumber,
+      description: `Aftersales invoice ${invoiceNumber} — ${recipient}`,
+      sourceType: JournalSourceType.AFTERSALES_INVOICE,
+      sourceId: invoice.id,
+      lines: [
+        { accountCode: CONTROL_ACCOUNT_CODES.DEBTORS_CONTROL, debit: totalAmount },
+        ...(labourTotal > 0 ? [{ accountCode: CONTROL_ACCOUNT_CODES.AFTERSALES_LABOUR, credit: labourTotal }] : []),
+        ...(partsTotal > 0 ? [{ accountCode: CONTROL_ACCOUNT_CODES.AFTERSALES_PARTS, credit: partsTotal }] : []),
+        ...(vatAmount > 0 ? [{ accountCode: CONTROL_ACCOUNT_CODES.VAT_OUTPUT, credit: vatAmount, vatAmount }] : []),
+      ],
+    });
+
+    return invoice;
   }
 
   async get(dealerId: string, jobCardId: string) {

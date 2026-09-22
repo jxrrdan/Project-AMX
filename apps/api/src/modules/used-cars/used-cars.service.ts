@@ -1,10 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { JournalSourceType } from '@prisma/client';
 import { ActionTriggerPoint, DealSheetStatus, DocumentTemplateType, UsedVehicleStatus } from '@project-amx/shared';
 import { PdfService } from '../../common/pdf/pdf.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ActionTriggersService } from '../action-triggers/action-triggers.service';
 import { DocumentSequenceService } from '../dealers/document-sequence.service';
 import { DocumentTemplatesService } from '../document-templates/document-templates.service';
+import { CONTROL_ACCOUNT_CODES } from '../ledger/ledger.constants';
+import { LedgerService } from '../ledger/ledger.service';
 import { TradeInService } from './trade-in.service';
 import {
   AddPhotosDto,
@@ -50,6 +53,7 @@ export class UsedCarsService {
     private readonly documentTemplates: DocumentTemplatesService,
     private readonly actionTriggers: ActionTriggersService,
     private readonly tradeInService: TradeInService,
+    private readonly ledgerService: LedgerService,
   ) {}
 
   // --- Stock (§4.1) --------------------------------------------------------
@@ -111,10 +115,34 @@ export class UsedCarsService {
     // signed sale — record that transition on the deal sheet itself so its status is meaningful,
     // not just the vehicle's.
     if (dto.status === UsedVehicleStatus.SOLD) {
+      const signedDealSheet = await this.prisma.dealSheet.findFirst({
+        where: { usedVehicleId: id, status: DealSheetStatus.ACTIVE },
+      });
       await this.prisma.dealSheet.updateMany({
         where: { usedVehicleId: id, status: DealSheetStatus.ACTIVE },
         data: { status: DealSheetStatus.SIGNED },
       });
+
+      if (signedDealSheet) {
+        const sellingPrice = Number(signedDealSheet.sellingPrice);
+        const costPrice = Number(vehicle.purchasePrice ?? 0);
+        await this.ledgerService.postSafely(dealerId, {
+          reference: signedDealSheet.id,
+          description: `Used car sale — ${vehicle.reg}`,
+          sourceType: JournalSourceType.VEHICLE_SALE,
+          sourceId: signedDealSheet.id,
+          lines: [
+            { accountCode: CONTROL_ACCOUNT_CODES.DEBTORS_CONTROL, debit: sellingPrice },
+            { accountCode: CONTROL_ACCOUNT_CODES.VEHICLE_SALES, credit: sellingPrice },
+            ...(costPrice > 0
+              ? [
+                  { accountCode: CONTROL_ACCOUNT_CODES.COST_OF_VEHICLE_SALES, debit: costPrice },
+                  { accountCode: CONTROL_ACCOUNT_CODES.VEHICLE_STOCK, credit: costPrice },
+                ]
+              : []),
+          ],
+        });
+      }
     }
     return updated;
   }

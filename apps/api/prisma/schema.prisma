@@ -126,49 +126,56 @@ model Dealer {
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
-  users                   User[]
-  roles                   Role[]
-  moduleLicenses          ModuleLicense[]
-  vehicles                Vehicle[]
-  pdiJobs                 PdiJob[]
-  handoverAppointments    HandoverAppointment[]
-  bays                    Bay[]
-  jobCards                JobCard[]
-  capacityBlocks          CapacityBlock[]
-  serviceBookings         ServiceBooking[]
-  parts                   Part[]
-  stockMovements          StockMovement[]
-  purchaseOrders          PurchaseOrder[]
-  usedVehicles            UsedVehicle[]
-  warrantyClaims          WarrantyClaim[]
-  contacts                Contact[]
-  leads                   Lead[]
-  emailTemplates          EmailTemplate[]
-  documentTemplates       DocumentTemplate[]
-  workflows               Workflow[]
-  vhcInspections          VhcInspection[]
-  listingPlatforms        ListingPlatform[]
-  accountingIntegrations  AccountingIntegration[]
-  courtesyVehicles        CourtesyVehicle[]
-  financeProducts         FinanceProduct[]
-  auditLogs               AuditLog[]
-  notifications           Notification[]
-  aiConversations         AiConversation[]
-  documentSequences       DocumentSequence[]
-  invitations             Invitation[]
-  integrationConnectors   IntegrationConnector[]
-  customFieldDefinitions  CustomFieldDefinition[]
-  uiScreenDefinitions     UiScreenDefinition[]
-  batchJobRuns            BatchJobRun[]
-  actionTriggers          ActionTrigger[]
-  jobCardPartRequirements JobCardPartRequirement[]
-  aftersalesInvoices      AftersalesInvoice[]
-  customerInvoices        CustomerInvoice[]
-  vehicleModelMetadata    VehicleModelMetadata[]
-  newCarSales             NewCarSale[]
-  vehicleConditionReports VehicleConditionReport[]
-  technicianSkills        TechnicianSkill[]
-  technicianAvailability  TechnicianAvailability[]
+  users                      User[]
+  roles                      Role[]
+  moduleLicenses             ModuleLicense[]
+  vehicles                   Vehicle[]
+  pdiJobs                    PdiJob[]
+  handoverAppointments       HandoverAppointment[]
+  bays                       Bay[]
+  jobCards                   JobCard[]
+  capacityBlocks             CapacityBlock[]
+  serviceBookings            ServiceBooking[]
+  parts                      Part[]
+  stockMovements             StockMovement[]
+  purchaseOrders             PurchaseOrder[]
+  usedVehicles               UsedVehicle[]
+  warrantyClaims             WarrantyClaim[]
+  contacts                   Contact[]
+  leads                      Lead[]
+  emailTemplates             EmailTemplate[]
+  documentTemplates          DocumentTemplate[]
+  workflows                  Workflow[]
+  vhcInspections             VhcInspection[]
+  listingPlatforms           ListingPlatform[]
+  accountingIntegrations     AccountingIntegration[]
+  courtesyVehicles           CourtesyVehicle[]
+  financeProducts            FinanceProduct[]
+  auditLogs                  AuditLog[]
+  notifications              Notification[]
+  aiConversations            AiConversation[]
+  documentSequences          DocumentSequence[]
+  invitations                Invitation[]
+  integrationConnectors      IntegrationConnector[]
+  customFieldDefinitions     CustomFieldDefinition[]
+  uiScreenDefinitions        UiScreenDefinition[]
+  batchJobRuns               BatchJobRun[]
+  actionTriggers             ActionTrigger[]
+  jobCardPartRequirements    JobCardPartRequirement[]
+  aftersalesInvoices         AftersalesInvoice[]
+  customerInvoices           CustomerInvoice[]
+  vehicleModelMetadata       VehicleModelMetadata[]
+  newCarSales                NewCarSale[]
+  vehicleConditionReports    VehicleConditionReport[]
+  technicianSkills           TechnicianSkill[]
+  technicianAvailability     TechnicianAvailability[]
+  nominalAccounts            NominalAccount[]
+  journalEntries             JournalEntry[]
+  suppliers                  Supplier[]
+  goodsReceiptNotes          GoodsReceiptNote[]
+  supplierInvoices           SupplierInvoice[]
+  manufacturerPaymentBatches ManufacturerPaymentBatch[]
+  vatReturns                 VatReturn[]
 
   @@map("dealers")
 }
@@ -938,15 +945,18 @@ enum PurchaseOrderStatus {
 }
 
 model PurchaseOrder {
-  id        String              @id @default(uuid())
-  dealerId  String
-  dealer    Dealer              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
-  supplier  String
-  status    PurchaseOrderStatus @default(DRAFT)
-  sentAt    DateTime?
-  createdAt DateTime            @default(now())
+  id         String              @id @default(uuid())
+  dealerId   String
+  dealer     Dealer              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  supplierId String
+  supplier   Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  status     PurchaseOrderStatus @default(DRAFT)
+  sentAt     DateTime?
+  createdAt  DateTime            @default(now())
 
-  lines PurchaseOrderLine[]
+  lines             PurchaseOrderLine[]
+  goodsReceiptNotes GoodsReceiptNote[]
+  supplierInvoices  SupplierInvoice[]
 
   @@map("purchase_orders")
 }
@@ -960,6 +970,8 @@ model PurchaseOrderLine {
   quantityOrdered  Int
   quantityReceived Int           @default(0)
   unitCost         Decimal       @db.Decimal(10, 2)
+
+  goodsReceiptLines GoodsReceiptLine[]
 
   @@map("purchase_order_lines")
 }
@@ -1144,7 +1156,8 @@ model WarrantyClaim {
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
-  operationLines WarrantyOperationLine[]
+  operationLines    WarrantyOperationLine[]
+  paymentBatchLines ManufacturerPaymentBatchLine[]
 
   @@map("warranty_claims")
 }
@@ -1735,6 +1748,294 @@ model AccountingTransaction {
   createdAt      DateTime              @default(now())
 
   @@map("accounting_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// Module 17 — Nominal Ledger, Purchase Ledger & Manufacturer Payments
+//
+// "Sales ledger", "purchase ledger", and "vehicle ledger" are not separate tables here — they're
+// JournalLine postings filtered by which nominal account they hit (Debtors Control, Creditors
+// Control, Vehicle Stock), the way a real double-entry system works. LedgerService.post() is the
+// single place anything in this app is allowed to create a balanced journal entry; every other
+// service (aftersales invoicing, customer invoicing, new-car sales, warranty payments, supplier
+// invoices) posts through it rather than writing ledger rows directly.
+// ---------------------------------------------------------------------------
+
+enum NominalAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+/// UK VAT liability categories — STANDARD (20%), REDUCED (5%, e.g. some energy-saving items),
+/// ZERO (0%, e.g. most new cars for export), EXEMPT and OUTSIDE_SCOPE both contribute no VAT but
+/// are tracked separately since only EXEMPT counts toward the partial-exemption test on a VAT
+/// return. See VAT_RATES in @project-amx/shared for the single source of rate percentages.
+enum VatCode {
+  STANDARD
+  REDUCED
+  ZERO
+  EXEMPT
+  OUTSIDE_SCOPE
+}
+
+model NominalAccount {
+  id               String             @id @default(uuid())
+  dealerId         String
+  dealer           Dealer             @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  code             String
+  name             String
+  type             NominalAccountType
+  defaultVatCode   VatCode?
+  /// A control account (Debtors Control, Creditors Control, Vehicle Stock, VAT Output/Input) is
+  /// posted to only by LedgerService itself, never picked directly off a manual-journal dropdown.
+  isControlAccount Boolean            @default(false)
+  active           Boolean            @default(true)
+  createdAt        DateTime           @default(now())
+
+  journalLines JournalLine[]
+
+  @@unique([dealerId, code])
+  @@map("nominal_accounts")
+}
+
+enum JournalSourceType {
+  AFTERSALES_INVOICE
+  CUSTOMER_INVOICE
+  SUPPLIER_INVOICE
+  MANUFACTURER_PAYMENT
+  VEHICLE_SALE
+  MANUAL
+}
+
+/// A balanced double-entry posting. sourceId is a loose reference (matching the pre-existing
+/// AccountingTransaction.sourceRecordId convention) to whichever AftersalesInvoice/SupplierInvoice/
+/// etc. row generated it, since the source is polymorphic across many unrelated tables.
+model JournalEntry {
+  id          String            @id @default(uuid())
+  dealerId    String
+  dealer      Dealer            @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  reference   String
+  description String
+  date        DateTime          @db.Date
+  sourceType  JournalSourceType @default(MANUAL)
+  sourceId    String?
+  createdById String?
+  createdAt   DateTime          @default(now())
+
+  lines JournalLine[]
+
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id             String         @id @default(uuid())
+  journalEntryId String
+  journalEntry   JournalEntry   @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        NominalAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  debit          Decimal        @default(0) @db.Decimal(12, 2)
+  credit         Decimal        @default(0) @db.Decimal(12, 2)
+  vatCode        VatCode?
+  vatAmount      Decimal?       @db.Decimal(12, 2)
+  description    String?
+
+  @@map("journal_lines")
+}
+
+/// A trading partner the dealer buys from — parts distributors, garages, and the vehicle
+/// manufacturer alike. isManufacturer just marks the OEM's own supplier row (e.g. "BMW (UK) Ltd")
+/// so vehicle-stocking/parts invoices from them are reportable distinctly (§ OEM invoice handling)
+/// while going through the exact same supplier-invoice/matching pipeline as any other supplier.
+model Supplier {
+  id             String   @id @default(uuid())
+  dealerId       String
+  dealer         Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  name           String
+  accountNumber  String?
+  vatNumber      String?
+  email          String?
+  phone          String?
+  isManufacturer Boolean  @default(false)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  purchaseOrders             PurchaseOrder[]
+  goodsReceiptNotes          GoodsReceiptNote[]
+  supplierInvoices           SupplierInvoice[]
+  manufacturerPaymentBatches ManufacturerPaymentBatch[]
+
+  @@unique([dealerId, name])
+  @@map("suppliers")
+}
+
+/// Formalises goods receipt against a PurchaseOrder — previously just a bare StockMovement row
+/// with no standalone identity to match an invoice against. One GRN per delivery; its lines are
+/// what a SupplierInvoice's 3-way match (PO / GRN / invoice) actually compares against.
+model GoodsReceiptNote {
+  id              String        @id @default(uuid())
+  dealerId        String
+  dealer          Dealer        @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  grnNumber       String
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  supplierId      String
+  supplier        Supplier      @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  receivedAt      DateTime      @default(now())
+  notes           String?
+  createdAt       DateTime      @default(now())
+
+  lines            GoodsReceiptLine[]
+  supplierInvoices SupplierInvoice[]
+
+  @@map("goods_receipt_notes")
+}
+
+model GoodsReceiptLine {
+  id                  String            @id @default(uuid())
+  goodsReceiptNoteId  String
+  goodsReceiptNote    GoodsReceiptNote  @relation(fields: [goodsReceiptNoteId], references: [id], onDelete: Cascade)
+  purchaseOrderLineId String
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Cascade)
+  quantityReceived    Int
+
+  @@map("goods_receipt_lines")
+}
+
+enum SupplierInvoiceStatus {
+  DRAFT
+  MATCHED
+  DISCREPANCY
+  APPROVED
+  PAID
+}
+
+/// An inbound invoice from a supplier — including the OEM, which is just a Supplier with
+/// isManufacturer: true (§ OEM invoice handling). matchInvoice() 3-way matches it against its
+/// PurchaseOrder and GoodsReceiptNote (§ invoice matching); approve() posts it to the purchase
+/// ledger via LedgerService (§ auto posting).
+model SupplierInvoice {
+  id                 String                @id @default(uuid())
+  dealerId           String
+  dealer             Dealer                @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  supplierId         String
+  supplier           Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchaseOrderId    String?
+  purchaseOrder      PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  goodsReceiptNoteId String?
+  goodsReceiptNote   GoodsReceiptNote?     @relation(fields: [goodsReceiptNoteId], references: [id], onDelete: SetNull)
+  /// The supplier's own invoice number, as printed on their document — not an AMX-generated sequence.
+  invoiceNumber      String
+  invoiceDate        DateTime              @db.Date
+  netAmount          Decimal               @db.Decimal(10, 2)
+  vatAmount          Decimal               @db.Decimal(10, 2)
+  totalAmount        Decimal               @db.Decimal(10, 2)
+  status             SupplierInvoiceStatus @default(DRAFT)
+  matchDiscrepancy   String?
+  approvedAt         DateTime?
+  approvedById       String?
+  createdAt          DateTime              @default(now())
+
+  lines SupplierInvoiceLine[]
+
+  @@unique([dealerId, supplierId, invoiceNumber])
+  @@map("supplier_invoices")
+}
+
+model SupplierInvoiceLine {
+  id                String          @id @default(uuid())
+  supplierInvoiceId String
+  supplierInvoice   SupplierInvoice @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
+  description       String
+  quantity          Int             @default(1)
+  unitPrice         Decimal         @db.Decimal(10, 2)
+  netAmount         Decimal         @db.Decimal(10, 2)
+
+  @@map("supplier_invoice_lines")
+}
+
+enum ManufacturerPaymentBatchStatus {
+  RECEIVED
+  RECONCILED
+  DISCREPANCY
+  POSTED
+}
+
+/// A single remittance from a manufacturer/OEM covering many warranty claims (or parts rebates)
+/// paid in one run — the manufacturer's own self-billing document stands in place of the dealer
+/// raising their own invoice (§ self-billing invoices), which is how OEM warranty payment actually
+/// works. Reconciling and approving a batch bulk-updates every matched WarrantyClaim and posts one
+/// consolidated journal entry (§ bulk manufacturer/warranty payment processing).
+model ManufacturerPaymentBatch {
+  id             String                         @id @default(uuid())
+  dealerId       String
+  dealer         Dealer                         @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  supplierId     String
+  supplier       Supplier                       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  batchReference String
+  /// True when this batch IS the manufacturer's self-billing invoice for the claims it covers —
+  /// the normal case for OEM warranty remittances, where the dealer never raises their own invoice.
+  isSelfBill     Boolean                        @default(true)
+  remittanceUrl  String?
+  receivedAt     DateTime                       @default(now())
+  totalAmount    Decimal                        @db.Decimal(10, 2)
+  status         ManufacturerPaymentBatchStatus @default(RECEIVED)
+  postedAt       DateTime?
+  createdAt      DateTime                       @default(now())
+
+  lines ManufacturerPaymentBatchLine[]
+
+  @@map("manufacturer_payment_batches")
+}
+
+model ManufacturerPaymentBatchLine {
+  id              String                   @id @default(uuid())
+  batchId         String
+  batch           ManufacturerPaymentBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  warrantyClaimId String?
+  warrantyClaim   WarrantyClaim?           @relation(fields: [warrantyClaimId], references: [id], onDelete: SetNull)
+  description     String
+  amount          Decimal                  @db.Decimal(10, 2)
+  /// Set once reconciled against the claim's expectedPayment — a mismatch is flagged, not silently accepted.
+  discrepancy     Decimal?                 @db.Decimal(10, 2)
+
+  @@map("manufacturer_payment_batch_lines")
+}
+
+enum VatReturnStatus {
+  DRAFT
+  SUBMITTED
+}
+
+/// UK VAT100 box values computed from JournalLine.vatAmount over a period (see
+/// LedgerService.computeVatReturn). Submission to HMRC's Making Tax Digital API is mocked (see
+/// MtdSubmissionService) the same way the Xero/Sage/QuickBooks accounting integrations and DVLA
+/// lookup are mocked elsewhere in this app, since there are no real Government Gateway credentials
+/// to submit against in this environment.
+model VatReturn {
+  id                         String          @id @default(uuid())
+  dealerId                   String
+  dealer                     Dealer          @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  periodStart                DateTime        @db.Date
+  periodEnd                  DateTime        @db.Date
+  box1VatDueSales            Decimal         @db.Decimal(12, 2)
+  box2VatDueAcquisitions     Decimal         @default(0) @db.Decimal(12, 2)
+  box3TotalVatDue            Decimal         @db.Decimal(12, 2)
+  box4VatReclaimed           Decimal         @db.Decimal(12, 2)
+  box5NetVatDue              Decimal         @db.Decimal(12, 2)
+  box6TotalSalesExVat        Decimal         @db.Decimal(12, 2)
+  box7TotalPurchasesExVat    Decimal         @db.Decimal(12, 2)
+  box8TotalSuppliesExVat     Decimal         @default(0) @db.Decimal(12, 2)
+  box9TotalAcquisitionsExVat Decimal         @default(0) @db.Decimal(12, 2)
+  status                     VatReturnStatus @default(DRAFT)
+  hmrcSubmissionRef          String?
+  submittedAt                DateTime?
+  createdAt                  DateTime        @default(now())
+
+  @@unique([dealerId, periodStart, periodEnd])
+  @@map("vat_returns")
 }
 
 // ---------------------------------------------------------------------------

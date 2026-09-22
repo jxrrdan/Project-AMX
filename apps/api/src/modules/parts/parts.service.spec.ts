@@ -111,6 +111,32 @@ describe('PartsService.allocateToJob', () => {
   });
 });
 
+describe('PartsService.generateSuggestedPurchaseOrder', () => {
+  it('refuses a supplier outside the caller\'s dealer', async () => {
+    const create = jest.fn();
+    const prisma = { supplier: { findFirst: jest.fn().mockResolvedValue(null) }, purchaseOrder: { create } };
+    const service = new PartsService(prisma as never);
+    await expect(
+      service.generateSuggestedPurchaseOrder('dealer-1', { supplierId: 'other-dealer-supplier' } as never),
+    ).rejects.toThrow(NotFoundException);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('generates a PO line for every part at or below its reorder level', async () => {
+    const create = jest.fn().mockResolvedValue({});
+    const prisma = {
+      supplier: { findFirst: jest.fn().mockResolvedValue({ id: 'supplier-1' }) },
+      part: { findMany: jest.fn().mockResolvedValue([makePart({ quantityOnHand: 2, reorderLevel: 5, costPrice: 10 })]) },
+      purchaseOrder: { create },
+    };
+    const service = new PartsService(prisma as never);
+    await service.generateSuggestedPurchaseOrder('dealer-1', { supplierId: 'supplier-1' } as never);
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ dealerId: 'dealer-1', supplierId: 'supplier-1' }) }),
+    );
+  });
+});
+
 describe('PartsService.receivePurchaseOrderLine', () => {
   it('throws when the purchase order line does not exist for this dealer', async () => {
     const prisma = { purchaseOrderLine: { findFirst: jest.fn().mockResolvedValue(null) } };

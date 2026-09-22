@@ -400,12 +400,76 @@ now" from a "no."
   (especially an approval, which has already spawned a follow-up job card) it can't vanish from the
   audit trail.
 
+## Nominal ledger, purchase ledger, manufacturer payments, and VAT/MTD (beyond the original spec)
+
+Accounting (Module 11) previously meant "sync totals to Xero/Sage/QuickBooks" — there was no real
+general ledger underneath it, no `Supplier` entity distinct from a free-text string on a purchase
+order, and `ModuleKey.GENERAL_LEDGER` had been licensed to the `ACCOUNTS` role since early in the
+project with nothing behind it. This wave builds that missing double-entry core.
+
+- **One posting engine, everything goes through it** — `LedgerService.post()` is the single place
+  in the app allowed to create a `JournalEntry`/`JournalLine`; it validates debit == credit
+  (rejecting an unbalanced entry with a `BadRequestException` naming the imbalance), resolves each
+  line's account code against a lazily-seeded standard UK dealer chart of accounts
+  (`LedgerService.ensureChartOfAccounts` — 16 accounts covering asset/liability/equity/income/expense,
+  seeded the first time a dealer's ledger is touched rather than at dealer creation), and rejects an
+  unknown code outright. "Sales ledger", "purchase ledger", and "vehicle ledger" are not separate
+  tables — they're `JournalLine` postings filtered by which control account they hit (Debtors
+  Control / Creditors Control / Vehicle Stock), the way a real double-entry system works.
+- **Auto-posting, not manual re-entry** — aftersales invoicing, ad-hoc customer-support invoicing,
+  new-car sales (retail books the full price, agency books only the dealer's commission — the OEM
+  is the contracting seller on an agency deal), and a used car going `SOLD` (selling price to
+  Vehicle Sales, cost price relieved from Vehicle Stock into Cost of Vehicle Sales, using the
+  vehicle's own purchase price) all post automatically via `LedgerService.postSafely()`, which
+  swallows and logs a posting failure rather than ever blocking the actual invoice or sale — the
+  business action always wins over the bookkeeping side-effect.
+- **Purchase ledger: suppliers, GRNs, 3-way matching, AI invoice extraction** — `Supplier` replaces
+  the free-text string a `PurchaseOrder` used to carry (`isManufacturer: true` marks the OEM's own
+  supplier row — e.g. "BMW (UK) Ltd" — so its invoices are reportable distinctly while flowing
+  through the exact same pipeline as any other supplier, deliberately not a new feature under the
+  unrelated OEM Integration Hub). A `GoodsReceiptNote` formalises a delivery against a PO (reusing
+  the existing per-line stock-receipt logic in `PartsService`, not duplicating it). A
+  `SupplierInvoice` optionally references a PO and a GRN; `PurchasingService.matchInvoice()` does
+  the 3-way match (invoice net vs. what the GRN — or failing that the PO — says was actually
+  ordered/received) and flags a `matchDiscrepancy` rather than silently accepting a mismatch;
+  `approveInvoice()` refuses to approve a PO-linked invoice that hasn't been matched, then posts it
+  to Creditors Control; `markInvoicePaid()` completes the cycle out of the bank account. AI invoice
+  processing is a heuristic regex extraction (`AiInvoiceExtractionService`) that prefills the
+  create-invoice form from pasted OCR/emailed invoice text — mocked the same way DVLA lookup and
+  the Xero/Sage/QuickBooks sync are mocked elsewhere, since there's no real OCR/LLM extraction
+  service to call from this sandbox.
+- **Bulk manufacturer/warranty payments as self-billing** — a `ManufacturerPaymentBatch` models an
+  OEM's own remittance covering many warranty claims (or parts rebates) in one run — the
+  manufacturer's remittance document stands in for an invoice the dealer would otherwise have to
+  raise, which is genuinely how BMW AWP warranty payment works, and deliberately unifies "self-billing
+  invoices", "OEM invoice handling", and "bulk manufacturer/warranty payment processing" into one
+  model rather than three overlapping ones. `reconcileBatch()` compares each line against its
+  `WarrantyClaim.expectedPayment` and flags a per-line discrepancy; `postBatch()` posts one
+  consolidated journal entry (Bank against Manufacturer Warranty Income) and bulk-settles every
+  linked claim to `PAID` in a single action.
+- **VAT return (UK VAT100 boxes) and mocked Making Tax Digital submission** — `VAT_RATES` in
+  `@project-amx/shared` is now the single source of VAT percentages (STANDARD 20%/REDUCED 5%/ZERO,
+  EXEMPT, OUTSIDE_SCOPE at 0%), replacing two previously-duplicated `VAT_RATE = 0.2` constants in
+  the aftersales and customer invoicing services. `LedgerService.computeVatReturn()` derives boxes
+  1–7 straight from `JournalLine.vatAmount`/account type over a period (boxes 2/8/9 are fixed at
+  zero — no EU acquisitions are modelled); `saveVatReturn()` persists a draft, and
+  `MtdSubmissionService.submit()` is a mocked HMRC MTD adapter (checks the dealer has a VAT number
+  set, logs what a real submission would send, returns a fabricated `MTD-MOCK-XXXXXXXX` reference)
+  — the same mocking convention used for DVLA lookup and the accounting-provider sync, since there
+  are no real Government Gateway credentials in this environment.
+- **Frontend** — a new "Accounting" nav group holds **Nominal Ledger** (chart of accounts, manual
+  journal posting, sales/purchase/vehicle ledger views, VAT return compute/save/submit),
+  **Purchase Ledger** (suppliers, goods receipt notes, supplier invoices with the AI-extraction
+  paste box and match/approve/pay actions), and **Manufacturer Payments** (batch creation against
+  warranty claims, reconcile, post) alongside the pre-existing Xero/Sage/QuickBooks sync page.
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks
-  (Module 11), Stripe billing (Module 7.6) are modelled in the schema and their sync/publish
-  actions are mocked (mark-as-published/synced immediately) rather than calling real APIs nobody
-  has test credentials for.
+  (Module 11), Stripe billing (Module 7.6), HMRC's Making Tax Digital VAT API, and AI-based invoice
+  OCR/extraction are modelled in the schema and their sync/publish/submit actions are mocked
+  (mark-as-published/synced immediately, a fabricated MTD submission reference, heuristic regex
+  extraction instead of OCR) rather than calling real APIs nobody has test credentials for.
 - **CloudFront/Route 53/API Gateway/WAF, Lambda workers, most of the observability stack beyond
   one alarm** — see `infra/cdk/README.md` for the full list and why.
 - **Angular PWA / offline support** for PDI checklists — the spec calls for this explicitly

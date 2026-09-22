@@ -61,5 +61,5 @@ export class AllocatePartDto {
 
 export class CreatePurchaseOrderDto {
   @IsString()
-  supplier!: string;
+  supplierId!: string;
 }

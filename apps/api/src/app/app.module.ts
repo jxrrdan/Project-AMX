@@ -31,6 +31,8 @@ import { OrgModule } from '../modules/org/org.module';
 import { ActionTriggersModule } from '../modules/action-triggers/action-triggers.module';
 import { AftersalesModule } from '../modules/aftersales/aftersales.module';
 import { TechniciansModule } from '../modules/technicians/technicians.module';
+import { LedgerModule } from '../modules/ledger/ledger.module';
+import { PurchasingModule } from '../modules/purchasing/purchasing.module';
 
 @Module({
   imports: [
@@ -63,6 +65,8 @@ import { TechniciansModule } from '../modules/technicians/technicians.module';
     ActionTriggersModule,
     AftersalesModule,
     TechniciansModule,
+    LedgerModule,
+    PurchasingModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

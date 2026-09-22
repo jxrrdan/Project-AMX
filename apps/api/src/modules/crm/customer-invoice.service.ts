@@ -1,9 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DocumentTemplateType } from '@project-amx/shared';
+import { JournalSourceType } from '@prisma/client';
+import { DocumentTemplateType, VAT_RATES, VatCode } from '@project-amx/shared';
 import { PdfService } from '../../common/pdf/pdf.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { DocumentSequenceService } from '../dealers/document-sequence.service';
 import { DocumentTemplatesService } from '../document-templates/document-templates.service';
+import { CONTROL_ACCOUNT_CODES } from '../ledger/ledger.constants';
+import { LedgerService } from '../ledger/ledger.service';
 import { CreateCustomerInvoiceDto } from './dto/customer-invoice.dto';
 
 /** Used whenever a dealer hasn't authored their own CUSTOMER_SUPPORT_INVOICE document template. */
@@ -23,7 +26,8 @@ const DEFAULT_CUSTOMER_SUPPORT_INVOICE_TEMPLATE = `
 {{#if dealerInvoiceFooterNote}}<p style="font-size:11px;color:#666">{{dealerInvoiceFooterNote}}</p>{{/if}}
 </body></html>`;
 
-const VAT_RATE = 0.2;
+/** Single source of truth for VAT rates — see VAT_RATES in @project-amx/shared. */
+const VAT_RATE = VAT_RATES[VatCode.STANDARD];
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -43,6 +47,7 @@ export class CustomerInvoiceService {
     private readonly pdf: PdfService,
     private readonly documentSequences: DocumentSequenceService,
     private readonly documentTemplates: DocumentTemplatesService,
+    private readonly ledgerService: LedgerService,
   ) {}
 
   list(dealerId: string, contactId: string) {
@@ -84,8 +89,24 @@ export class CustomerInvoiceService {
       dealerInvoiceFooterNote: dealer?.invoiceFooterNote,
     });
 
-    return this.prisma.customerInvoice.create({
+    const invoice = await this.prisma.customerInvoice.create({
       data: { dealerId, contactId, invoiceNumber, description: dto.description, amount, vatAmount, totalAmount, pdfUrl },
     });
+
+    // No dedicated nominal code exists for ad-hoc customer-support fees (lost keys, admin
+    // charges); they're closest in kind to aftersales work, so they're booked there.
+    await this.ledgerService.postSafely(dealerId, {
+      reference: invoiceNumber,
+      description: `Customer invoice ${invoiceNumber} — ${dto.description}`,
+      sourceType: JournalSourceType.CUSTOMER_INVOICE,
+      sourceId: invoice.id,
+      lines: [
+        { accountCode: CONTROL_ACCOUNT_CODES.DEBTORS_CONTROL, debit: totalAmount },
+        { accountCode: CONTROL_ACCOUNT_CODES.AFTERSALES_LABOUR, credit: amount },
+        ...(vatAmount > 0 ? [{ accountCode: CONTROL_ACCOUNT_CODES.VAT_OUTPUT, credit: vatAmount, vatAmount }] : []),
+      ],
+    });
+
+    return invoice;
   }
 }
