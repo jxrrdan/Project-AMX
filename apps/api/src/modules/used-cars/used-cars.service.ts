@@ -4,6 +4,7 @@ import { ActionTriggerPoint, DealSheetStatus, DocumentTemplateType, UsedVehicleS
 import { PdfService } from '../../common/pdf/pdf.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ActionTriggersService } from '../action-triggers/action-triggers.service';
+import { VehicleValuationService } from '../../common/valuation/vehicle-valuation.service';
 import { DocumentSequenceService } from '../dealers/document-sequence.service';
 import { DocumentTemplatesService } from '../document-templates/document-templates.service';
 import { CONTROL_ACCOUNT_CODES } from '../ledger/ledger.constants';
@@ -54,6 +55,7 @@ export class UsedCarsService {
     private readonly actionTriggers: ActionTriggersService,
     private readonly tradeInService: TradeInService,
     private readonly ledgerService: LedgerService,
+    private readonly valuationService: VehicleValuationService,
   ) {}
 
   // --- Stock (§4.1) --------------------------------------------------------
@@ -188,6 +190,16 @@ export class UsedCarsService {
       this.prisma.usedVehicle.update({ where: { id }, data: { askingPrice: dto.askingPrice } }),
       this.prisma.priceHistoryEntry.create({ data: { usedVehicleId: id, price: dto.askingPrice } }),
     ]);
+  }
+
+  /** Live market valuation (mocked CAP HPI/Cazana/Auto Trader) — the "suggested price" gap
+   * against Keyloop/Pinewood.AI on top of a dealer's own asking-price history. */
+  async getValuation(dealerId: string, id: string) {
+    const vehicle = await this.prisma.usedVehicle.findFirst({ where: { id, dealerId } });
+    if (!vehicle) {
+      throw new NotFoundException('Used vehicle not found');
+    }
+    return this.valuationService.getValuation(vehicle.reg, vehicle.mileage ?? 0);
   }
 
   /** Days-in-stock tracker with alerts at 30/60/90 days (§4.2). */

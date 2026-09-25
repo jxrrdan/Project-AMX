@@ -36,6 +36,14 @@ interface UnmatchedRequirement {
   customerName: string;
 }
 
+interface NoShowRiskRow {
+  id: string;
+  customerName: string;
+  jobType: string;
+  riskScore: number;
+  reasons: string[];
+}
+
 /** "How full is the workshop" and "what parts do we need before the jobs on the books arrive" —
  * two views the job-card diary/kanban alone doesn't answer (see WorkshopService.loadingReport
  * and .upcomingPartsShortfalls). */
@@ -135,6 +143,25 @@ interface UnmatchedRequirement {
         }
       }
     </mat-card>
+
+    <mat-card class="section">
+      <h3>No-show risk — upcoming bookings</h3>
+      <p class="hint">
+        A deterministic risk score from signals actually on the booking (no phone number, no advisor assigned, booked
+        far ahead, no vehicle registration captured) — not a chatbot guess.
+      </p>
+      @for (b of noShowRisk(); track b.id) {
+        <div class="unmatched-row">
+          <span class="risk" [class.risk-high]="b.riskScore >= 60">{{ b.riskScore }}</span>
+          {{ b.customerName }} — {{ b.jobType }}
+          @if (b.reasons.length) {
+            <span class="hint"> ({{ b.reasons.join(', ') }})</span>
+          }
+        </div>
+      } @empty {
+        <p class="hint">No upcoming scheduled bookings.</p>
+      }
+    </mat-card>
   `,
   styles: [
     `
@@ -167,6 +194,20 @@ interface UnmatchedRequirement {
         font-size: 13px;
         padding: 4px 0;
       }
+      .risk {
+        display: inline-block;
+        min-width: 28px;
+        text-align: center;
+        border-radius: 4px;
+        background: #e8f5e9;
+        padding: 1px 6px;
+        font-weight: 600;
+        margin-right: 6px;
+      }
+      .risk-high {
+        background: #ffebee;
+        color: #c62828;
+      }
       table {
         width: 100%;
       }
@@ -177,6 +218,7 @@ export class WorkshopLoadingComponent implements OnInit {
   readonly loadingRows = signal<LoadingRow[]>([]);
   readonly shortfalls = signal<PartShortfall[]>([]);
   readonly unmatched = signal<UnmatchedRequirement[]>([]);
+  readonly noShowRisk = signal<NoShowRiskRow[]>([]);
   readonly loadingColumns = ['date', 'bayName', 'booked', 'capacity', 'utilisation'];
   readonly shortfallColumns = ['partNumber', 'onHand', 'required', 'shortfall'];
 
@@ -189,6 +231,11 @@ export class WorkshopLoadingComponent implements OnInit {
   ngOnInit(): void {
     this.loadLoading();
     this.loadShortfalls();
+    this.loadNoShowRisk();
+  }
+
+  loadNoShowRisk(): void {
+    this.http.get<NoShowRiskRow[]>(`${environment.apiUrl}/ai/service/no-show-risk`).subscribe((data) => this.noShowRisk.set(data));
   }
 
   loadLoading(): void {

@@ -50,6 +50,7 @@ interface ConditionReport {
 }
 
 interface Invoice {
+  id: string;
   invoiceNumber: string;
   isInternal: boolean;
   recipient: string | null;
@@ -58,6 +59,7 @@ interface Invoice {
   vatAmount: number;
   totalAmount: number;
   pdfUrl: string | null;
+  paidAt: string | null;
 }
 
 @Component({
@@ -186,12 +188,19 @@ interface Invoice {
             <p>
               {{ inv.isInternal ? 'Internal cost record' : 'Invoice' }} {{ inv.invoiceNumber }}
               @if (inv.isInternal) { <mat-chip class="internal-chip">Internal — not customer payable</mat-chip> }
+              @if (inv.paidAt) { <mat-chip class="paid-chip">Paid</mat-chip> }
             </p>
             @if (inv.recipient) { <p class="hint">Billed to: {{ inv.recipient }}</p> }
             <p>Labour: £{{ inv.labourTotal }} · Parts: £{{ inv.partsTotal }} · VAT: £{{ inv.vatAmount }}</p>
             <p><b>Total: £{{ inv.totalAmount }}</b></p>
             @if (inv.pdfUrl) {
               <a [href]="storageUrl(inv.pdfUrl)" target="_blank" rel="noopener">View invoice document</a>
+            }
+            @if (!inv.isInternal && !inv.paidAt) {
+              <div class="payment-row">
+                <button mat-stroked-button (click)="takePayment(inv.id)">Take payment (card in branch)</button>
+                <button mat-stroked-button (click)="copyPaymentLink(inv.id)">Copy pay-online link</button>
+              </div>
             }
           } @else {
             <button mat-flat-button color="primary" (click)="generateInvoice()">
@@ -327,6 +336,15 @@ interface Invoice {
         background: #fbe9e7;
         font-size: 11px;
       }
+      .paid-chip {
+        background: #e8f5e9;
+        font-size: 11px;
+      }
+      .payment-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+      }
       .op-line {
         border-bottom: 1px solid #eee;
         padding: 6px 0;
@@ -424,6 +442,21 @@ export class JobCardDetailComponent implements OnInit {
       next: (invoice) => this.invoice.set(invoice),
       error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not generate invoice', 'Dismiss', { duration: 4000 }),
     });
+  }
+
+  takePayment(invoiceId: string): void {
+    this.http.post(`${environment.apiUrl}/payments/AFTERSALES_INVOICE/${invoiceId}`, { sourceType: 'AFTERSALES_INVOICE', method: 'CARD' }).subscribe({
+      next: () => {
+        this.snackBar.open('Payment taken', 'Dismiss', { duration: 3000 });
+        this.loadInvoice();
+      },
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Payment failed', 'Dismiss', { duration: 4000 }),
+    });
+  }
+
+  copyPaymentLink(invoiceId: string): void {
+    const url = `${window.location.origin}/pay/AFTERSALES_INVOICE/${invoiceId}`;
+    navigator.clipboard.writeText(url).then(() => this.snackBar.open('Payment link copied', 'Dismiss', { duration: 3000 }));
   }
 
   loadConditionReports(): void {

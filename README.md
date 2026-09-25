@@ -472,17 +472,75 @@ project with nothing behind it. This wave builds that missing double-entry core.
   value into Vehicle Stock against Creditors Control. Both use a new `JournalSourceType.FI_COMMISSION`
   / `VEHICLE_STOCK_IN` rather than being lumped under the generic `MANUAL` type.
 
+## Online payments, WhatsApp, call logging, vehicle valuation, bank reconciliation, and predictive AI
+
+A gap review against what Keyloop and Pinewood.AI advertise (as traditional wholesale-model DMSes —
+so floor-plan financing, OEM wholesale invoicing, and production allocation are correctly out of
+scope for a direct-sales BMW retailer) turned up several genuine gaps that this wave closes.
+
+- **Take payment in branch, or send the customer a link — no card machine integration required
+  to demo it.** A new `Payment` model and `PaymentsModule` sit behind a mocked
+  `PaymentGatewayService.charge()` (always succeeds locally, returns a fabricated
+  `PAY-MOCK-XXXXXXXX` reference — the same convention as DVLA lookup and the MTD submission
+  adapter). The amount is never client-supplied: it's always read server-side from the invoice's
+  own `totalAmount`, so the public pay page can't be tricked into charging an arbitrary figure.
+  Aftersales and customer-support invoices both gained a `paidAt` field; a successful charge marks
+  the invoice paid and posts Bank against Debtors Control via `LedgerService.postSafely()`, so a
+  card payment taken in branch shows up in the ledger with zero extra work. The public
+  `/pay/:sourceType/:sourceId` page reuses the VHC report's security model — the only access
+  control is that the id in the URL is unguessable, no login required — and the job-card and
+  contact-invoice screens both got "Take payment" / "Copy pay-online link" actions.
+- **WhatsApp as a first-class notification channel and CRM comms method** — `NotificationChannel`
+  gained `WHATSAPP`, delivered through a new `WhatsAppService` that mirrors the existing
+  `SmsService` mock exactly (console-logs what a real WhatsApp Business API call would send,
+  skips gracefully with a warning if the contact has no phone number). `CommunicationsService`
+  gained `sendWhatsApp()` alongside the existing `sendSms()`, and the contact detail page has a
+  "Send WhatsApp" card next to "Send SMS".
+- **Call logging** — a `CallLog` model records direction (inbound/outbound), outcome
+  (connected/no answer/voicemail/wrong number), and free-text notes against a contact, with a
+  "Log a call" card and call history list on the contact detail page — closing the "no telephony/
+  call-outcome record" gap against Keyloop's integrated telephony.
+- **Mocked live vehicle valuation** — `VehicleValuationService.getValuation(reg, mileage)` returns
+  a deterministic fake trade/part-exchange/private-retail valuation seeded from the registration
+  (same "fabricated but consistent" approach as the DVLA mock), standing in for a real
+  Autotrader/CAP HPI valuation feed. Used car detail pages get a "Get suggested valuation" button
+  against the vehicle's own pricing.
+- **Bank statement reconciliation** — `BankStatementLine` plus `BankReconciliationService` let a
+  user paste in statement lines (date/description/amount), which are recorded under one
+  `DocumentSequenceService`-numbered import batch and auto-matched to an unmatched `JournalLine` on
+  the bank account when exactly one candidate exists within a ±5-day, ±£0.01 window — anything
+  ambiguous is left for the new "Bank reconciliation" tab on the Nominal Ledger page to match or
+  unmatch by hand, rather than the system guessing.
+- **Predictive AI heuristics, not just chat** — the existing `AiInsightsService` only ever wrapped
+  the mocked Bedrock-style `AiService.complete()` for prose (briefings, next-best-action, email
+  drafts). Two new methods close the actual "AI-powered predictive analytics" gap against Keyloop/
+  Pinewood.AI — a scored, ranked, explainable output a business actually acts on, in the same
+  deterministic style as the pre-existing `priorityLeads()`:
+  - `serviceNoShowRisk()` scores upcoming workshop bookings from signals already on the record (no
+    phone number to remind them with, no advisor assigned, booked more than 14 days out, no vehicle
+    registration captured) — surfaced as a "No-show risk" card on the workshop loading page.
+  - `usedCarPricingSuggestions()` flags used-car stock that's both ageing (over 60 days) and priced
+    above the mocked market valuation, or priced more than 5% over market regardless of age —
+    surfaced as a "Pricing suggestions" card on the used car stock list, linking through to the
+    vehicle.
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks
-  (Module 11), Stripe billing (Module 7.6), HMRC's Making Tax Digital VAT API, and AI-based invoice
-  OCR/extraction are modelled in the schema and their sync/publish/submit actions are mocked
-  (mark-as-published/synced immediately, a fabricated MTD submission reference, heuristic regex
-  extraction instead of OCR) rather than calling real APIs nobody has test credentials for.
+  (Module 11), a real card payment gateway (Stripe/Worldpay/etc.), HMRC's Making Tax Digital VAT
+  API, a live vehicle valuation feed, and AI-based invoice OCR/extraction are modelled in the
+  schema and their sync/publish/submit/charge actions are mocked (mark-as-published/synced
+  immediately, a fabricated MTD submission or payment reference, heuristic regex extraction
+  instead of OCR, a deterministic fake valuation) rather than calling real APIs nobody has test
+  credentials for.
 - **CloudFront/Route 53/API Gateway/WAF, Lambda workers, most of the observability stack beyond
   one alarm** — see `infra/cdk/README.md` for the full list and why.
-- **Angular PWA / offline support** for PDI checklists — the spec calls for this explicitly
-  (§Non-functional Requirements); the app is a standard SPA today.
+- **Angular PWA / offline support** for PDI checklists and technician mobile use — the spec calls
+  for this explicitly (§Non-functional Requirements); the app is a standard SPA today.
+- **A full authenticated customer/trade self-service portal** — the public pay-invoice page covers
+  paying a single known invoice, not a logged-in multi-invoice/multi-vehicle customer portal or a
+  trade-customer parts-ordering portal, both of which Keyloop and Pinewood.AI offer as separate
+  paid modules; judged too large to build out fully in this pass.
 
 ## Development commands
 

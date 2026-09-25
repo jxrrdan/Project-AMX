@@ -15,7 +15,7 @@ import {
   UpdateLeadStageDto,
 } from './dto/contact.dto';
 import { CreateCustomerInvoiceDto } from './dto/customer-invoice.dto';
-import { CreateEmailTemplateDto, SendEmailDto, SendSmsDto } from './dto/template.dto';
+import { CreateEmailTemplateDto, LogCallDto, SendEmailDto, SendSmsDto } from './dto/template.dto';
 import { CreateWorkflowDto, EnrollDto } from './dto/workflow.dto';
 import { CrmService } from './crm.service';
 import { WorkflowsService } from './workflows.service';
@@ -40,6 +40,18 @@ export class CrmController {
   @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.CREATE })
   createCustomerInvoice(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CreateCustomerInvoiceDto) {
     return this.customerInvoiceService.create(user.dealerId, id, dto);
+  }
+
+  @Get('contacts/:id/calls')
+  @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.VIEW })
+  listCalls(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.communicationsService.listCalls(user.dealerId, id);
+  }
+
+  @Post('contacts/:id/calls')
+  @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.CREATE })
+  logCall(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: LogCallDto) {
+    return this.communicationsService.logCall(user.dealerId, id, dto);
   }
 
   @Get('contacts')
@@ -141,6 +153,12 @@ export class CrmController {
   @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.CREATE })
   sendSms(@CurrentUser() user: AuthUser, @Body() dto: SendSmsDto) {
     return this.communicationsService.sendSms(user.dealerId, dto);
+  }
+
+  @Post('whatsapp/send')
+  @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.CREATE })
+  sendWhatsApp(@CurrentUser() user: AuthUser, @Body() dto: SendSmsDto) {
+    return this.communicationsService.sendWhatsApp(user.dealerId, dto);
   }
 
   @Get('workflows')

@@ -33,6 +33,7 @@ import { AftersalesModule } from '../modules/aftersales/aftersales.module';
 import { TechniciansModule } from '../modules/technicians/technicians.module';
 import { LedgerModule } from '../modules/ledger/ledger.module';
 import { PurchasingModule } from '../modules/purchasing/purchasing.module';
+import { PaymentsModule } from '../modules/payments/payments.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { PurchasingModule } from '../modules/purchasing/purchasing.module';
     TechniciansModule,
     LedgerModule,
     PurchasingModule,
+    PaymentsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

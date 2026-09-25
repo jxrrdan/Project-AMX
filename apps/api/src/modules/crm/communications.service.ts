@@ -3,15 +3,17 @@ import * as Handlebars from 'handlebars';
 import { EmailService } from '../../common/email/email.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SmsService } from '../../common/sms/sms.service';
-import { CreateEmailTemplateDto, SendEmailDto, SendSmsDto } from './dto/template.dto';
+import { WhatsAppService } from '../../common/whatsapp/whatsapp.service';
+import { CreateEmailTemplateDto, LogCallDto, SendEmailDto, SendSmsDto } from './dto/template.dto';
 
-/** Module 8.5-8.7 — templated email/SMS communications with variable resolution. */
+/** Module 8.5-8.7 — templated email/SMS/WhatsApp communications with variable resolution. */
 @Injectable()
 export class CommunicationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
     private readonly sms: SmsService,
+    private readonly whatsapp: WhatsAppService,
   ) {}
 
   listTemplates(dealerId: string) {
@@ -63,6 +65,36 @@ export class CommunicationsService {
     const body = this.substitutePlaceholders(dto.body, contact);
     await this.sms.send(contact.phone, body);
     return this.prisma.smsMessage.create({ data: { contactId: contact.id, body, status: 'SENT', sentAt: new Date() } });
+  }
+
+  /** Mirrors sendSms exactly — WhatsApp as a third messaging channel, the omnichannel gap
+   * Pinewood.AI closed with its own WhatsApp integration. */
+  async sendWhatsApp(dealerId: string, dto: SendSmsDto) {
+    const contact = await this.prisma.contact.findFirst({ where: { id: dto.contactId, dealerId } });
+    if (!contact || !contact.phone) {
+      throw new NotFoundException('Contact or phone number not found');
+    }
+    const body = this.substitutePlaceholders(dto.body, contact);
+    await this.whatsapp.send(contact.phone, body);
+    return this.prisma.whatsAppMessage.create({ data: { contactId: contact.id, body, status: 'SENT', sentAt: new Date() } });
+  }
+
+  /** Structured record of a call's direction/outcome — unlike a free-form CrmActivity note,
+   * this is what a call-volume or connect-rate report would query. */
+  async logCall(dealerId: string, contactId: string, dto: LogCallDto) {
+    const contact = await this.prisma.contact.findFirst({ where: { id: contactId, dealerId } });
+    if (!contact) {
+      throw new NotFoundException('Contact not found');
+    }
+    return this.prisma.callLog.create({ data: { contactId, direction: dto.direction, outcome: dto.outcome, notes: dto.notes } });
+  }
+
+  async listCalls(dealerId: string, contactId: string) {
+    const contact = await this.prisma.contact.findFirst({ where: { id: contactId, dealerId } });
+    if (!contact) {
+      throw new NotFoundException('Contact not found');
+    }
+    return this.prisma.callLog.findMany({ where: { contactId }, orderBy: { calledAt: 'desc' } });
   }
 
   /**

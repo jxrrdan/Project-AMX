@@ -42,6 +42,12 @@ interface RegLookupResult {
   enrichment: ActionTriggerEnrichment | null;
 }
 
+interface PricingSuggestion {
+  vehicleId: string;
+  reg: string;
+  recommendation: string;
+}
+
 @Component({
   selector: 'app-used-cars-list',
   imports: [
@@ -132,6 +138,19 @@ interface RegLookupResult {
       </mat-card>
     }
 
+    @if (pricingSuggestions().length) {
+      <mat-card class="form-card">
+        <h3>Pricing suggestions</h3>
+        <p class="hint">Aged or above-market stock, flagged against a mocked live valuation.</p>
+        @for (s of pricingSuggestions(); track s.vehicleId) {
+          <div class="suggestion-row" [routerLink]="['/used-cars', s.vehicleId]">
+            <span class="reg">{{ s.reg }}</span>
+            <span>{{ s.recommendation }}</span>
+          </div>
+        }
+      </mat-card>
+    }
+
     <div class="grid">
       @for (v of vehicles(); track v.id) {
         <mat-card [routerLink]="['/used-cars', v.id]" class="clickable">
@@ -175,6 +194,28 @@ interface RegLookupResult {
         color: #2e7d32;
         margin: 0;
       }
+      .hint {
+        font-size: 12px;
+        color: rgba(0, 0, 0, 0.55);
+        margin: 0;
+      }
+      .suggestion-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .suggestion-row:last-child {
+        border-bottom: none;
+      }
+      .suggestion-row .reg {
+        font-size: 13px;
+        color: rgba(0, 0, 0, 0.87);
+        font-weight: 600;
+      }
       .grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -203,6 +244,7 @@ interface RegLookupResult {
 })
 export class UsedCarsListComponent implements OnInit {
   readonly vehicles = signal<UsedVehicle[]>([]);
+  readonly pricingSuggestions = signal<PricingSuggestion[]>([]);
   readonly showForm = signal(false);
   readonly dvlaLoading = signal(false);
   readonly dvlaResult = signal<DvlaVehicleSpec | null>(null);
@@ -228,6 +270,9 @@ export class UsedCarsListComponent implements OnInit {
 
   load(): void {
     this.http.get<UsedVehicle[]>(`${environment.apiUrl}/used-vehicles`).subscribe((data) => this.vehicles.set(data));
+    this.http
+      .get<PricingSuggestion[]>(`${environment.apiUrl}/ai/used-cars/pricing-suggestions`)
+      .subscribe((data) => this.pricingSuggestions.set(data));
   }
 
   lookupDvla(): void {

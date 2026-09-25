@@ -29,6 +29,18 @@ export class AiInsightsController {
     return this.aiInsightsService.priorityLeads(user.dealerId);
   }
 
+  @Get('service/no-show-risk')
+  @RequirePermissions({ module: ModuleKey.AI_INSIGHTS, action: PermissionAction.VIEW })
+  serviceNoShowRisk(@CurrentUser() user: AuthUser) {
+    return this.aiInsightsService.serviceNoShowRisk(user.dealerId);
+  }
+
+  @Get('used-cars/pricing-suggestions')
+  @RequirePermissions({ module: ModuleKey.AI_INSIGHTS, action: PermissionAction.VIEW })
+  usedCarPricingSuggestions(@CurrentUser() user: AuthUser) {
+    return this.aiInsightsService.usedCarPricingSuggestions(user.dealerId);
+  }
+
   @Get('leads/:id/next-best-action')
   @RequirePermissions({ module: ModuleKey.AI_INSIGHTS, action: PermissionAction.VIEW })
   nextBestAction(@CurrentUser() user: AuthUser, @Param('id') id: string) {

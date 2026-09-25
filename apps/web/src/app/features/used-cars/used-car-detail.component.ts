@@ -21,6 +21,12 @@ interface AccessoryLine {
   price: number | null;
 }
 
+interface VehicleValuation {
+  tradeValue: number;
+  privateRetailValue: number;
+  partExchangeValue: number;
+}
+
 interface DealSheetDetail {
   id: string;
   status: 'ACTIVE' | 'SIGNED' | 'INVALIDATED';
@@ -100,6 +106,14 @@ interface UsedVehicleDetail {
             </div>
             @if (v.priceHistory.length) {
               <p class="hint">Price history: {{ v.priceHistory.length }} change(s)</p>
+            }
+            @if (valuation(); as val) {
+              <p class="hint">
+                Suggested valuation — trade {{ val.tradeValue | currency: 'GBP' }} · part-exchange
+                {{ val.partExchangeValue | currency: 'GBP' }} · private retail {{ val.privateRetailValue | currency: 'GBP' }}
+              </p>
+            } @else {
+              <button mat-stroked-button (click)="loadValuation()">Get suggested valuation</button>
             }
             <button mat-flat-button color="primary" (click)="publishListing()">
               <mat-icon>storefront</mat-icon>
@@ -341,6 +355,7 @@ interface UsedVehicleDetail {
 })
 export class UsedCarDetailComponent implements OnInit {
   readonly vehicle = signal<UsedVehicleDetail | null>(null);
+  readonly valuation = signal<VehicleValuation | null>(null);
   readonly statuses = Object.values(UsedVehicleStatus);
   readonly usedVehicleEntity = IntegrationTargetEntity.USED_VEHICLE;
   readonly accessoryLines = signal<AccessoryLine[]>([{ description: '', price: null }]);
@@ -395,6 +410,13 @@ export class UsedCarDetailComponent implements OnInit {
     this.http
       .patch(`${environment.apiUrl}/used-vehicles/${this.vehicleId}/asking-price`, { askingPrice: this.askingPriceValue })
       .subscribe(() => this.load());
+  }
+
+  loadValuation(): void {
+    this.http.get<VehicleValuation>(`${environment.apiUrl}/used-vehicles/${this.vehicleId}/valuation`).subscribe({
+      next: (data) => this.valuation.set(data),
+      error: () => this.snackBar.open('Could not fetch a valuation for this vehicle', 'Dismiss', { duration: 3000 }),
+    });
   }
 
   publishListing(): void {

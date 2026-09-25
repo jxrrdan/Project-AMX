@@ -11,7 +11,14 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { CrmActivityType, IntegrationTargetEntity } from '@project-amx/shared';
+import {
+  CALL_DIRECTION_LABELS,
+  CALL_OUTCOME_LABELS,
+  CallDirection,
+  CallOutcome,
+  CrmActivityType,
+  IntegrationTargetEntity,
+} from '@project-amx/shared';
 import { CustomFieldsPanelComponent } from '../integrations/custom-fields-panel.component';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/auth.service';
@@ -29,6 +36,14 @@ interface ContactDetail {
   tasks: { id: string; title: string; dueDate: string; completedAt: string | null }[];
 }
 
+interface CallLogEntry {
+  id: string;
+  direction: CallDirection;
+  outcome: CallOutcome;
+  notes: string | null;
+  calledAt: string;
+}
+
 interface CustomerInvoiceSummary {
   id: string;
   invoiceNumber: string;
@@ -37,6 +52,7 @@ interface CustomerInvoiceSummary {
   vatAmount: number;
   totalAmount: number;
   pdfUrl: string | null;
+  paidAt: string | null;
   createdAt: string;
 }
 
@@ -112,6 +128,15 @@ interface EmailTemplate {
             </mat-form-field>
             <button mat-flat-button color="primary" [disabled]="!smsBody" (click)="sendSms()">Send</button>
           </mat-card>
+
+          <mat-card>
+            <h3>Send WhatsApp</h3>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Message</mat-label>
+              <textarea matInput rows="3" [(ngModel)]="whatsAppBody"></textarea>
+            </mat-form-field>
+            <button mat-flat-button color="primary" [disabled]="!whatsAppBody" (click)="sendWhatsApp()">Send</button>
+          </mat-card>
         </div>
 
         <div class="col">
@@ -140,6 +165,44 @@ interface EmailTemplate {
               </div>
             } @empty {
               <p class="empty">No activity logged yet.</p>
+            }
+          </mat-card>
+
+          <mat-card>
+            <h3>Log a call</h3>
+            <div class="row">
+              <mat-form-field appearance="outline">
+                <mat-label>Direction</mat-label>
+                <mat-select [(ngModel)]="callDirection">
+                  @for (d of callDirections; track d) {
+                    <mat-option [value]="d">{{ callDirectionLabels[d] }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Outcome</mat-label>
+                <mat-select [(ngModel)]="callOutcome">
+                  @for (o of callOutcomes; track o) {
+                    <mat-option [value]="o">{{ callOutcomeLabels[o] }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            </div>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Notes (optional)</mat-label>
+              <textarea matInput rows="2" [(ngModel)]="callNotes"></textarea>
+            </mat-form-field>
+            <button mat-flat-button color="primary" (click)="logCall()">Log call</button>
+
+            <h3>Call history</h3>
+            @for (call of calls(); track call.id) {
+              <div class="timeline-item">
+                <span class="type">{{ callDirectionLabels[call.direction] }} — {{ callOutcomeLabels[call.outcome] }}</span>
+                <span class="date">{{ call.calledAt | date: 'd MMM, HH:mm' }}</span>
+                @if (call.notes) { <p>{{ call.notes }}</p> }
+              </div>
+            } @empty {
+              <p class="empty">No calls logged yet.</p>
             }
           </mat-card>
 
@@ -195,6 +258,12 @@ interface EmailTemplate {
                 @if (inv.pdfUrl) {
                   <a [href]="storageUrl(inv.pdfUrl)" target="_blank" rel="noopener">View document</a>
                 }
+                @if (inv.paidAt) {
+                  <mat-chip class="paid-chip">Paid</mat-chip>
+                } @else {
+                  <button mat-button (click)="takeInvoicePayment(inv.id)">Take payment</button>
+                  <button mat-button (click)="copyInvoicePaymentLink(inv.id)">Copy pay-online link</button>
+                }
               </div>
             } @empty {
               <p class="empty">No invoices raised yet.</p>
@@ -249,6 +318,14 @@ interface EmailTemplate {
         margin: 4px 0 0;
         color: rgba(0, 0, 0, 0.7);
       }
+      .paid-chip {
+        background: #e8f5e9;
+        font-size: 11px;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+      }
       .type {
         font-weight: 600;
       }
@@ -267,16 +344,25 @@ export class ContactDetailComponent implements OnInit {
   readonly contact = signal<ContactDetail | null>(null);
   readonly templates = signal<EmailTemplate[]>([]);
   readonly invoices = signal<CustomerInvoiceSummary[]>([]);
+  readonly calls = signal<CallLogEntry[]>([]);
+  readonly callDirections = Object.values(CallDirection);
+  readonly callDirectionLabels = CALL_DIRECTION_LABELS;
+  readonly callOutcomes = Object.values(CallOutcome);
+  readonly callOutcomeLabels = CALL_OUTCOME_LABELS;
   readonly contactEntity = IntegrationTargetEntity.CONTACT;
 
   selectedTemplateId = '';
   smsBody = '';
+  whatsAppBody = '';
   activityType: CrmActivityType = CrmActivityType.NOTE;
   activityNotes = '';
   taskTitle = '';
   taskDueDate = '';
   invoiceDescription = '';
   invoiceAmount: number | null = null;
+  callDirection: CallDirection = CallDirection.OUTBOUND;
+  callOutcome: CallOutcome = CallOutcome.CONNECTED;
+  callNotes = '';
 
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
@@ -288,6 +374,7 @@ export class ContactDetailComponent implements OnInit {
     this.contactId = this.route.snapshot.paramMap.get('id') ?? '';
     this.load();
     this.loadInvoices();
+    this.loadCalls();
     this.http.get<EmailTemplate[]>(`${environment.apiUrl}/email-templates`).subscribe((data) => this.templates.set(data));
   }
 
@@ -299,6 +386,41 @@ export class ContactDetailComponent implements OnInit {
     this.http
       .get<CustomerInvoiceSummary[]>(`${environment.apiUrl}/contacts/${this.contactId}/invoices`)
       .subscribe((data) => this.invoices.set(data));
+  }
+
+  loadCalls(): void {
+    this.http.get<CallLogEntry[]>(`${environment.apiUrl}/contacts/${this.contactId}/calls`).subscribe((data) => this.calls.set(data));
+  }
+
+  logCall(): void {
+    this.http
+      .post(`${environment.apiUrl}/contacts/${this.contactId}/calls`, {
+        direction: this.callDirection,
+        outcome: this.callOutcome,
+        notes: this.callNotes || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.callNotes = '';
+          this.loadCalls();
+        },
+        error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not log call', 'Dismiss', { duration: 4000 }),
+      });
+  }
+
+  takeInvoicePayment(invoiceId: string): void {
+    this.http.post(`${environment.apiUrl}/payments/CUSTOMER_INVOICE/${invoiceId}`, { sourceType: 'CUSTOMER_INVOICE', method: 'CARD' }).subscribe({
+      next: () => {
+        this.snackBar.open('Payment taken', 'Dismiss', { duration: 3000 });
+        this.loadInvoices();
+      },
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Payment failed', 'Dismiss', { duration: 4000 }),
+    });
+  }
+
+  copyInvoicePaymentLink(invoiceId: string): void {
+    const url = `${window.location.origin}/pay/CUSTOMER_INVOICE/${invoiceId}`;
+    navigator.clipboard.writeText(url).then(() => this.snackBar.open('Payment link copied', 'Dismiss', { duration: 3000 }));
   }
 
   createCustomerInvoice(): void {
@@ -368,6 +490,16 @@ export class ContactDetailComponent implements OnInit {
         this.snackBar.open('SMS sent (see the console-log adapter output)', 'Dismiss', { duration: 4000 });
       },
       error: () => this.snackBar.open('Failed to send SMS — does this contact have a phone number?', 'Dismiss', { duration: 4000 }),
+    });
+  }
+
+  sendWhatsApp(): void {
+    this.http.post(`${environment.apiUrl}/whatsapp/send`, { contactId: this.contactId, body: this.whatsAppBody }).subscribe({
+      next: () => {
+        this.whatsAppBody = '';
+        this.snackBar.open('WhatsApp message sent (see the console-log adapter output)', 'Dismiss', { duration: 4000 });
+      },
+      error: () => this.snackBar.open('Failed to send WhatsApp message — does this contact have a phone number?', 'Dismiss', { duration: 4000 }),
     });
   }
 }

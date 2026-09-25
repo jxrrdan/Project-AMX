@@ -86,6 +86,12 @@ export class UsedCarsController {
     return this.usedCarsService.setAskingPrice(user.dealerId, id, dto);
   }
 
+  @Get(':id/valuation')
+  @RequirePermissions({ module: ModuleKey.USED_CARS, action: PermissionAction.VIEW })
+  getValuation(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.usedCarsService.getValuation(user.dealerId, id);
+  }
+
   @Post(':id/appraisal')
   @RequirePermissions({ module: ModuleKey.USED_CARS, action: PermissionAction.CREATE })
   createAppraisal(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CreateAppraisalDto) {

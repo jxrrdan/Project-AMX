@@ -3,6 +3,7 @@ import { NotificationChannel } from '@project-amx/shared';
 import { EmailService } from '../../common/email/email.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SmsService } from '../../common/sms/sms.service';
+import { WhatsAppService } from '../../common/whatsapp/whatsapp.service';
 
 /**
  * Write side of the in-app notification centre (see NotificationsController for the read side).
@@ -11,6 +12,8 @@ import { SmsService } from '../../common/sms/sms.service';
  *   - EMAIL: also sent via EmailService (console-log locally, real SES in production).
  *   - SMS: also sent via SmsService (console-log locally, real SNS/Twilio in production) — skipped
  *     with a warning if the user has no phone number on file.
+ *   - WHATSAPP: also sent via WhatsAppService (console-log locally, real WhatsApp Business API in
+ *     production) — same phone-number requirement and skip behaviour as SMS.
  *   - PUSH: not implemented — there's no push adapter (FCM/APNs/web-push) anywhere in this app
  *     yet, so this logs a warning rather than pretending to deliver.
  *   - IN_APP: no extra delivery, the DB row is the whole notification.
@@ -25,6 +28,7 @@ export class NotificationsService {
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
     private readonly sms: SmsService,
+    private readonly whatsapp: WhatsAppService,
   ) {}
 
   async create(
@@ -80,6 +84,15 @@ export class NotificationsService {
         return;
       }
       await this.sms.send(user.phone, `${title}: ${body}`);
+      return;
+    }
+
+    if (channel === NotificationChannel.WHATSAPP) {
+      if (!user.phone) {
+        this.logger.warn(`WhatsApp notification requested for user ${userId} but they have no phone number on file — skipping`);
+        return;
+      }
+      await this.whatsapp.send(user.phone, `${title}: ${body}`);
     }
   }
 }

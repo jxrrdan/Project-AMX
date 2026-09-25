@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { AiConversationChannel, AiMessageRole, LeadStage } from '@project-amx/shared';
+import { AiConversationChannel, AiMessageRole, JobCardStatus, LeadStage, UsedVehicleStatus } from '@project-amx/shared';
 import { AiService } from '../../common/ai/ai.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { VehicleValuationService } from '../../common/valuation/vehicle-valuation.service';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { ChatbotMessageDto, ChatMessageDto, EmailDraftDto, NlQueryDto } from './dto/ai.dto';
 
@@ -17,6 +18,7 @@ export class AiInsightsService {
     private readonly ai: AiService,
     private readonly prisma: PrismaService,
     private readonly dashboard: DashboardService,
+    private readonly valuationService: VehicleValuationService,
   ) {}
 
   /** §14.1 — AI-generated daily briefing built from the same KPIs as the Module 6 dashboard. */
@@ -59,6 +61,86 @@ export class AiInsightsService {
 
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, 5);
+  }
+
+  /**
+   * Predictive no-show risk for upcoming workshop bookings — the "AI-powered predictive
+   * analytics" gap against Keyloop/Pinewood.AI, which both flag likely no-shows so a service
+   * advisor can proactively confirm them. Deterministic and explainable rather than an LLM call
+   * (matching priorityLeads' style), scored from signals actually on the booking: no phone
+   * number to remind them with, no advisor assigned to own the confirmation call, booked far in
+   * advance, or a thin record with no vehicle registration captured.
+   */
+  async serviceNoShowRisk(dealerId: string) {
+    const bookings = await this.prisma.jobCard.findMany({
+      where: { dealerId, status: JobCardStatus.SCHEDULED, scheduledStart: { gte: new Date() } },
+      include: { contact: true },
+      orderBy: { scheduledStart: 'asc' },
+    });
+
+    const scored = bookings.map((booking) => {
+      const reasons: string[] = [];
+      let score = 15;
+
+      if (!booking.contact?.phone) {
+        score += 30;
+        reasons.push('no phone number on file to send a reminder');
+      }
+      if (!booking.serviceAdvisorId) {
+        score += 20;
+        reasons.push('no service advisor assigned to confirm it');
+      }
+      if (booking.scheduledStart) {
+        const daysAhead = Math.ceil((booking.scheduledStart.getTime() - Date.now()) / 86400000);
+        if (daysAhead > 14) {
+          score += 20;
+          reasons.push(`booked ${daysAhead} days in advance`);
+        }
+      }
+      if (!booking.vehicleReg && !booking.vehicleId) {
+        score += 15;
+        reasons.push('no vehicle registration captured');
+      }
+
+      return { ...booking, riskScore: Math.min(100, score), reasons };
+    });
+
+    scored.sort((a, b) => b.riskScore - a.riskScore);
+    return scored;
+  }
+
+  /**
+   * Predictive/prescriptive used-car pricing suggestions — the "AI-powered analytics" gap
+   * against Keyloop/Pinewood.AI's demand-based pricing tools. Flags stock that's both ageing and
+   * priced meaningfully above the mocked market valuation (VehicleValuationService), so a
+   * suggested price cut is surfaced proactively rather than discovered manually.
+   */
+  async usedCarPricingSuggestions(dealerId: string) {
+    const vehicles = await this.prisma.usedVehicle.findMany({
+      where: { dealerId, status: { in: [UsedVehicleStatus.IN_STOCK, UsedVehicleStatus.LISTED] }, askingPrice: { not: null } },
+    });
+
+    const now = Date.now();
+    const suggestions = await Promise.all(
+      vehicles.map(async (vehicle) => {
+        const daysInStock = Math.floor((now - vehicle.createdAt.getTime()) / 86400000);
+        const valuation = await this.valuationService.getValuation(vehicle.reg, vehicle.mileage ?? 0);
+        const askingPrice = Number(vehicle.askingPrice);
+        const overpricedBy = askingPrice - valuation.privateRetailValue;
+        const overpricedPercent = overpricedBy / valuation.privateRetailValue;
+
+        let recommendation: string | null = null;
+        if (daysInStock > 60 && overpricedPercent > 0) {
+          recommendation = `Priced above market and in stock ${daysInStock} days — suggest reducing to £${valuation.privateRetailValue}`;
+        } else if (overpricedPercent > 0.05) {
+          recommendation = `£${overpricedBy.toFixed(0)} above suggested market value — consider reducing to £${valuation.privateRetailValue}`;
+        }
+
+        return { vehicleId: vehicle.id, reg: vehicle.reg, askingPrice, daysInStock, valuation, recommendation };
+      }),
+    );
+
+    return suggestions.filter((s) => s.recommendation).sort((a, b) => b.daysInStock - a.daysInStock);
   }
 
   /** §14.4 — contextual recommendation for a single lead. */

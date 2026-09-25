@@ -14,6 +14,11 @@ export const appRoutes: Route[] = [
     loadComponent: () => import('./features/public/vhc-report.component').then((m) => m.VhcReportComponent),
   },
   {
+    // Public, unauthenticated — pay an invoice online without logging in.
+    path: 'pay/:sourceType/:sourceId',
+    loadComponent: () => import('./features/public/pay-invoice.component').then((m) => m.PayInvoiceComponent),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./layout/shell.component').then((m) => m.ShellComponent),

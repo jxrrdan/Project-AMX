@@ -12,7 +12,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatTabsModule } from '@angular/material/tabs';
-import { NOMINAL_ACCOUNT_TYPE_LABELS, NominalAccountType, VAT_CODE_LABELS, VatCode } from '@project-amx/shared';
+import { BANK_LINE_STATUS_LABELS, BankLineStatus, NOMINAL_ACCOUNT_TYPE_LABELS, NominalAccountType, VAT_CODE_LABELS, VatCode } from '@project-amx/shared';
 import { environment } from '../../../environments/environment';
 
 interface NominalAccount {
@@ -62,6 +62,22 @@ interface VatReturn {
   box7TotalPurchasesExVat: string | number;
   status: 'DRAFT' | 'SUBMITTED';
   hmrcSubmissionRef: string | null;
+}
+
+interface BankStatementLineRow {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  status: BankLineStatus;
+  matchedJournalLine: { journalEntry: { reference: string } } | null;
+}
+
+interface UnmatchedJournalLine {
+  id: string;
+  debit: string | number;
+  credit: string | number;
+  journalEntry: { reference: string };
 }
 
 @Component({
@@ -294,6 +310,66 @@ interface VatReturn {
           <tr mat-row *matRowDef="let row; columns: vatColumns"></tr>
         </table>
       </mat-tab>
+
+      <mat-tab label="Bank reconciliation">
+        <mat-card>
+          <h3>Import a bank statement</h3>
+          <p class="hint">
+            One transaction per line: <code>date,description,amount</code> — a positive amount is money in, negative is
+            money out. (No real Open Banking feed is connected in this environment — paste rows exported from your bank.)
+          </p>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Statement rows</mat-label>
+            <textarea matInput rows="5" [(ngModel)]="bankImportText" placeholder="2026-09-01,Card payment received,120.00"></textarea>
+          </mat-form-field>
+          <button mat-flat-button color="primary" [disabled]="!bankImportText" (click)="importBankStatement()">Import</button>
+        </mat-card>
+
+        <table mat-table [dataSource]="bankLines()" class="mat-elevation-z1">
+          <ng-container matColumnDef="date">
+            <th mat-header-cell *matHeaderCellDef>Date</th>
+            <td mat-cell *matCellDef="let l">{{ l.date | date: 'dd/MM/yyyy' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="description">
+            <th mat-header-cell *matHeaderCellDef>Description</th>
+            <td mat-cell *matCellDef="let l">{{ l.description }}</td>
+          </ng-container>
+          <ng-container matColumnDef="amount">
+            <th mat-header-cell *matHeaderCellDef>Amount</th>
+            <td mat-cell *matCellDef="let l">{{ l.amount | currency: 'GBP' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let l">
+              <mat-chip [class.unmatched-chip]="l.status === 'UNMATCHED'">{{ bankLineStatusLabel(l.status) }}</mat-chip>
+              @if (l.matchedJournalLine) {
+                <span class="ref">{{ l.matchedJournalLine.journalEntry.reference }}</span>
+              }
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef></th>
+            <td mat-cell *matCellDef="let l">
+              @if (l.status === 'UNMATCHED') {
+                <mat-form-field appearance="outline" class="match-select">
+                  <mat-label>Match to…</mat-label>
+                  <mat-select (selectionChange)="matchBankLine(l.id, $event.value)">
+                    @for (jl of unmatchedJournalLines(); track jl.id) {
+                      <mat-option [value]="jl.id">
+                        {{ jl.journalEntry.reference }} — {{ journalLineAmount(jl) | currency: 'GBP' }}
+                      </mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+              } @else {
+                <button mat-button (click)="unmatchBankLine(l.id)">Unmatch</button>
+              }
+            </td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="bankLineColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: bankLineColumns"></tr>
+        </table>
+      </mat-tab>
     </mat-tab-group>
 
     <ng-template #ledgerTable let-lines>
@@ -362,6 +438,17 @@ interface VatReturn {
         font-size: 12px;
         color: #666;
       }
+      .unmatched-chip {
+        background: #fff3e0;
+      }
+      .match-select {
+        width: 220px;
+      }
+      code {
+        background: #f5f5f5;
+        padding: 1px 4px;
+        border-radius: 3px;
+      }
     `,
   ],
 })
@@ -373,11 +460,15 @@ export class LedgerOverviewComponent implements OnInit {
   readonly vehicleLedger = signal<JournalLine[]>([]);
   readonly vatReturns = signal<VatReturn[]>([]);
   readonly vatPreview = signal<VatReturn | null>(null);
+  readonly bankLines = signal<BankStatementLineRow[]>([]);
+  readonly unmatchedJournalLines = signal<UnmatchedJournalLine[]>([]);
 
   readonly accountColumns = ['code', 'name', 'type', 'vat'];
   readonly journalColumns = ['date', 'reference', 'description', 'source', 'total'];
   readonly ledgerColumns = ['date', 'reference', 'description', 'debit', 'credit'];
   readonly vatColumns = ['period', 'netVat', 'status', 'actions'];
+  readonly bankLineColumns = ['date', 'description', 'amount', 'status', 'actions'];
+  readonly bankLineStatusLabels = BANK_LINE_STATUS_LABELS;
 
   readonly accountTypes = Object.values(NominalAccountType);
   readonly accountTypeLabels = NOMINAL_ACCOUNT_TYPE_LABELS;
@@ -403,6 +494,7 @@ export class LedgerOverviewComponent implements OnInit {
 
   vatPeriodStart = '';
   vatPeriodEnd = '';
+  bankImportText = '';
 
   private readonly http = inject(HttpClient);
   private readonly snackBar = inject(MatSnackBar);
@@ -418,6 +510,16 @@ export class LedgerOverviewComponent implements OnInit {
     this.http.get<JournalLine[]>(`${environment.apiUrl}/ledger/purchase-ledger`).subscribe((data) => this.purchaseLedger.set(data));
     this.http.get<JournalLine[]>(`${environment.apiUrl}/ledger/vehicle-ledger`).subscribe((data) => this.vehicleLedger.set(data));
     this.http.get<VatReturn[]>(`${environment.apiUrl}/ledger/vat-returns`).subscribe((data) => this.vatReturns.set(data));
+    this.loadBankReconciliation();
+  }
+
+  loadBankReconciliation(): void {
+    this.http
+      .get<BankStatementLineRow[]>(`${environment.apiUrl}/ledger/bank-reconciliation/lines`)
+      .subscribe((data) => this.bankLines.set(data));
+    this.http
+      .get<UnmatchedJournalLine[]>(`${environment.apiUrl}/ledger/bank-reconciliation/unmatched-journal-lines`)
+      .subscribe((data) => this.unmatchedJournalLines.set(data));
   }
 
   createAccount(): void {
@@ -459,6 +561,14 @@ export class LedgerOverviewComponent implements OnInit {
 
   vatCodeLabel(code: VatCode): string {
     return this.vatCodeLabels[code];
+  }
+
+  bankLineStatusLabel(status: BankLineStatus): string {
+    return this.bankLineStatusLabels[status];
+  }
+
+  journalLineAmount(line: UnmatchedJournalLine): number {
+    return Number(line.debit) > 0 ? Number(line.debit) : Number(line.credit);
   }
 
   journalTotal(entry: JournalEntry): number {
@@ -510,5 +620,35 @@ export class LedgerOverviewComponent implements OnInit {
       },
       error: (err) => this.snackBar.open(err.error?.message ?? 'Submission failed', 'Dismiss', { duration: 5000 }),
     });
+  }
+
+  importBankStatement(): void {
+    const lines = this.bankImportText
+      .split('\n')
+      .map((row) => row.trim())
+      .filter((row) => row.length > 0)
+      .map((row) => {
+        const [date, description, amount] = row.split(',');
+        return { date: date?.trim(), description: description?.trim(), amount: Number(amount) };
+      });
+
+    this.http.post(`${environment.apiUrl}/ledger/bank-reconciliation/import`, { lines }).subscribe({
+      next: () => {
+        this.bankImportText = '';
+        this.loadBankReconciliation();
+        this.snackBar.open('Statement imported', 'Dismiss', { duration: 3000 });
+      },
+      error: (err) => this.snackBar.open(err.error?.message ?? 'Import failed', 'Dismiss', { duration: 5000 }),
+    });
+  }
+
+  matchBankLine(bankLineId: string, journalLineId: string): void {
+    this.http
+      .post(`${environment.apiUrl}/ledger/bank-reconciliation/lines/${bankLineId}/match`, { journalLineId })
+      .subscribe(() => this.loadBankReconciliation());
+  }
+
+  unmatchBankLine(bankLineId: string): void {
+    this.http.post(`${environment.apiUrl}/ledger/bank-reconciliation/lines/${bankLineId}/unmatch`, {}).subscribe(() => this.loadBankReconciliation());
   }
 }

@@ -8,13 +8,14 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
   };
   const email = { send: jest.fn().mockResolvedValue(undefined) };
   const sms = { send: jest.fn().mockResolvedValue(undefined) };
-  return { prisma: { ...prisma, ...overrides }, email, sms };
+  const whatsapp = { send: jest.fn().mockResolvedValue(undefined) };
+  return { prisma: { ...prisma, ...overrides }, email, sms, whatsapp };
 }
 
 describe('NotificationsService.create', () => {
   it('always writes an IN_APP row regardless of the requested delivery channel', async () => {
-    const { prisma, email, sms } = makeDeps();
-    const service = new NotificationsService(prisma as never, email as never, sms as never);
+    const { prisma, email, sms, whatsapp } = makeDeps();
+    const service = new NotificationsService(prisma as never, email as never, sms as never, whatsapp as never);
 
     await service.create('dealer-1', 'user-1', 'STALE_LEAD', 'Stale lead', 'No activity in 7 days', NotificationChannel.EMAIL);
 
@@ -31,8 +32,8 @@ describe('NotificationsService.create', () => {
   });
 
   it('IN_APP channel (the default) does not call email or SMS', async () => {
-    const { prisma, email, sms } = makeDeps();
-    const service = new NotificationsService(prisma as never, email as never, sms as never);
+    const { prisma, email, sms, whatsapp } = makeDeps();
+    const service = new NotificationsService(prisma as never, email as never, sms as never, whatsapp as never);
 
     await service.create('dealer-1', 'user-1', 'EVT', 'title', 'body');
 
@@ -42,8 +43,8 @@ describe('NotificationsService.create', () => {
   });
 
   it('EMAIL channel sends via EmailService using the user\'s email address', async () => {
-    const { prisma, email, sms } = makeDeps();
-    const service = new NotificationsService(prisma as never, email as never, sms as never);
+    const { prisma, email, sms, whatsapp } = makeDeps();
+    const service = new NotificationsService(prisma as never, email as never, sms as never, whatsapp as never);
 
     await service.create('dealer-1', 'user-1', 'EVT', 'Stale lead', 'body text', NotificationChannel.EMAIL);
 
@@ -52,8 +53,8 @@ describe('NotificationsService.create', () => {
   });
 
   it('SMS channel sends via SmsService using the user\'s phone number', async () => {
-    const { prisma, email, sms } = makeDeps();
-    const service = new NotificationsService(prisma as never, email as never, sms as never);
+    const { prisma, email, sms, whatsapp } = makeDeps();
+    const service = new NotificationsService(prisma as never, email as never, sms as never, whatsapp as never);
 
     await service.create('dealer-1', 'user-1', 'EVT', 'Stale lead', 'body text', NotificationChannel.SMS);
 
@@ -62,17 +63,36 @@ describe('NotificationsService.create', () => {
   });
 
   it('SMS channel is skipped (no throw) when the user has no phone number on file', async () => {
-    const { prisma, email, sms } = makeDeps({ user: { findUnique: jest.fn().mockResolvedValue({ email: 'x@example.com', phone: null }) } });
-    const service = new NotificationsService(prisma as never, email as never, sms as never);
+    const { prisma, email, sms, whatsapp } = makeDeps({ user: { findUnique: jest.fn().mockResolvedValue({ email: 'x@example.com', phone: null }) } });
+    const service = new NotificationsService(prisma as never, email as never, sms as never, whatsapp as never);
 
     await service.create('dealer-1', 'user-1', 'EVT', 'title', 'body', NotificationChannel.SMS);
 
     expect(sms.send).not.toHaveBeenCalled();
   });
 
+  it('WHATSAPP channel sends via WhatsAppService using the user\'s phone number', async () => {
+    const { prisma, email, sms, whatsapp } = makeDeps();
+    const service = new NotificationsService(prisma as never, email as never, sms as never, whatsapp as never);
+
+    await service.create('dealer-1', 'user-1', 'EVT', 'Stale lead', 'body text', NotificationChannel.WHATSAPP);
+
+    expect(whatsapp.send).toHaveBeenCalledWith('+447700900000', 'Stale lead: body text');
+    expect(sms.send).not.toHaveBeenCalled();
+  });
+
+  it('WHATSAPP channel is skipped (no throw) when the user has no phone number on file', async () => {
+    const { prisma, email, sms, whatsapp } = makeDeps({ user: { findUnique: jest.fn().mockResolvedValue({ email: 'x@example.com', phone: null }) } });
+    const service = new NotificationsService(prisma as never, email as never, sms as never, whatsapp as never);
+
+    await service.create('dealer-1', 'user-1', 'EVT', 'title', 'body', NotificationChannel.WHATSAPP);
+
+    expect(whatsapp.send).not.toHaveBeenCalled();
+  });
+
   it('PUSH channel logs a warning rather than throwing — no push adapter exists yet', async () => {
-    const { prisma, email, sms } = makeDeps();
-    const service = new NotificationsService(prisma as never, email as never, sms as never);
+    const { prisma, email, sms, whatsapp } = makeDeps();
+    const service = new NotificationsService(prisma as never, email as never, sms as never, whatsapp as never);
 
     await expect(service.create('dealer-1', 'user-1', 'EVT', 'title', 'body', NotificationChannel.PUSH)).resolves.toBeDefined();
     expect(email.send).not.toHaveBeenCalled();
@@ -82,8 +102,8 @@ describe('NotificationsService.create', () => {
 
 describe('NotificationsService.createMany', () => {
   it('is a no-op for an empty user list', async () => {
-    const { prisma, email, sms } = makeDeps();
-    const service = new NotificationsService(prisma as never, email as never, sms as never);
+    const { prisma, email, sms, whatsapp } = makeDeps();
+    const service = new NotificationsService(prisma as never, email as never, sms as never, whatsapp as never);
 
     const result = await service.createMany('dealer-1', [], 'EVT', 'title', 'body');
 
@@ -92,8 +112,8 @@ describe('NotificationsService.createMany', () => {
   });
 
   it('delivers to every user id when a real channel is requested', async () => {
-    const { prisma, email, sms } = makeDeps();
-    const service = new NotificationsService(prisma as never, email as never, sms as never);
+    const { prisma, email, sms, whatsapp } = makeDeps();
+    const service = new NotificationsService(prisma as never, email as never, sms as never, whatsapp as never);
 
     await service.createMany('dealer-1', ['u1', 'u2'], 'EVT', 'title', 'body', NotificationChannel.EMAIL);
 

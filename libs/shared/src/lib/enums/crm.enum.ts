@@ -138,3 +138,27 @@ export enum WorkflowEnrollmentStatus {
   COMPLETED = 'COMPLETED',
   UNENROLLED = 'UNENROLLED',
 }
+
+export enum CallDirection {
+  INBOUND = 'INBOUND',
+  OUTBOUND = 'OUTBOUND',
+}
+
+export const CALL_DIRECTION_LABELS: Record<CallDirection, string> = {
+  [CallDirection.INBOUND]: 'Inbound',
+  [CallDirection.OUTBOUND]: 'Outbound',
+};
+
+export enum CallOutcome {
+  CONNECTED = 'CONNECTED',
+  NO_ANSWER = 'NO_ANSWER',
+  VOICEMAIL = 'VOICEMAIL',
+  WRONG_NUMBER = 'WRONG_NUMBER',
+}
+
+export const CALL_OUTCOME_LABELS: Record<CallOutcome, string> = {
+  [CallOutcome.CONNECTED]: 'Connected',
+  [CallOutcome.NO_ANSWER]: 'No answer',
+  [CallOutcome.VOICEMAIL]: 'Left voicemail',
+  [CallOutcome.WRONG_NUMBER]: 'Wrong number',
+};
