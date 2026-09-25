@@ -79,8 +79,28 @@ export class UsedCarsService {
     });
   }
 
-  create(dealerId: string, dto: CreateUsedVehicleDto) {
-    return this.prisma.usedVehicle.create({ data: { dealerId, ...dto } });
+  async create(dealerId: string, dto: CreateUsedVehicleDto) {
+    const vehicle = await this.prisma.usedVehicle.create({ data: { dealerId, ...dto } });
+    if (dto.purchasePrice) {
+      await this.postStockIntake(dealerId, vehicle.id, vehicle.reg, dto.purchasePrice);
+    }
+    return vehicle;
+  }
+
+  /** Debits Vehicle Stock for a vehicle entering stock — whether bought outright (this method)
+   * or taken in as a trade-in (TradeInService.intake) — against Creditors Control, covering
+   * both "we owe an auction/wholesaler for it" and "we owe the trading-in customer its value". */
+  private postStockIntake(dealerId: string, usedVehicleId: string, reg: string, purchasePrice: number) {
+    return this.ledgerService.postSafely(dealerId, {
+      reference: usedVehicleId,
+      description: `Vehicle stock intake — ${reg}`,
+      sourceType: JournalSourceType.VEHICLE_STOCK_IN,
+      sourceId: usedVehicleId,
+      lines: [
+        { accountCode: CONTROL_ACCOUNT_CODES.VEHICLE_STOCK, debit: purchasePrice },
+        { accountCode: CONTROL_ACCOUNT_CODES.CREDITORS_CONTROL, credit: purchasePrice },
+      ],
+    });
   }
 
   /**

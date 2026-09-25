@@ -26,6 +26,53 @@ function makeLedger() {
   return { postSafely: jest.fn() };
 }
 
+describe('UsedCarsService.create', () => {
+  const dealerId = 'dealer-1';
+
+  it('posts the purchase price into Vehicle Stock against Creditors Control', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'vehicle-1', reg: 'AB12CDE' });
+    const prisma = { usedVehicle: { create } };
+    const ledger = makeLedger();
+    const service = new UsedCarsService(
+      prisma as never,
+      makePdf() as never,
+      makeDocumentSequences() as never,
+      makeDocumentTemplates() as never,
+      makeActionTriggers() as never,
+      makeTradeIn() as never,
+      ledger as never,
+    );
+
+    await service.create(dealerId, { reg: 'AB12CDE', make: 'Ford', model: 'Focus', purchasePrice: 8000 } as never);
+
+    expect(ledger.postSafely).toHaveBeenCalledWith(
+      dealerId,
+      expect.objectContaining({
+        lines: expect.arrayContaining([expect.objectContaining({ debit: 8000 }), expect.objectContaining({ credit: 8000 })]),
+      }),
+    );
+  });
+
+  it('does not post to the ledger when no purchase price is given', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'vehicle-1', reg: 'AB12CDE' });
+    const prisma = { usedVehicle: { create } };
+    const ledger = makeLedger();
+    const service = new UsedCarsService(
+      prisma as never,
+      makePdf() as never,
+      makeDocumentSequences() as never,
+      makeDocumentTemplates() as never,
+      makeActionTriggers() as never,
+      makeTradeIn() as never,
+      ledger as never,
+    );
+
+    await service.create(dealerId, { reg: 'AB12CDE', make: 'Ford', model: 'Focus' } as never);
+
+    expect(ledger.postSafely).not.toHaveBeenCalled();
+  });
+});
+
 describe('UsedCarsService.createDealSheet', () => {
   const dealerId = 'dealer-1';
   const usedVehicleId = 'vehicle-1';

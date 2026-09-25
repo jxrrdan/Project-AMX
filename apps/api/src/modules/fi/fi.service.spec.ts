@@ -1,10 +1,14 @@
 import { NotFoundException } from '@nestjs/common';
 import { FiService } from './fi.service';
 
+function makeLedger() {
+  return { postSafely: jest.fn() };
+}
+
 describe('FiService.addToDeal', () => {
   it('throws when the finance product does not exist for this dealer', async () => {
     const prisma = { financeProduct: { findFirst: jest.fn().mockResolvedValue(null) } };
-    const service = new FiService(prisma as never);
+    const service = new FiService(prisma as never, makeLedger() as never);
     await expect(
       service.addToDeal('dealer-1', { productId: 'missing', totalPremium: 500 } as never),
     ).rejects.toThrow(NotFoundException);
@@ -13,7 +17,7 @@ describe('FiService.addToDeal', () => {
   it('refuses to link a finance product belonging to another dealer', async () => {
     const findFirst = jest.fn().mockResolvedValue(null);
     const prisma = { financeProduct: { findFirst } };
-    const service = new FiService(prisma as never);
+    const service = new FiService(prisma as never, makeLedger() as never);
     await expect(
       service.addToDeal('dealer-1', { productId: 'dealer-2-product', totalPremium: 500 } as never),
     ).rejects.toThrow(NotFoundException);
@@ -25,12 +29,45 @@ describe('FiService.addToDeal', () => {
   it('calculates commission as a percentage of the premium when the product has a commission rate', async () => {
     const create = jest.fn().mockImplementation(({ data }) => Promise.resolve(data));
     const prisma = {
-      financeProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'p1', commissionRate: 10, commissionFixed: null }) },
+      financeProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'p1', name: 'GAP Insurance', commissionRate: 10, commissionFixed: null }) },
       dealFinanceProduct: { create },
     };
-    const service = new FiService(prisma as never);
+    const service = new FiService(prisma as never, makeLedger() as never);
     const result = await service.addToDeal('dealer-1', { productId: 'p1', totalPremium: 500 } as never);
     expect(result.commissionAmount).toBe(50);
+  });
+
+  it('posts the commission to Debtors Control against F&I Commission', async () => {
+    const create = jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'deal-product-1', ...data }));
+    const prisma = {
+      financeProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'p1', name: 'GAP Insurance', commissionRate: 10, commissionFixed: null }) },
+      dealFinanceProduct: { create },
+    };
+    const ledger = makeLedger();
+    const service = new FiService(prisma as never, ledger as never);
+
+    await service.addToDeal('dealer-1', { productId: 'p1', totalPremium: 500 } as never);
+
+    expect(ledger.postSafely).toHaveBeenCalledWith(
+      'dealer-1',
+      expect.objectContaining({
+        lines: expect.arrayContaining([expect.objectContaining({ debit: 50 }), expect.objectContaining({ credit: 50 })]),
+      }),
+    );
+  });
+
+  it('does not post to the ledger when there is no commission', async () => {
+    const create = jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'deal-product-1', ...data }));
+    const prisma = {
+      financeProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'p1', name: 'Extended Warranty', commissionRate: null, commissionFixed: null }) },
+      dealFinanceProduct: { create },
+    };
+    const ledger = makeLedger();
+    const service = new FiService(prisma as never, ledger as never);
+
+    await service.addToDeal('dealer-1', { productId: 'p1', totalPremium: 500 } as never);
+
+    expect(ledger.postSafely).not.toHaveBeenCalled();
   });
 
   it('uses amountFinanced as the base when totalPremium is absent', async () => {
@@ -39,7 +76,7 @@ describe('FiService.addToDeal', () => {
       financeProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'p1', commissionRate: 5, commissionFixed: null }) },
       dealFinanceProduct: { create },
     };
-    const service = new FiService(prisma as never);
+    const service = new FiService(prisma as never, makeLedger() as never);
     const result = await service.addToDeal('dealer-1', { productId: 'p1', amountFinanced: 20000 } as never);
     expect(result.commissionAmount).toBe(1000);
   });
@@ -50,7 +87,7 @@ describe('FiService.addToDeal', () => {
       financeProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'p1', commissionRate: 10, commissionFixed: 75 }) },
       dealFinanceProduct: { create },
     };
-    const service = new FiService(prisma as never);
+    const service = new FiService(prisma as never, makeLedger() as never);
     const result = await service.addToDeal('dealer-1', { productId: 'p1', totalPremium: 500 } as never);
     expect(result.commissionAmount).toBe(75);
   });
@@ -61,7 +98,7 @@ describe('FiService.addToDeal', () => {
       financeProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'p1', commissionRate: null, commissionFixed: null }) },
       dealFinanceProduct: { create },
     };
-    const service = new FiService(prisma as never);
+    const service = new FiService(prisma as never, makeLedger() as never);
     const result = await service.addToDeal('dealer-1', { productId: 'p1', totalPremium: 500 } as never);
     expect(result.commissionAmount).toBe(0);
   });
@@ -73,7 +110,7 @@ describe('FiService.addToDeal', () => {
       usedVehicle: { findFirst: jest.fn().mockResolvedValue(null) },
       dealFinanceProduct: { create },
     };
-    const service = new FiService(prisma as never);
+    const service = new FiService(prisma as never, makeLedger() as never);
     await expect(
       service.addToDeal('dealer-1', { productId: 'p1', usedVehicleId: 'dealer-2-vehicle', totalPremium: 500 } as never),
     ).rejects.toThrow(NotFoundException);
@@ -86,7 +123,7 @@ describe('FiService.recordDisclosure', () => {
     const findFirst = jest.fn().mockResolvedValue(null);
     const create = jest.fn();
     const prisma = { dealFinanceProduct: { findFirst }, fcaDisclosure: { create } };
-    const service = new FiService(prisma as never);
+    const service = new FiService(prisma as never, makeLedger() as never);
     await expect(
       service.recordDisclosure('dealer-1', 'dealer-2-deal-product', {
         commissionDisclosed: true,
@@ -105,7 +142,7 @@ describe('FiService.recordDisclosure', () => {
       dealFinanceProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'deal-product-1' }) },
       fcaDisclosure: { create },
     };
-    const service = new FiService(prisma as never);
+    const service = new FiService(prisma as never, makeLedger() as never);
     await service.recordDisclosure('dealer-1', 'deal-product-1', {
       commissionDisclosed: true,
       customerSignatureUrl: 'sig.png',
@@ -125,7 +162,7 @@ describe('FiService.commissionReport', () => {
         ]),
       },
     };
-    const service = new FiService(prisma as never);
+    const service = new FiService(prisma as never, makeLedger() as never);
     const report = await service.commissionReport('dealer-1');
     expect(report).toEqual({ totalCommission: 150, dealCount: 3, financePenetration: 1, insuranceAttachment: 2 });
   });

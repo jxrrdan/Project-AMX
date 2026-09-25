@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { JournalSourceType } from '@prisma/client';
 import { VehicleSource } from '@project-amx/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CONTROL_ACCOUNT_CODES } from '../ledger/ledger.constants';
+import { LedgerService } from '../ledger/ledger.service';
 
 export interface TradeInInput {
   reg: string;
@@ -28,7 +31,10 @@ export interface TradeInInput {
  */
 @Injectable()
 export class TradeInService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ledgerService: LedgerService,
+  ) {}
 
   async intake(dealerId: string, tradeIn: TradeInInput, link: { dealSheetId: string } | { newCarSaleId: string }) {
     const usedVehicle = await this.prisma.usedVehicle.create({
@@ -55,6 +61,20 @@ export class TradeInService {
         newCarSaleId: 'newCarSaleId' in link ? link.newCarSaleId : undefined,
       },
     });
+
+    if (tradeIn.agreedValue > 0) {
+      await this.ledgerService.postSafely(dealerId, {
+        reference: usedVehicle.id,
+        description: `Trade-in intake — ${tradeIn.reg}`,
+        sourceType: JournalSourceType.VEHICLE_STOCK_IN,
+        sourceId: usedVehicle.id,
+        lines: [
+          { accountCode: CONTROL_ACCOUNT_CODES.VEHICLE_STOCK, debit: tradeIn.agreedValue },
+          { accountCode: CONTROL_ACCOUNT_CODES.CREDITORS_CONTROL, credit: tradeIn.agreedValue },
+        ],
+      });
+    }
+
     return { usedVehicle, appraisal };
   }
 }

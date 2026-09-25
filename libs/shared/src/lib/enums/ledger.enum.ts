@@ -49,6 +49,8 @@ export enum JournalSourceType {
   SUPPLIER_INVOICE = 'SUPPLIER_INVOICE',
   MANUFACTURER_PAYMENT = 'MANUFACTURER_PAYMENT',
   VEHICLE_SALE = 'VEHICLE_SALE',
+  VEHICLE_STOCK_IN = 'VEHICLE_STOCK_IN',
+  FI_COMMISSION = 'FI_COMMISSION',
   MANUAL = 'MANUAL',
 }
 
@@ -58,6 +60,8 @@ export const JOURNAL_SOURCE_TYPE_LABELS: Record<JournalSourceType, string> = {
   [JournalSourceType.SUPPLIER_INVOICE]: 'Supplier invoice',
   [JournalSourceType.MANUFACTURER_PAYMENT]: 'Manufacturer payment',
   [JournalSourceType.VEHICLE_SALE]: 'Vehicle sale',
+  [JournalSourceType.VEHICLE_STOCK_IN]: 'Vehicle stock intake',
+  [JournalSourceType.FI_COMMISSION]: 'F&I commission',
   [JournalSourceType.MANUAL]: 'Manual journal',
 };
 

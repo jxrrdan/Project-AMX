@@ -462,6 +462,15 @@ project with nothing behind it. This wave builds that missing double-entry core.
   **Purchase Ledger** (suppliers, goods receipt notes, supplier invoices with the AI-extraction
   paste box and match/approve/pay actions), and **Manufacturer Payments** (batch creation against
   warranty claims, reconcile, post) alongside the pre-existing Xero/Sage/QuickBooks sync page.
+- **F&I commission and vehicle stock-in also post automatically** — two gaps found after this wave
+  first shipped: `FiService.addToDeal()` computed a deal's commission but never posted it, leaving
+  the seeded `FI_COMMISSION` account permanently empty; it now posts Debtors Control against F&I
+  Commission the moment a product is added to a deal. Likewise nothing debited Vehicle Stock when a
+  vehicle actually entered stock — only the sale side (cost-of-sale relief) posted — so the vehicle
+  ledger only ever showed vehicles leaving, never arriving. `UsedCarsService.create()` (buying stock
+  outright) and `TradeInService.intake()` (taking in a trade-in) now both post the purchase/agreed
+  value into Vehicle Stock against Creditors Control. Both use a new `JournalSourceType.FI_COMMISSION`
+  / `VEHICLE_STOCK_IN` rather than being lumped under the generic `MANUAL` type.
 
 ## What's deliberately not built
 

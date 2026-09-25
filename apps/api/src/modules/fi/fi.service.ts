@@ -1,11 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { JournalSourceType } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CONTROL_ACCOUNT_CODES } from '../ledger/ledger.constants';
+import { LedgerService } from '../ledger/ledger.service';
 import { AddDealProductDto, CreateFinanceProductDto, RecordDisclosureDto } from './dto/fi.dto';
 
 /** Module 13 — Finance & Insurance, with FCA-compliant commission disclosure tracking. */
 @Injectable()
 export class FiService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ledgerService: LedgerService,
+  ) {}
 
   listProducts(dealerId: string) {
     return this.prisma.financeProduct.findMany({ where: { dealerId, active: true } });
@@ -41,7 +47,22 @@ export class FiService {
         ? (base * Number(product.commissionRate)) / 100
         : 0;
 
-    return this.prisma.dealFinanceProduct.create({ data: { ...dto, commissionAmount } });
+    const dealFinanceProduct = await this.prisma.dealFinanceProduct.create({ data: { ...dto, commissionAmount } });
+
+    if (commissionAmount > 0) {
+      await this.ledgerService.postSafely(dealerId, {
+        reference: dealFinanceProduct.id,
+        description: `F&I commission — ${product.name}`,
+        sourceType: JournalSourceType.FI_COMMISSION,
+        sourceId: dealFinanceProduct.id,
+        lines: [
+          { accountCode: CONTROL_ACCOUNT_CODES.DEBTORS_CONTROL, debit: commissionAmount },
+          { accountCode: CONTROL_ACCOUNT_CODES.FI_COMMISSION, credit: commissionAmount },
+        ],
+      });
+    }
+
+    return dealFinanceProduct;
   }
 
   /** FCA disclosure log — customer informed of commission, consent captured digitally (§13.3). */
