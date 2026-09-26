@@ -6,11 +6,13 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { CompleteHandoverDto, CreateHandoverDto } from './dto/handover.dto';
 import { CreateNewCarSaleDto, InvalidateNewCarSaleDto } from './dto/new-car-sale.dto';
 import { SchedulePdiDto, SignOffPdiDto, UpdateChecklistItemDto } from './dto/pdi.dto';
+import { LinkVehicleContactDto } from './dto/vehicle-contact.dto';
 import { CreateVehicleDto, UpdateVehicleDto } from './dto/vehicle.dto';
 import { HandoverService } from './handover.service';
 import { NewCarSaleService } from './new-car-sale.service';
 import { PdiService } from './pdi.service';
 import { RisImportService } from './ris-import.service';
+import { VehicleContactsService } from './vehicle-contacts.service';
 import { VehiclesService } from './vehicles.service';
 
 @Controller()
@@ -21,6 +23,7 @@ export class VehiclesController {
     private readonly handoverService: HandoverService,
     private readonly risImportService: RisImportService,
     private readonly newCarSaleService: NewCarSaleService,
+    private readonly vehicleContactsService: VehicleContactsService,
   ) {}
 
   @Get('vehicles')
@@ -118,5 +121,24 @@ export class VehiclesController {
     @Body() dto: InvalidateNewCarSaleDto,
   ) {
     return this.newCarSaleService.invalidate(user.dealerId, id, saleId, dto);
+  }
+
+  @Get('vehicles/:id/contacts')
+  @RequirePermissions({ module: ModuleKey.NEW_CAR_PDI, action: PermissionAction.VIEW })
+  listVehicleContacts(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.vehicleContactsService.list(user.dealerId, id);
+  }
+
+  /** Links a contact as this vehicle's owner, registered keeper, or a driver (§Module 19). */
+  @Post('vehicles/:id/contacts')
+  @RequirePermissions({ module: ModuleKey.NEW_CAR_PDI, action: PermissionAction.EDIT })
+  linkVehicleContact(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: LinkVehicleContactDto) {
+    return this.vehicleContactsService.link(user.dealerId, id, dto);
+  }
+
+  @Post('vehicles/:id/contacts/:linkId/end')
+  @RequirePermissions({ module: ModuleKey.NEW_CAR_PDI, action: PermissionAction.EDIT })
+  endVehicleContact(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('linkId') linkId: string) {
+    return this.vehicleContactsService.end(user.dealerId, id, linkId);
   }
 }

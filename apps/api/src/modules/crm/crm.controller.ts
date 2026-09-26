@@ -4,6 +4,7 @@ import type { AuthUser } from '@project-amx/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { VehicleContactsService } from '../vehicles/vehicle-contacts.service';
 import { CommunicationsService } from './communications.service';
 import { CustomerInvoiceService } from './customer-invoice.service';
 import {
@@ -27,7 +28,16 @@ export class CrmController {
     private readonly communicationsService: CommunicationsService,
     private readonly workflowsService: WorkflowsService,
     private readonly customerInvoiceService: CustomerInvoiceService,
+    private readonly vehicleContactsService: VehicleContactsService,
   ) {}
+
+  /** The other side of Module 19's vehicle-owner/keeper/driver links — every vehicle this contact
+   * currently or previously held a role on. */
+  @Get('contacts/:id/vehicles')
+  @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.VIEW })
+  listContactVehicles(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.vehicleContactsService.listForContact(user.dealerId, id);
+  }
 
   @Get('contacts/:id/invoices')
   @RequirePermissions({ module: ModuleKey.CRM, action: PermissionAction.VIEW })

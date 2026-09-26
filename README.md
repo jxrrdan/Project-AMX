@@ -524,6 +524,38 @@ scope for a direct-sales BMW retailer) turned up several genuine gaps that this 
     surfaced as a "Pricing suggestions" card on the used car stock list, linking through to the
     vehicle.
 
+## Security & quality CI, a 360-degree comms timeline, and vehicle owner/keeper/driver history
+
+- **`.github/workflows/security-scan.yml`** — ESLint, [Semgrep](https://semgrep.dev) SAST,
+  [Gitleaks](https://github.com/gitleaks/gitleaks) secret scanning, and a [Trivy](https://trivy.dev)
+  filesystem/dependency and IaC-config scan, each as its own job, running on every push/PR against
+  `main`/`develop`. The ESLint job runs with `continue-on-error: true` (soft-launched, per its own
+  comment, "remove once the codebase is clean, so it fails the build properly") since it's a repo-
+  root-wide scan, not the per-package `nx lint` used everywhere else in this README; the other three
+  jobs gate the build immediately. Getting the ESLint job to report real signal instead of noise
+  required extending the shared `eslint.config.mjs` ignore list (`**/.angular`, `**/.nx`,
+  `**/coverage`, `**/cdk.out`) — without it, a plain `eslint .` at the repo root swept in Angular's
+  build cache and reported thousands of irrelevant errors from vendored/generated files.
+- **A genuine 360-degree view of a contact** — `CrmService.findContact()` already returned a
+  contact's emails and SMS messages but not its WhatsApp messages, and the contact detail page never
+  rendered any of the three, or the separately-fetched call log, together. `ContactDetailComponent`
+  now merges all four channels into one chronological "Communication history" card (sorted newest
+  first, colour-coded channel icon per row), replacing the standalone "Call history" list that used
+  to sit disconnected from email/SMS/WhatsApp — the same "one merged timeline, not four separate
+  lists" gap Keyloop/Pinewood.AI close with an integrated activity feed.
+- **Vehicle owner/keeper/driver history** — a `Vehicle` previously had no link to a `Contact` at
+  all beyond a free-text `customerName` string and whichever contact happened to book a workshop
+  job. A new `VehicleContact` join model (role: `OWNER` | `KEEPER` | `DRIVER`, with `startedAt`/
+  `endedAt`) captures the genuinely distinct UK motor-trade relationships a vehicle has over its
+  life: its legal owner (often a finance company on a PCP/lease deal), its DVLA-registered keeper
+  (usually the customer, but not always the same as the owner), and anyone else who drives it (a
+  company car can have several current drivers at once). `VehicleContactsService.link()` auto-ends
+  any other current OWNER or KEEPER on that vehicle when a new one is added — a vehicle only has one
+  of each at a time — but never touches DRIVER links, which are allowed to stack; `end()` closes a
+  link without deleting it, so the history of past keepers/owners survives. The vehicle detail page
+  gained a "People — owner, keeper & drivers" card (current holders per role, a link/end form, and a
+  history list of ended links); the contact detail page gained the mirror-image "Vehicles" card.
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks

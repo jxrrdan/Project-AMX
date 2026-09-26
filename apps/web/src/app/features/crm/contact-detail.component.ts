@@ -18,10 +18,36 @@ import {
   CallOutcome,
   CrmActivityType,
   IntegrationTargetEntity,
+  VEHICLE_CONTACT_ROLE_LABELS,
+  VehicleContactRole,
 } from '@project-amx/shared';
 import { CustomFieldsPanelComponent } from '../integrations/custom-fields-panel.component';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/auth.service';
+
+interface EmailMessageSummary {
+  id: string;
+  subject: string;
+  status: string;
+  sentAt: string | null;
+  createdAt: string;
+}
+
+interface SmsMessageSummary {
+  id: string;
+  body: string;
+  status: string;
+  sentAt: string | null;
+  createdAt: string;
+}
+
+interface WhatsAppMessageSummary {
+  id: string;
+  body: string;
+  status: string;
+  sentAt: string | null;
+  createdAt: string;
+}
 
 interface ContactDetail {
   id: string;
@@ -34,6 +60,9 @@ interface ContactDetail {
   leads: { id: string; stage: string }[];
   activities: { id: string; type: string; notes: string | null; createdAt: string }[];
   tasks: { id: string; title: string; dueDate: string; completedAt: string | null }[];
+  emails: EmailMessageSummary[];
+  smsMessages: SmsMessageSummary[];
+  whatsAppMessages: WhatsAppMessageSummary[];
 }
 
 interface CallLogEntry {
@@ -42,6 +71,24 @@ interface CallLogEntry {
   outcome: CallOutcome;
   notes: string | null;
   calledAt: string;
+}
+
+interface VehicleLink {
+  id: string;
+  role: VehicleContactRole;
+  startedAt: string;
+  endedAt: string | null;
+  vehicle: { id: string; vin: string; model: string };
+}
+
+type CommsChannel = 'EMAIL' | 'SMS' | 'WHATSAPP' | 'CALL';
+
+/** One row in the merged 360-degree communication history — see ContactDetailComponent.communicationHistory(). */
+interface CommsTimelineEntry {
+  channel: CommsChannel;
+  date: string;
+  headline: string;
+  detail: string | null;
 }
 
 interface CustomerInvoiceSummary {
@@ -141,6 +188,21 @@ interface EmailTemplate {
 
         <div class="col">
           <mat-card>
+            <h3>Communication history</h3>
+            <p class="hint">Every email, SMS, WhatsApp message and call in one place — a full 360-degree view of this contact.</p>
+            @for (entry of communicationHistory(); track entry.channel + entry.date + entry.headline) {
+              <div class="timeline-item">
+                <mat-icon class="channel-icon" [class]="'channel-' + entry.channel">{{ channelIcons[entry.channel] }}</mat-icon>
+                <span class="type">{{ entry.headline }}</span>
+                <span class="date">{{ entry.date | date: 'd MMM, HH:mm' }}</span>
+                @if (entry.detail) { <p>{{ entry.detail }}</p> }
+              </div>
+            } @empty {
+              <p class="empty">No emails, SMS, WhatsApp messages or calls logged yet.</p>
+            }
+          </mat-card>
+
+          <mat-card>
             <h3>Log an activity</h3>
             <mat-form-field appearance="outline" class="full-width">
               <mat-label>Type</mat-label>
@@ -193,17 +255,7 @@ interface EmailTemplate {
               <textarea matInput rows="2" [(ngModel)]="callNotes"></textarea>
             </mat-form-field>
             <button mat-flat-button color="primary" (click)="logCall()">Log call</button>
-
-            <h3>Call history</h3>
-            @for (call of calls(); track call.id) {
-              <div class="timeline-item">
-                <span class="type">{{ callDirectionLabels[call.direction] }} — {{ callOutcomeLabels[call.outcome] }}</span>
-                <span class="date">{{ call.calledAt | date: 'd MMM, HH:mm' }}</span>
-                @if (call.notes) { <p>{{ call.notes }}</p> }
-              </div>
-            } @empty {
-              <p class="empty">No calls logged yet.</p>
-            }
+            <p class="hint">Logged calls appear in the "Communication history" card above, alongside email/SMS/WhatsApp.</p>
           </mat-card>
 
           <mat-card>
@@ -267,6 +319,24 @@ interface EmailTemplate {
               </div>
             } @empty {
               <p class="empty">No invoices raised yet.</p>
+            }
+          </mat-card>
+
+          <mat-card>
+            <h3>Vehicles</h3>
+            <p class="hint">Every vehicle this contact is (or was) the owner, registered keeper, or a driver of.</p>
+            @for (link of vehicleLinks(); track link.id) {
+              <div class="timeline-item">
+                <a [routerLink]="['/vehicles', link.vehicle.id]">{{ link.vehicle.model }} ({{ link.vehicle.vin }})</a>
+                <mat-chip>{{ vehicleContactRoleLabels[link.role] }}</mat-chip>
+                @if (link.endedAt) {
+                  <span class="date">ended {{ link.endedAt | date: 'd MMM y' }}</span>
+                } @else {
+                  <span class="date">current</span>
+                }
+              </div>
+            } @empty {
+              <p class="empty">No vehicles linked yet.</p>
             }
           </mat-card>
         </div>
@@ -337,6 +407,28 @@ interface EmailTemplate {
         color: rgba(0, 0, 0, 0.5);
         font-size: 13px;
       }
+      .hint {
+        font-size: 12px;
+        color: rgba(0, 0, 0, 0.55);
+        margin: 0 0 8px;
+      }
+      .channel-icon {
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+      }
+      .channel-EMAIL {
+        color: #1976d2;
+      }
+      .channel-SMS {
+        color: #6a1b9a;
+      }
+      .channel-WHATSAPP {
+        color: #2e7d32;
+      }
+      .channel-CALL {
+        color: #ef6c00;
+      }
     `,
   ],
 })
@@ -345,11 +437,14 @@ export class ContactDetailComponent implements OnInit {
   readonly templates = signal<EmailTemplate[]>([]);
   readonly invoices = signal<CustomerInvoiceSummary[]>([]);
   readonly calls = signal<CallLogEntry[]>([]);
+  readonly vehicleLinks = signal<VehicleLink[]>([]);
   readonly callDirections = Object.values(CallDirection);
   readonly callDirectionLabels = CALL_DIRECTION_LABELS;
   readonly callOutcomes = Object.values(CallOutcome);
   readonly callOutcomeLabels = CALL_OUTCOME_LABELS;
   readonly contactEntity = IntegrationTargetEntity.CONTACT;
+  readonly channelIcons: Record<CommsChannel, string> = { EMAIL: 'email', SMS: 'sms', WHATSAPP: 'chat', CALL: 'call' };
+  readonly vehicleContactRoleLabels = VEHICLE_CONTACT_ROLE_LABELS;
 
   selectedTemplateId = '';
   smsBody = '';
@@ -375,6 +470,7 @@ export class ContactDetailComponent implements OnInit {
     this.load();
     this.loadInvoices();
     this.loadCalls();
+    this.loadVehicleLinks();
     this.http.get<EmailTemplate[]>(`${environment.apiUrl}/email-templates`).subscribe((data) => this.templates.set(data));
   }
 
@@ -390,6 +486,30 @@ export class ContactDetailComponent implements OnInit {
 
   loadCalls(): void {
     this.http.get<CallLogEntry[]>(`${environment.apiUrl}/contacts/${this.contactId}/calls`).subscribe((data) => this.calls.set(data));
+  }
+
+  loadVehicleLinks(): void {
+    this.http
+      .get<VehicleLink[]>(`${environment.apiUrl}/contacts/${this.contactId}/vehicles`)
+      .subscribe((data) => this.vehicleLinks.set(data));
+  }
+
+  /** Merges every channel (email, SMS, WhatsApp, calls) into one chronological 360-degree view. */
+  communicationHistory(): CommsTimelineEntry[] {
+    const c = this.contact();
+    if (!c) return [];
+    const entries: CommsTimelineEntry[] = [
+      ...c.emails.map((e) => ({ channel: 'EMAIL' as const, date: e.sentAt ?? e.createdAt, headline: e.subject, detail: e.status })),
+      ...c.smsMessages.map((s) => ({ channel: 'SMS' as const, date: s.sentAt ?? s.createdAt, headline: s.body, detail: s.status })),
+      ...c.whatsAppMessages.map((w) => ({ channel: 'WHATSAPP' as const, date: w.sentAt ?? w.createdAt, headline: w.body, detail: w.status })),
+      ...this.calls().map((call) => ({
+        channel: 'CALL' as const,
+        date: call.calledAt,
+        headline: `${this.callDirectionLabels[call.direction]} — ${this.callOutcomeLabels[call.outcome]}`,
+        detail: call.notes,
+      })),
+    ];
+    return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
   logCall(): void {

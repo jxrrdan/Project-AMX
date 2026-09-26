@@ -10,11 +10,12 @@ import { NewCarSaleService } from './new-car-sale.service';
 import { PdiService } from './pdi.service';
 import { HandoverService } from './handover.service';
 import { RisImportService } from './ris-import.service';
+import { VehicleContactsService } from './vehicle-contacts.service';
 
 @Module({
   imports: [ScheduleModule.forRoot(), DealersModule, DocumentTemplatesModule, UsedCarsModule, LedgerModule],
   controllers: [VehiclesController],
-  providers: [VehiclesService, PdiService, HandoverService, RisImportService, NewCarSaleService],
-  exports: [VehiclesService, HandoverService],
+  providers: [VehiclesService, PdiService, HandoverService, RisImportService, NewCarSaleService, VehicleContactsService],
+  exports: [VehiclesService, HandoverService, VehicleContactsService],
 })
 export class VehiclesModule {}

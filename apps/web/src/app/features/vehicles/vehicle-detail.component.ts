@@ -1,4 +1,4 @@
-import { CurrencyPipe } from '@angular/common';
+import { CurrencyPipe, DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Component, OnInit, inject, signal } from '@angular/core';
@@ -12,7 +12,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { SALE_MODEL_LABELS, SaleModel } from '@project-amx/shared';
+import { SALE_MODEL_LABELS, SaleModel, VEHICLE_CONTACT_ROLE_LABELS, VehicleContactRole } from '@project-amx/shared';
 import { environment } from '../../../environments/environment';
 
 interface NewCarSale {
@@ -38,10 +38,25 @@ interface VehicleDetail {
   sales: NewCarSale[];
 }
 
+interface ContactOption {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+interface VehicleContactLink {
+  id: string;
+  role: VehicleContactRole;
+  startedAt: string;
+  endedAt: string | null;
+  contact: ContactOption;
+}
+
 @Component({
   selector: 'app-vehicle-detail',
   imports: [
     CurrencyPipe,
+    DatePipe,
     FormsModule,
     RouterLink,
     MatButtonModule,
@@ -63,6 +78,57 @@ interface VehicleDetail {
         </div>
       </div>
       <p class="subtitle">VIN {{ v.vin }} @if (v.colour) { · {{ v.colour }} } @if (v.customerName) { · {{ v.customerName }} }</p>
+
+      <mat-card class="section">
+        <h3>People — owner, keeper &amp; drivers</h3>
+        <p class="hint">
+          A vehicle's registered keeper and legal owner (e.g. a finance company on a PCP/lease deal) can be
+          different people, and can change over the vehicle's life — this keeps a record of who held each role.
+        </p>
+        @for (role of vehicleContactRoles; track role) {
+          <div class="role-row">
+            <span class="role-label">{{ vehicleContactRoleLabels[role] }}</span>
+            @for (link of currentLinksByRole(role); track link.id) {
+              <mat-chip>{{ link.contact.firstName }} {{ link.contact.lastName }}</mat-chip>
+              <button mat-icon-button (click)="endContactLink(link.id)" title="End this link">
+                <mat-icon>close</mat-icon>
+              </button>
+            } @empty {
+              <span class="hint">none set</span>
+            }
+          </div>
+        }
+
+        <div class="row">
+          <mat-form-field appearance="outline">
+            <mat-label>Contact</mat-label>
+            <mat-select [(ngModel)]="linkContactId">
+              @for (c of contactOptions(); track c.id) {
+                <mat-option [value]="c.id">{{ c.firstName }} {{ c.lastName }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Role</mat-label>
+            <mat-select [(ngModel)]="linkRole">
+              @for (role of vehicleContactRoles; track role) {
+                <mat-option [value]="role">{{ vehicleContactRoleLabels[role] }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <button mat-flat-button color="primary" [disabled]="!linkContactId" (click)="linkContact()">Add</button>
+        </div>
+
+        @if (pastLinks().length) {
+          <h4>History</h4>
+          @for (link of pastLinks(); track link.id) {
+            <div class="line-item">
+              <span>{{ vehicleContactRoleLabels[link.role] }} — {{ link.contact.firstName }} {{ link.contact.lastName }}</span>
+              <span class="hint">ended {{ link.endedAt | date: 'd MMM y' }}</span>
+            </div>
+          }
+        }
+      </mat-card>
 
       <mat-card class="section">
         <h3>Sale</h3>
@@ -211,6 +277,18 @@ interface VehicleDetail {
         font-size: 12px;
         color: rgba(0, 0, 0, 0.5);
       }
+      .role-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 4px 0;
+      }
+      .role-label {
+        font-weight: 600;
+        font-size: 13px;
+        min-width: 120px;
+      }
       .line-item {
         display: flex;
         justify-content: space-between;
@@ -239,6 +317,14 @@ export class VehicleDetailComponent implements OnInit {
   readonly activeSale = () => this.vehicle()?.sales.find((s) => s.status === 'ACTIVE') ?? null;
   readonly pastSales = () => this.vehicle()?.sales.filter((s) => s.status !== 'ACTIVE') ?? [];
 
+  readonly contactLinks = signal<VehicleContactLink[]>([]);
+  readonly contactOptions = signal<ContactOption[]>([]);
+  readonly vehicleContactRoles = Object.values(VehicleContactRole);
+  readonly vehicleContactRoleLabels = VEHICLE_CONTACT_ROLE_LABELS;
+  readonly currentLinksByRole = (role: VehicleContactRole) =>
+    this.contactLinks().filter((l) => l.role === role && !l.endedAt);
+  readonly pastLinks = () => this.contactLinks().filter((l) => !!l.endedAt);
+
   saleForm = { saleModel: SaleModel.RETAIL, sellingPrice: null as number | null, agencyCommission: null as number | null };
   hasTradeIn = false;
   tradeInForm = {
@@ -251,6 +337,8 @@ export class VehicleDetailComponent implements OnInit {
     agreedValue: null as number | null,
   };
   invalidateReason = '';
+  linkContactId = '';
+  linkRole: VehicleContactRole = VehicleContactRole.KEEPER;
 
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
@@ -261,10 +349,38 @@ export class VehicleDetailComponent implements OnInit {
   ngOnInit(): void {
     this.vehicleId = this.route.snapshot.paramMap.get('id') ?? '';
     this.load();
+    this.loadContactLinks();
+    this.http.get<ContactOption[]>(`${environment.apiUrl}/contacts`).subscribe((data) => this.contactOptions.set(data));
   }
 
   load(): void {
     this.http.get<VehicleDetail>(`${environment.apiUrl}/vehicles/${this.vehicleId}`).subscribe((data) => this.vehicle.set(data));
+  }
+
+  loadContactLinks(): void {
+    this.http
+      .get<VehicleContactLink[]>(`${environment.apiUrl}/vehicles/${this.vehicleId}/contacts`)
+      .subscribe((data) => this.contactLinks.set(data));
+  }
+
+  linkContact(): void {
+    if (!this.linkContactId) return;
+    this.http
+      .post(`${environment.apiUrl}/vehicles/${this.vehicleId}/contacts`, { contactId: this.linkContactId, role: this.linkRole })
+      .subscribe({
+        next: () => {
+          this.linkContactId = '';
+          this.loadContactLinks();
+        },
+        error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not link contact', 'Dismiss', { duration: 4000 }),
+      });
+  }
+
+  endContactLink(linkId: string): void {
+    this.http.post(`${environment.apiUrl}/vehicles/${this.vehicleId}/contacts/${linkId}/end`, {}).subscribe({
+      next: () => this.loadContactLinks(),
+      error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not end this link', 'Dismiss', { duration: 4000 }),
+    });
   }
 
   isTradeInValid(): boolean {

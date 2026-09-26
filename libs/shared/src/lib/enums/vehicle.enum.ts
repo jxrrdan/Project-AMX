@@ -70,3 +70,19 @@ export enum DamageSeverity {
   MODERATE = 'MODERATE',
   SEVERE = 'SEVERE',
 }
+
+/** Mirrors the Prisma `VehicleContactRole` enum — a vehicle's DVLA-registered keeper, its legal
+ * owner (often a finance company on a PCP/lease deal, genuinely distinct from the keeper), and
+ * whoever actually drives it day to day are three different people who can each change
+ * independently over the vehicle's life. See VehicleContact. */
+export enum VehicleContactRole {
+  OWNER = 'OWNER',
+  KEEPER = 'KEEPER',
+  DRIVER = 'DRIVER',
+}
+
+export const VEHICLE_CONTACT_ROLE_LABELS: Record<VehicleContactRole, string> = {
+  [VehicleContactRole.OWNER]: 'Owner',
+  [VehicleContactRole.KEEPER]: 'Registered keeper',
+  [VehicleContactRole.DRIVER]: 'Driver',
+};
