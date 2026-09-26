@@ -48,9 +48,9 @@ const NAV_ENTRIES: NavEntry[] = [
       { path: 'vhc', label: 'Vehicle Health Check', icon: 'health_and_safety', module: ModuleKey.VHC },
       { path: 'warranty', label: 'Warranty', icon: 'verified', module: ModuleKey.WARRANTY },
       { path: 'courtesy', label: 'Courtesy Fleet', icon: 'time_to_leave', module: ModuleKey.COURTESY_FLEET },
+      { path: 'parts', label: 'Parts', icon: 'inventory_2', module: ModuleKey.PARTS },
     ],
   },
-  { path: 'parts', label: 'Parts', icon: 'inventory_2', module: ModuleKey.PARTS },
   { path: 'used-cars', label: 'Used Cars', icon: 'car_repair', module: ModuleKey.USED_CARS },
   { path: 'crm', label: 'CRM', icon: 'contacts', module: ModuleKey.CRM },
   { path: 'listings', label: 'Stock Listings', icon: 'storefront', module: ModuleKey.LISTINGS },
@@ -71,9 +71,15 @@ const NAV_ENTRIES: NavEntry[] = [
   },
   { path: 'fi', label: 'Finance & Insurance', icon: 'account_balance', module: ModuleKey.FI },
   { path: 'ai', label: 'AI Assistant', icon: 'auto_awesome', module: ModuleKey.AI_INSIGHTS },
-  { path: 'admin/users', label: 'Users & Roles', icon: 'admin_panel_settings', module: ModuleKey.ADMIN },
-  { path: 'admin/settings', label: 'Settings', icon: 'settings', module: ModuleKey.ADMIN },
-  { path: 'integrations', label: 'OEM Integration Hub', icon: 'hub', module: ModuleKey.OEM_INTEGRATIONS },
+  {
+    label: 'Settings',
+    icon: 'settings',
+    children: [
+      { path: 'admin/users', label: 'Users & Roles', icon: 'admin_panel_settings', module: ModuleKey.ADMIN },
+      { path: 'admin/settings', label: 'Dealer Settings', icon: 'tune', module: ModuleKey.ADMIN },
+      { path: 'integrations', label: 'OEM Integration Hub', icon: 'hub', module: ModuleKey.OEM_INTEGRATIONS },
+    ],
+  },
 ];
 
 @Component({
@@ -119,34 +125,42 @@ const NAV_ENTRIES: NavEntry[] = [
 
     <mat-sidenav-container class="container">
       <mat-sidenav mode="side" opened class="sidenav">
-        <mat-nav-list>
+        <mat-nav-list class="nav-list">
           @for (entry of visibleNavEntries(); track entry.label) {
             @if (isGroupEntry(entry)) {
-              <button mat-list-item class="group-toggle" (click)="toggleGroup(entry.label)">
+              <button
+                mat-list-item
+                class="nav-row group-toggle"
+                [class.expanded]="isGroupExpanded(entry.label)"
+                (click)="toggleGroup(entry.label)"
+              >
                 <mat-icon matListItemIcon>{{ entry.icon }}</mat-icon>
                 <span matListItemTitle>{{ entry.label }}</span>
-                <mat-icon class="chevron">{{ isGroupExpanded(entry.label) ? 'expand_less' : 'expand_more' }}</mat-icon>
+                <mat-icon class="chevron" [class.rotated]="isGroupExpanded(entry.label)">expand_more</mat-icon>
               </button>
-              @if (isGroupExpanded(entry.label)) {
+              <div class="sub-group" [class.open]="isGroupExpanded(entry.label)">
                 @for (child of entry.children; track child.path) {
                   <a
                     mat-list-item
-                    class="sub-item"
+                    class="nav-row sub-item"
                     [routerLink]="child.path"
                     routerLinkActive="active-link"
                     [style.--amx-active-bg]="activeLinkTint()"
+                    [style.--amx-accent]="theme.primaryColour()"
                   >
                     <mat-icon matListItemIcon>{{ child.icon }}</mat-icon>
                     <span matListItemTitle>{{ child.label }}</span>
                   </a>
                 }
-              }
+              </div>
             } @else {
               <a
                 mat-list-item
+                class="nav-row"
                 [routerLink]="entry.path"
                 routerLinkActive="active-link"
                 [style.--amx-active-bg]="activeLinkTint()"
+                [style.--amx-accent]="theme.primaryColour()"
               >
                 <mat-icon matListItemIcon>{{ entry.icon }}</mat-icon>
                 <span matListItemTitle>{{ entry.label }}</span>
@@ -170,9 +184,11 @@ const NAV_ENTRIES: NavEntry[] = [
         position: sticky;
         top: 0;
         z-index: 10;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
       }
       .brand {
         font-weight: 600;
+        letter-spacing: 0.2px;
       }
       .brand-logo {
         height: 32px;
@@ -186,25 +202,70 @@ const NAV_ENTRIES: NavEntry[] = [
         height: calc(100vh - 64px);
       }
       .sidenav {
-        width: 240px;
+        width: 268px;
+        background: #fbfbfc;
+        border-right: 1px solid rgba(0, 0, 0, 0.06);
+      }
+      .nav-list {
+        padding: 12px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
       }
       .content {
         padding: 24px;
         background: #f5f6f8;
       }
+      .nav-row {
+        border-radius: 10px !important;
+        margin-bottom: 1px;
+        cursor: pointer;
+        color: rgba(0, 0, 0, 0.72);
+        transition: background-color 0.15s ease;
+      }
+      .nav-row:hover {
+        background: rgba(0, 0, 0, 0.045);
+      }
+      .nav-row mat-icon[matListItemIcon] {
+        color: rgba(0, 0, 0, 0.45);
+      }
       .active-link {
-        background: var(--amx-active-bg, rgba(0, 102, 177, 0.08));
+        background: var(--amx-active-bg, rgba(0, 102, 177, 0.08)) !important;
+        color: var(--amx-accent, #0066b1);
+        font-weight: 600;
+      }
+      .active-link mat-icon[matListItemIcon] {
+        color: var(--amx-accent, #0066b1);
       }
       .group-toggle {
         width: 100%;
-        cursor: pointer;
+      }
+      .group-toggle.expanded {
+        color: rgba(0, 0, 0, 0.87);
+        font-weight: 600;
       }
       .chevron {
         margin-left: auto;
-        color: rgba(0, 0, 0, 0.4);
+        color: rgba(0, 0, 0, 0.35);
+        transition: transform 0.2s ease;
+      }
+      .chevron.rotated {
+        transform: rotate(180deg);
+      }
+      .sub-group {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.2s ease;
+      }
+      .sub-group.open {
+        max-height: 400px;
       }
       .sub-item {
-        padding-left: 16px;
+        padding-left: 20px !important;
+        font-size: 13px;
       }
       .sub-item mat-icon[matListItemIcon] {
         transform: scale(0.85);

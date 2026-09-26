@@ -23,6 +23,16 @@ export const LEAD_PIPELINE_COLUMNS: LeadStage[] = [
   LeadStage.LOST,
 ];
 
+export const LEAD_STAGE_LABELS: Record<LeadStage, string> = {
+  [LeadStage.ENQUIRY]: 'Enquiry',
+  [LeadStage.CONTACTED]: 'Contacted',
+  [LeadStage.TEST_DRIVE]: 'Test drive',
+  [LeadStage.OFFER]: 'Offer made',
+  [LeadStage.RESERVED]: 'Reserved',
+  [LeadStage.SOLD]: 'Sold',
+  [LeadStage.LOST]: 'Lost',
+};
+
 export enum LeadSource {
   WEBSITE_FORM = 'WEBSITE_FORM',
   BMW_CRM = 'BMW_CRM',
@@ -31,6 +41,15 @@ export enum LeadSource {
   CHATBOT = 'CHATBOT',
   PHONE = 'PHONE',
 }
+
+export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
+  [LeadSource.WEBSITE_FORM]: 'Website enquiry form',
+  [LeadSource.BMW_CRM]: 'BMW CRM',
+  [LeadSource.EMAIL]: 'Email',
+  [LeadSource.MANUAL]: 'Manually added',
+  [LeadSource.CHATBOT]: 'Website chatbot',
+  [LeadSource.PHONE]: 'Phone',
+};
 
 export enum CrmActivityType {
   CALL = 'CALL',

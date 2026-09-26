@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatButtonModule } from '@angular/material/button';
@@ -16,8 +17,13 @@ import {
   CALL_OUTCOME_LABELS,
   CallDirection,
   CallOutcome,
+  ContactStatus,
   CrmActivityType,
   IntegrationTargetEntity,
+  LEAD_SOURCE_LABELS,
+  LEAD_STAGE_LABELS,
+  LeadSource,
+  LeadStage,
   VEHICLE_CONTACT_ROLE_LABELS,
   VehicleContactRole,
 } from '@project-amx/shared';
@@ -49,16 +55,45 @@ interface WhatsAppMessageSummary {
   createdAt: string;
 }
 
+interface LeadVehicleOfInterest {
+  id: string;
+  reg: string;
+  make: string;
+  model: string;
+}
+
+interface LeadSalesperson {
+  firstName: string;
+  lastName: string;
+}
+
+interface LeadSummary {
+  id: string;
+  stage: LeadStage;
+  source: LeadSource;
+  createdAt: string;
+  usedVehicle: LeadVehicleOfInterest | null;
+  assignedSalesperson: LeadSalesperson | null;
+}
+
+interface ActivityEntry {
+  id: string;
+  type: string;
+  notes: string | null;
+  createdAt: string;
+  leadId: string | null;
+}
+
 interface ContactDetail {
   id: string;
   firstName: string;
   lastName: string;
   email: string | null;
   phone: string | null;
-  status: string;
+  status: ContactStatus;
   gdprConsent: boolean;
-  leads: { id: string; stage: string }[];
-  activities: { id: string; type: string; notes: string | null; createdAt: string }[];
+  leads: LeadSummary[];
+  activities: ActivityEntry[];
   tasks: { id: string; title: string; dueDate: string; completedAt: string | null }[];
   emails: EmailMessageSummary[];
   smsMessages: SmsMessageSummary[];
@@ -81,9 +116,9 @@ interface VehicleLink {
   vehicle: { id: string; vin: string; model: string };
 }
 
-type CommsChannel = 'EMAIL' | 'SMS' | 'WHATSAPP' | 'CALL';
+type CommsChannel = 'EMAIL' | 'SMS' | 'WHATSAPP' | 'CALL' | 'MEETING' | 'NOTE';
 
-/** One row in the merged 360-degree communication history — see ContactDetailComponent.communicationHistory(). */
+/** One row in the merged activity & communication timeline — see ContactDetailComponent.communicationHistory(). */
 interface CommsTimelineEntry {
   channel: CommsChannel;
   date: string;
@@ -108,6 +143,8 @@ interface EmailTemplate {
   name: string;
 }
 
+type ContactChannel = 'EMAIL' | 'SMS' | 'WHATSAPP';
+
 @Component({
   selector: 'app-contact-detail',
   imports: [
@@ -115,6 +152,7 @@ interface EmailTemplate {
     DatePipe,
     FormsModule,
     RouterLink,
+    MatButtonToggleModule,
     MatCardModule,
     MatChipsModule,
     MatButtonModule,
@@ -146,116 +184,73 @@ interface EmailTemplate {
       <div class="columns">
         <div class="col">
           <mat-card>
-            <h3>Leads</h3>
+            <h3>Leads &amp; enquiries</h3>
             @for (lead of c.leads; track lead.id) {
-              <mat-chip>{{ lead.stage }}</mat-chip>
+              <div class="lead-item">
+                <div class="lead-header">
+                  <mat-chip>{{ leadStageLabels[lead.stage] }}</mat-chip>
+                  <span class="date">{{ lead.createdAt | date: 'd MMM y' }}</span>
+                </div>
+                <p class="lead-meta">
+                  {{ leadSourceLabels[lead.source] }}
+                  @if (lead.assignedSalesperson) {
+                    · assigned to {{ lead.assignedSalesperson.firstName }} {{ lead.assignedSalesperson.lastName }}
+                  }
+                </p>
+                @if (lead.usedVehicle; as v) {
+                  <p class="lead-meta">
+                    Interested in
+                    <a [routerLink]="['/used-cars', v.id]">{{ v.make }} {{ v.model }} ({{ v.reg }})</a>
+                  </p>
+                }
+                @if (enquiryMessage(lead.id); as message) {
+                  <p class="lead-message">&ldquo;{{ message }}&rdquo;</p>
+                }
+              </div>
             } @empty {
               <p class="empty">No leads yet.</p>
             }
           </mat-card>
 
           <mat-card>
-            <h3>Send email</h3>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Template</mat-label>
-              <mat-select [(ngModel)]="selectedTemplateId">
-                @for (t of templates(); track t.id) {
-                  <mat-option [value]="t.id">{{ t.name }}</mat-option>
-                }
-              </mat-select>
-            </mat-form-field>
-            <button mat-flat-button color="primary" [disabled]="!selectedTemplateId" (click)="sendEmail()">Send</button>
-          </mat-card>
-
-          <mat-card>
-            <h3>Send SMS</h3>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Message</mat-label>
-              <textarea matInput rows="3" [(ngModel)]="smsBody"></textarea>
-            </mat-form-field>
-            <button mat-flat-button color="primary" [disabled]="!smsBody" (click)="sendSms()">Send</button>
-          </mat-card>
-
-          <mat-card>
-            <h3>Send WhatsApp</h3>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Message</mat-label>
-              <textarea matInput rows="3" [(ngModel)]="whatsAppBody"></textarea>
-            </mat-form-field>
-            <button mat-flat-button color="primary" [disabled]="!whatsAppBody" (click)="sendWhatsApp()">Send</button>
-          </mat-card>
-        </div>
-
-        <div class="col">
-          <mat-card>
-            <h3>Communication history</h3>
-            <p class="hint">Every email, SMS, WhatsApp message and call in one place — a full 360-degree view of this contact.</p>
-            @for (entry of communicationHistory(); track entry.channel + entry.date + entry.headline) {
-              <div class="timeline-item">
-                <mat-icon class="channel-icon" [class]="'channel-' + entry.channel">{{ channelIcons[entry.channel] }}</mat-icon>
-                <span class="type">{{ entry.headline }}</span>
-                <span class="date">{{ entry.date | date: 'd MMM, HH:mm' }}</span>
-                @if (entry.detail) { <p>{{ entry.detail }}</p> }
-              </div>
-            } @empty {
-              <p class="empty">No emails, SMS, WhatsApp messages or calls logged yet.</p>
-            }
-          </mat-card>
-
-          <mat-card>
-            <h3>Log an activity</h3>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Type</mat-label>
-              <mat-select [(ngModel)]="activityType">
-                <mat-option value="CALL">Call</mat-option>
-                <mat-option value="MEETING">Meeting</mat-option>
-                <mat-option value="NOTE">Note</mat-option>
-              </mat-select>
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Notes</mat-label>
-              <textarea matInput rows="2" [(ngModel)]="activityNotes"></textarea>
-            </mat-form-field>
-            <button mat-flat-button color="primary" (click)="logActivity()">Log activity</button>
-
-            <h3>Activity timeline</h3>
-            @for (a of c.activities; track a.id) {
-              <div class="timeline-item">
-                <span class="type">{{ a.type }}</span>
-                <span class="date">{{ a.createdAt | date: 'd MMM, HH:mm' }}</span>
-                <p>{{ a.notes }}</p>
-              </div>
-            } @empty {
-              <p class="empty">No activity logged yet.</p>
-            }
-          </mat-card>
-
-          <mat-card>
-            <h3>Log a call</h3>
-            <div class="row">
-              <mat-form-field appearance="outline">
-                <mat-label>Direction</mat-label>
-                <mat-select [(ngModel)]="callDirection">
-                  @for (d of callDirections; track d) {
-                    <mat-option [value]="d">{{ callDirectionLabels[d] }}</mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
-              <mat-form-field appearance="outline">
-                <mat-label>Outcome</mat-label>
-                <mat-select [(ngModel)]="callOutcome">
-                  @for (o of callOutcomes; track o) {
-                    <mat-option [value]="o">{{ callOutcomeLabels[o] }}</mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
+            <div class="contact-toggle-row">
+              <h3>Contact {{ c.status === contactStatusCustomer ? 'customer' : 'prospect' }}</h3>
+              <button mat-stroked-button (click)="showContactForm.set(!showContactForm())">
+                <mat-icon>{{ showContactForm() ? 'expand_less' : 'forum' }}</mat-icon>
+                {{ showContactForm() ? 'Hide' : 'Contact ' + (c.status === contactStatusCustomer ? 'customer' : 'prospect') }}
+              </button>
             </div>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Notes (optional)</mat-label>
-              <textarea matInput rows="2" [(ngModel)]="callNotes"></textarea>
-            </mat-form-field>
-            <button mat-flat-button color="primary" (click)="logCall()">Log call</button>
-            <p class="hint">Logged calls appear in the "Communication history" card above, alongside email/SMS/WhatsApp.</p>
+            @if (showContactForm()) {
+              <mat-button-toggle-group class="channel-toggle" [(ngModel)]="contactChannel">
+                <mat-button-toggle value="EMAIL"><mat-icon>email</mat-icon> Email</mat-button-toggle>
+                <mat-button-toggle value="SMS"><mat-icon>sms</mat-icon> SMS</mat-button-toggle>
+                <mat-button-toggle value="WHATSAPP"><mat-icon>chat</mat-icon> WhatsApp</mat-button-toggle>
+              </mat-button-toggle-group>
+
+              @if (contactChannel === 'EMAIL') {
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Template</mat-label>
+                  <mat-select [(ngModel)]="selectedTemplateId">
+                    @for (t of templates(); track t.id) {
+                      <mat-option [value]="t.id">{{ t.name }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <button mat-flat-button color="primary" [disabled]="!selectedTemplateId" (click)="sendEmail()">Send email</button>
+              } @else if (contactChannel === 'SMS') {
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Message</mat-label>
+                  <textarea matInput rows="3" [(ngModel)]="smsBody"></textarea>
+                </mat-form-field>
+                <button mat-flat-button color="primary" [disabled]="!smsBody" (click)="sendSms()">Send SMS</button>
+              } @else {
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Message</mat-label>
+                  <textarea matInput rows="3" [(ngModel)]="whatsAppBody"></textarea>
+                </mat-form-field>
+                <button mat-flat-button color="primary" [disabled]="!whatsAppBody" (click)="sendWhatsApp()">Send WhatsApp</button>
+              }
+            }
           </mat-card>
 
           <mat-card>
@@ -272,7 +267,7 @@ interface EmailTemplate {
               Create task
             </button>
 
-            <h3>Tasks</h3>
+            <h4>Tasks</h4>
             @for (t of c.tasks; track t.id) {
               <div class="timeline-item">
                 <span class="type">{{ t.title }}</span>
@@ -286,6 +281,69 @@ interface EmailTemplate {
             } @empty {
               <p class="empty">No tasks yet.</p>
             }
+          </mat-card>
+        </div>
+
+        <div class="col">
+          <mat-card>
+            <h3>Activity &amp; communication history</h3>
+            <p class="hint">Every call, meeting, note, email, SMS and WhatsApp message in one place — a full 360-degree view of this contact.</p>
+            @for (entry of communicationHistory(); track entry.channel + entry.date + entry.headline) {
+              <div class="timeline-item">
+                <mat-icon class="channel-icon" [class]="'channel-' + entry.channel">{{ channelIcons[entry.channel] }}</mat-icon>
+                <span class="type">{{ entry.headline }}</span>
+                <span class="date">{{ entry.date | date: 'd MMM, HH:mm' }}</span>
+                @if (entry.detail) { <p>{{ entry.detail }}</p> }
+              </div>
+            } @empty {
+              <p class="empty">Nothing logged yet.</p>
+            }
+          </mat-card>
+
+          <mat-card>
+            <h3>Log an activity</h3>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Type</mat-label>
+              <mat-select [(ngModel)]="activityType">
+                <mat-option value="CALL">Call</mat-option>
+                <mat-option value="MEETING">Meeting</mat-option>
+                <mat-option value="NOTE">Note</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            @if (activityType === 'CALL') {
+              <div class="row">
+                <mat-form-field appearance="outline">
+                  <mat-label>Direction</mat-label>
+                  <mat-select [(ngModel)]="callDirection">
+                    @for (d of callDirections; track d) {
+                      <mat-option [value]="d">{{ callDirectionLabels[d] }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>Outcome</mat-label>
+                  <mat-select [(ngModel)]="callOutcome">
+                    @for (o of callOutcomes; track o) {
+                      <mat-option [value]="o">{{ callOutcomeLabels[o] }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+              </div>
+            }
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Notes{{ activityType === 'CALL' ? ' (optional)' : '' }}</mat-label>
+              <textarea matInput rows="2" [(ngModel)]="activityNotes"></textarea>
+            </mat-form-field>
+            <button
+              mat-flat-button
+              color="primary"
+              [disabled]="activityType !== 'CALL' && !activityNotes"
+              (click)="logActivityOrCall()"
+            >
+              Log {{ activityType === 'CALL' ? 'call' : 'activity' }}
+            </button>
           </mat-card>
 
           <mat-card>
@@ -372,6 +430,9 @@ interface EmailTemplate {
       mat-card {
         padding: 16px;
       }
+      h4 {
+        margin: 12px 0 4px;
+      }
       .full-width {
         width: 100%;
       }
@@ -429,6 +490,54 @@ interface EmailTemplate {
       .channel-CALL {
         color: #ef6c00;
       }
+      .channel-MEETING {
+        color: #00838f;
+      }
+      .channel-NOTE {
+        color: rgba(0, 0, 0, 0.5);
+      }
+      .lead-item {
+        border-bottom: 1px solid #eee;
+        padding: 8px 0;
+      }
+      .lead-item:last-child {
+        border-bottom: none;
+      }
+      .lead-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .lead-meta {
+        font-size: 12px;
+        color: rgba(0, 0, 0, 0.6);
+        margin: 4px 0 0;
+      }
+      .lead-message {
+        font-size: 13px;
+        color: rgba(0, 0, 0, 0.75);
+        font-style: italic;
+        margin: 6px 0 0;
+      }
+      .contact-toggle-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .contact-toggle-row h3 {
+        margin: 0;
+      }
+      .channel-toggle {
+        margin-bottom: 12px;
+        display: flex;
+      }
+      .channel-toggle mat-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+        margin-right: 4px;
+        vertical-align: middle;
+      }
     `,
   ],
 })
@@ -438,14 +547,26 @@ export class ContactDetailComponent implements OnInit {
   readonly invoices = signal<CustomerInvoiceSummary[]>([]);
   readonly calls = signal<CallLogEntry[]>([]);
   readonly vehicleLinks = signal<VehicleLink[]>([]);
+  readonly showContactForm = signal(false);
   readonly callDirections = Object.values(CallDirection);
   readonly callDirectionLabels = CALL_DIRECTION_LABELS;
   readonly callOutcomes = Object.values(CallOutcome);
   readonly callOutcomeLabels = CALL_OUTCOME_LABELS;
+  readonly leadStageLabels = LEAD_STAGE_LABELS;
+  readonly leadSourceLabels = LEAD_SOURCE_LABELS;
   readonly contactEntity = IntegrationTargetEntity.CONTACT;
-  readonly channelIcons: Record<CommsChannel, string> = { EMAIL: 'email', SMS: 'sms', WHATSAPP: 'chat', CALL: 'call' };
+  readonly contactStatusCustomer = ContactStatus.CUSTOMER;
+  readonly channelIcons: Record<CommsChannel, string> = {
+    EMAIL: 'email',
+    SMS: 'sms',
+    WHATSAPP: 'chat',
+    CALL: 'call',
+    MEETING: 'event',
+    NOTE: 'sticky_note_2',
+  };
   readonly vehicleContactRoleLabels = VEHICLE_CONTACT_ROLE_LABELS;
 
+  contactChannel: ContactChannel = 'EMAIL';
   selectedTemplateId = '';
   smsBody = '';
   whatsAppBody = '';
@@ -457,7 +578,6 @@ export class ContactDetailComponent implements OnInit {
   invoiceAmount: number | null = null;
   callDirection: CallDirection = CallDirection.OUTBOUND;
   callOutcome: CallOutcome = CallOutcome.CONNECTED;
-  callNotes = '';
 
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
@@ -494,10 +614,17 @@ export class ContactDetailComponent implements OnInit {
       .subscribe((data) => this.vehicleLinks.set(data));
   }
 
-  /** Merges every channel (email, SMS, WhatsApp, calls) into one chronological 360-degree view. */
+  /** The free-text enquiry message captured against a lead, if any — see CrmService.createEnquiry. */
+  enquiryMessage(leadId: string): string | null {
+    const activity = this.contact()?.activities.find((a) => a.leadId === leadId && a.notes);
+    return activity?.notes ?? null;
+  }
+
+  /** Merges every channel (email, SMS, WhatsApp, calls, meetings, notes) into one chronological timeline. */
   communicationHistory(): CommsTimelineEntry[] {
     const c = this.contact();
     if (!c) return [];
+    const activityHeadlines: Partial<Record<string, string>> = { MEETING: 'Meeting', NOTE: 'Note' };
     const entries: CommsTimelineEntry[] = [
       ...c.emails.map((e) => ({ channel: 'EMAIL' as const, date: e.sentAt ?? e.createdAt, headline: e.subject, detail: e.status })),
       ...c.smsMessages.map((s) => ({ channel: 'SMS' as const, date: s.sentAt ?? s.createdAt, headline: s.body, detail: s.status })),
@@ -508,23 +635,41 @@ export class ContactDetailComponent implements OnInit {
         headline: `${this.callDirectionLabels[call.direction]} — ${this.callOutcomeLabels[call.outcome]}`,
         detail: call.notes,
       })),
+      ...c.activities.map((a) => ({
+        channel: (a.type === 'MEETING' ? 'MEETING' : 'NOTE') as CommsChannel,
+        date: a.createdAt,
+        headline: activityHeadlines[a.type] ?? a.type,
+        detail: a.notes,
+      })),
     ];
     return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
-  logCall(): void {
+  /** The merged "Log an activity" form — a Call routes to the CallLog model (direction/outcome),
+   * Meeting/Note route to the generic CrmActivity model. */
+  logActivityOrCall(): void {
+    if (this.activityType === CrmActivityType.CALL) {
+      this.http
+        .post(`${environment.apiUrl}/contacts/${this.contactId}/calls`, {
+          direction: this.callDirection,
+          outcome: this.callOutcome,
+          notes: this.activityNotes || undefined,
+        })
+        .subscribe({
+          next: () => {
+            this.activityNotes = '';
+            this.loadCalls();
+          },
+          error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not log call', 'Dismiss', { duration: 4000 }),
+        });
+      return;
+    }
+
     this.http
-      .post(`${environment.apiUrl}/contacts/${this.contactId}/calls`, {
-        direction: this.callDirection,
-        outcome: this.callOutcome,
-        notes: this.callNotes || undefined,
-      })
-      .subscribe({
-        next: () => {
-          this.callNotes = '';
-          this.loadCalls();
-        },
-        error: (err) => this.snackBar.open(err?.error?.message ?? 'Could not log call', 'Dismiss', { duration: 4000 }),
+      .post(`${environment.apiUrl}/crm-activities`, { contactId: this.contactId, type: this.activityType, notes: this.activityNotes })
+      .subscribe(() => {
+        this.activityNotes = '';
+        this.load();
       });
   }
 
@@ -562,15 +707,6 @@ export class ContactDetailComponent implements OnInit {
 
   storageUrl(path: string): string {
     return `${environment.apiUrl.replace(/\/api$/, '')}${path}`;
-  }
-
-  logActivity(): void {
-    this.http
-      .post(`${environment.apiUrl}/crm-activities`, { contactId: this.contactId, type: this.activityType, notes: this.activityNotes })
-      .subscribe(() => {
-        this.activityNotes = '';
-        this.load();
-      });
   }
 
   createTask(): void {

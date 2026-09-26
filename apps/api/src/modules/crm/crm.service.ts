@@ -38,7 +38,7 @@ export class CrmService {
     return this.prisma.contact.findFirst({
       where: { id, dealerId },
       include: {
-        leads: true,
+        leads: { include: { usedVehicle: true, assignedSalesperson: true }, orderBy: { createdAt: 'desc' } },
         activities: true,
         tasks: true,
         emails: true,

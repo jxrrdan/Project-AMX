@@ -556,6 +556,38 @@ scope for a direct-sales BMW retailer) turned up several genuine gaps that this 
   gained a "People — owner, keeper & drivers" card (current holders per role, a link/end form, and a
   history list of ended links); the contact detail page gained the mirror-image "Vehicles" card.
 
+## UI modernisation and a CRM contact-detail overhaul
+
+- **Left navigation** — restyled from a flat highlighted-background list into rounded "pill" rows
+  (hover and active states, an accent-coloured icon/label on the active page matching the dealer's
+  own branding colour) with a smoothly-rotating chevron on group headers instead of swapping icons.
+  "Parts" moved from a top-level item into the "Aftersales" group (it's a customer-support/workshop
+  concern, not a peer of New Car PDI or Used Cars), and "Users & Roles", the dealer "Settings" page,
+  and the "OEM Integration Hub" all merged into one "Settings" group — role/user administration,
+  branding/sequences/templates, and configuring inbound/outbound data connectors are all
+  administrative concerns, not top-level nav destinations on a par with the sales/aftersales modules.
+- **CRM contact detail: one activity log, not two** — "Log a call" (which wrote to the `CallLog`
+  model) and "Log an activity" (which wrote to the generic `CrmActivity` model for Meeting/Note,
+  and confusingly also offered a "Call" option that silently went to the wrong model) are now a
+  single form. Picking "Call" from the Type dropdown reveals the Direction/Outcome fields and posts
+  to `CallLog`; Meeting/Note post to `CrmActivity` as before — one dropdown, correct routing either
+  way. The separate "Activity timeline" list is gone too: calls, meetings, and notes are now
+  interleaved into the same "Activity & communication history" timeline as email/SMS/WhatsApp,
+  making it a genuinely unified feed rather than two overlapping ones.
+- **CRM contact detail: contact channels collapsed behind one toggle** — "Send email", "Send SMS",
+  and "Send WhatsApp" were three permanently-visible cards even when a user had no intention of
+  messaging the contact right now. They're now one "Contact customer"/"Contact prospect" card
+  (label follows the contact's own `ContactStatus`) that stays collapsed until clicked, then reveals
+  a channel switcher and only the field that channel needs (a template picker for email, a textarea
+  for SMS/WhatsApp) — one send action instead of three parallel forms competing for attention.
+- **CRM contact detail: a lead is more than the word "Enquiry"** — the Leads card used to render
+  nothing but a bare `{{ lead.stage }}` chip. `CrmService.findContact()` now includes each lead's
+  `usedVehicle` and `assignedSalesperson`, and the card shows a proper stage label (`Enquiry` rather
+  than `ENQUIRY`, via new `LEAD_STAGE_LABELS`/`LEAD_SOURCE_LABELS`), the lead's source, who it's
+  assigned to, a link to the vehicle of interest when there is one, and — reusing the `CrmActivity`
+  note that `createEnquiry()` already writes against the lead — the customer's own enquiry message,
+  quoted directly on the lead rather than only buried in the generic activity feed.
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks
