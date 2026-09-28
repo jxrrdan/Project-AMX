@@ -45,6 +45,12 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/vehicles/vehicle-detail.component').then((m) => m.VehicleDetailComponent),
       },
       {
+        // Offline-capable PDI checklist (Feature Spec §Non-functional: works with no connection).
+        path: 'vehicles/:id/pdi',
+        loadComponent: () =>
+          import('./features/vehicles/pdi/pdi-checklist.component').then((m) => m.PdiChecklistComponent),
+      },
+      {
         path: 'parts',
         loadComponent: () => import('./features/parts/parts-list.component').then((m) => m.PartsListComponent),
       },

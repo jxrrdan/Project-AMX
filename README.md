@@ -302,6 +302,29 @@ function, not just a scheduled feed":
   "who's liable for this damage" record either way, logged from the courtesy list and job-card
   detail pages respectively.
 
+## PWA & offline PDI checklists
+
+The spec calls for the PDI checklist to work offline (§Non-functional Requirements) — a
+technician often completes it in a workshop bay with no signal. The app is now an installable
+PWA and the PDI checklist is offline-first:
+
+- **Installable app shell** — a web app manifest (`apps/web/public/manifest.webmanifest`) plus a
+  dependency-free service worker (`apps/web/public/sw.js`, registered in production only). The
+  worker serves the app shell offline (network-first navigations falling back to the cached
+  `index.html`, stale-while-revalidate for hashed assets) and never shadows `/api` calls, which
+  the offline data layer owns.
+- **Offline PDI checklist** (`/vehicles/:id/pdi`) — the checklist reads from the network when
+  online and caches the whole job in IndexedDB, so it survives a reload with no connection. Every
+  rating, note, and even the final sign-off is applied to the local cache immediately and appended
+  to a durable **mutation queue** (`PdiOfflineService`), which is replayed in order the moment
+  connectivity returns — driven by an Angular `effect` on a `ConnectivityService` `online` signal.
+  A sync bar shows the technician exactly what's saved locally and how many changes are still
+  waiting to upload; a global "Offline" chip appears in the toolbar app-wide. Network failures
+  keep the queue for a later retry, while server rejections are dropped so the queue can't wedge.
+- **Testable in dev** — the IndexedDB layer is plain app code, so offline capture works with
+  `npm run dev:web` (toggle DevTools → Network → Offline). The service worker itself is
+  production-gated, mirroring Angular's own PWA convention.
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks
@@ -310,8 +333,6 @@ function, not just a scheduled feed":
   has test credentials for.
 - **CloudFront/Route 53/API Gateway/WAF, Lambda workers, most of the observability stack beyond
   one alarm** — see `infra/cdk/README.md` for the full list and why.
-- **Angular PWA / offline support** for PDI checklists — the spec calls for this explicitly
-  (§Non-functional Requirements); the app is a standard SPA today.
 
 ## Development commands
 

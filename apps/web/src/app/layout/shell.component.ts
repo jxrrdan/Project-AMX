@@ -9,6 +9,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatBadgeModule } from '@angular/material/badge';
 import { ModuleKey, PermissionAction } from '@project-amx/shared';
 import { AuthService } from '../core/auth.service';
+import { ConnectivityService } from '../core/connectivity.service';
 import { ThemeService } from '../core/theme.service';
 import { AiAssistantDockComponent } from '../features/ai/ai-assistant-dock.component';
 import { NotificationsBellComponent } from '../features/notifications/notifications-bell.component';
@@ -63,6 +64,12 @@ const NAV_ITEMS: NavItem[] = [
         <span class="brand">AMS — {{ theme.dealerName() }}</span>
       }
       <span class="spacer"></span>
+      @if (!connectivity.online()) {
+        <span class="offline-chip" title="You're offline — changes are saved on this device and will sync when you reconnect">
+          <mat-icon>cloud_off</mat-icon>
+          Offline
+        </span>
+      }
       <app-notifications-bell />
       <button mat-icon-button [matMenuTriggerFor]="userMenu">
         <mat-icon>account_circle</mat-icon>
@@ -141,12 +148,28 @@ const NAV_ITEMS: NavItem[] = [
         font-size: 12px;
         color: rgba(0, 0, 0, 0.6);
       }
+      .offline-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 10px;
+        margin-right: 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        background: rgba(255, 255, 255, 0.2);
+      }
+      .offline-chip mat-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+      }
     `,
   ],
 })
 export class ShellComponent implements OnInit {
   readonly auth = inject(AuthService);
   readonly theme = inject(ThemeService);
+  readonly connectivity = inject(ConnectivityService);
   readonly aiModule = ModuleKey.AI_INSIGHTS;
   readonly viewAction = PermissionAction.VIEW;
 
