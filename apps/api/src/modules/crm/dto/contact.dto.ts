@@ -71,6 +71,14 @@ export class CreateEnquiryDto {
 
   @IsBoolean()
   gdprConsent!: boolean;
+
+  @IsOptional()
+  @IsString()
+  captchaToken?: string;
+
+  @IsOptional()
+  @IsString()
+  captchaAnswer?: string;
 }
 
 export class UpdateLeadStageDto {

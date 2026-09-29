@@ -149,6 +149,7 @@ locally and in production:
 | BMW RIS MQTT ingest | A cron job that fabricates a plausible new order every 30 minutes (`RisImportService`) | Always-on MQTT subscriber (`infra/cdk/lib/compute-stack.ts`) → SQS → Lambda |
 | AWP webhook integration | Mocked job references (`AWP-MOCK-...`) generated on PDI scheduling | Real webhook exchange with AWP |
 | DVLA Vehicle Enquiry Service | Deterministic mock spec, seeded from the registration itself (`DvlaService`, `DVLA_DRIVER=mock`) — try the "Look up on DVLA" button on the Used Cars page | Real DVLA API (needs a government-issued API key) |
+| CAPTCHA on public forms | Dependency-free signed arithmetic challenge (`CaptchaService`, `CAPTCHA_DRIVER=local`) — works offline, protects the enquiry and service-booking forms | Cloudflare Turnstile (`CAPTCHA_DRIVER=turnstile`, verified server-side) or reCAPTCHA |
 
 Every one of these is a small, isolated class — swapping the local branch for a real AWS call is
 a contained change, not a rewrite.

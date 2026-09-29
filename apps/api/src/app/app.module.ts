@@ -40,6 +40,7 @@ import { ParcModule } from '../modules/parc/parc.module';
 import { ReportingModule } from '../modules/reporting/reporting.module';
 import { ComplianceModule } from '../modules/compliance/compliance.module';
 import { PartsDepthModule } from '../modules/parts-depth/parts-depth.module';
+import { CaptchaModule } from '../modules/captcha/captcha.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { PartsDepthModule } from '../modules/parts-depth/parts-depth.module';
     ReportingModule,
     ComplianceModule,
     PartsDepthModule,
+    CaptchaModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

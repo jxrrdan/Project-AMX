@@ -26,6 +26,14 @@ export class CreateOnlineBookingDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  captchaToken?: string;
+
+  @IsOptional()
+  @IsString()
+  captchaAnswer?: string;
 }
 
 export class UpdateOnlineBookingDto {

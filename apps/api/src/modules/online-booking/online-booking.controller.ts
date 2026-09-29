@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ModuleKey, OnlineBookingStatus, PermissionAction } from '@project-amx/shared';
 import type { AuthUser } from '@project-amx/shared';
+import { CaptchaService } from '../../common/captcha/captcha.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
@@ -9,12 +10,16 @@ import { OnlineBookingService } from './online-booking.service';
 
 @Controller()
 export class OnlineBookingController {
-  constructor(private readonly service: OnlineBookingService) {}
+  constructor(
+    private readonly service: OnlineBookingService,
+    private readonly captcha: CaptchaService,
+  ) {}
 
   /** Public portal submission — the dealer's own site / a QR code points customers here. */
   @Public()
   @Post('public/booking/:dealerId')
-  createPublic(@Param('dealerId') dealerId: string, @Body() dto: CreateOnlineBookingDto) {
+  async createPublic(@Param('dealerId') dealerId: string, @Body() dto: CreateOnlineBookingDto) {
+    await this.captcha.verify(dto.captchaToken, dto.captchaAnswer);
     return this.service.createPublic(dealerId, dto);
   }
 

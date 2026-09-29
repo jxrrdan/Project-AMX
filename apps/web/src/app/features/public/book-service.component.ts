@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, ViewChild, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -7,6 +7,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { environment } from '../../../environments/environment';
+import { CaptchaComponent } from './captcha.component';
 
 /**
  * Public customer portal page (#4) — a dealer's own website or a QR code links here so a customer
@@ -14,7 +15,7 @@ import { environment } from '../../../environments/environment';
  */
 @Component({
   selector: 'app-book-service',
-  imports: [FormsModule, MatButtonModule, MatCardModule, MatFormFieldModule, MatInputModule],
+  imports: [FormsModule, MatButtonModule, MatCardModule, MatFormFieldModule, MatInputModule, CaptchaComponent],
   template: `
     <div class="wrap">
       <mat-card class="card">
@@ -31,6 +32,7 @@ import { environment } from '../../../environments/environment';
           <mat-form-field appearance="outline" class="full"><mat-label>Service required</mat-label><input matInput [(ngModel)]="form.serviceType" placeholder="e.g. Annual service, MOT" /></mat-form-field>
           <mat-form-field appearance="outline" class="full"><mat-label>Preferred date</mat-label><input matInput type="date" [(ngModel)]="form.preferredDate" /></mat-form-field>
           <mat-form-field appearance="outline" class="full"><mat-label>Notes (optional)</mat-label><textarea matInput rows="2" [(ngModel)]="form.notes"></textarea></mat-form-field>
+          <app-captcha #captcha />
           @if (error()) { <p class="error">{{ error() }}</p> }
           <button mat-flat-button color="primary" [disabled]="!valid() || submitting()" (click)="submit()">Request booking</button>
         }
@@ -45,6 +47,7 @@ import { environment } from '../../../environments/environment';
   `],
 })
 export class BookServiceComponent implements OnInit {
+  @ViewChild('captcha') captcha!: CaptchaComponent;
   readonly done = signal(false);
   readonly dealerName = signal<string | null>(null);
   readonly error = signal<string | null>(null);
@@ -57,11 +60,14 @@ export class BookServiceComponent implements OnInit {
 
   ngOnInit(): void { this.dealerId = this.route.snapshot.paramMap.get('dealerId') ?? ''; }
 
-  valid(): boolean { return !!(this.form.customerName && this.form.vehicleReg && this.form.serviceType); }
+  valid(): boolean {
+    return !!(this.form.customerName && this.form.vehicleReg && this.form.serviceType && this.captcha?.valid());
+  }
 
   submit(): void {
     this.submitting.set(true);
     this.error.set(null);
+    const captcha = this.captcha.getResponse();
     this.http.post<{ received: boolean; dealerName: string }>(`${environment.apiUrl}/public/booking/${this.dealerId}`, {
       customerName: this.form.customerName,
       contactEmail: this.form.contactEmail || undefined,
@@ -70,9 +76,11 @@ export class BookServiceComponent implements OnInit {
       serviceType: this.form.serviceType,
       preferredDate: this.form.preferredDate ? new Date(this.form.preferredDate).toISOString() : undefined,
       notes: this.form.notes || undefined,
+      captchaToken: captcha.captchaToken,
+      captchaAnswer: captcha.captchaAnswer,
     }).subscribe({
       next: (r) => { this.dealerName.set(r.dealerName); this.done.set(true); this.submitting.set(false); },
-      error: (err) => { this.error.set(err?.error?.message ?? 'Could not submit request'); this.submitting.set(false); },
+      error: (err) => { this.error.set(err?.error?.message ?? 'Could not submit request'); this.submitting.set(false); this.captcha.reset(); },
     });
   }
 

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { LeadStage, ModuleKey, PermissionAction } from '@project-amx/shared';
 import type { AuthUser } from '@project-amx/shared';
+import { CaptchaService } from '../../common/captcha/captcha.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
@@ -27,6 +28,7 @@ export class CrmController {
     private readonly communicationsService: CommunicationsService,
     private readonly workflowsService: WorkflowsService,
     private readonly customerInvoiceService: CustomerInvoiceService,
+    private readonly captcha: CaptchaService,
   ) {}
 
   @Get('contacts/:id/invoices')
@@ -67,7 +69,8 @@ export class CrmController {
    */
   @Public()
   @Post('dealers/:dealerId/enquiries')
-  createEnquiry(@Param('dealerId') dealerId: string, @Body() dto: CreateEnquiryDto) {
+  async createEnquiry(@Param('dealerId') dealerId: string, @Body() dto: CreateEnquiryDto) {
+    await this.captcha.verify(dto.captchaToken, dto.captchaAnswer);
     return this.crmService.createEnquiry(dealerId, dto);
   }
 
