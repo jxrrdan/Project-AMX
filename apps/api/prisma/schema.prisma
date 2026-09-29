@@ -170,6 +170,17 @@ model Dealer {
   recallCampaigns         RecallCampaign[]
   recallVehicles          RecallVehicle[]
   creditNotes             CreditNote[]
+  payments                Payment[]
+  accountCustomers        AccountCustomer[]
+  servicePlans            ServicePlan[]
+  servicePlanSubs         ServicePlanSubscription[]
+  onlineBookingRequests   OnlineBookingRequest[]
+  serviceHistoryEntries   ServiceHistoryEntry[]
+  consentRecords          ConsentRecord[]
+  documentSignatures      DocumentSignature[]
+  suppliers               Supplier[]
+  stockCounts             StockCount[]
+  partBackorders          PartBackorder[]
 
   @@map("dealers")
 }
@@ -222,6 +233,12 @@ enum ModuleKey {
   OEM_INTEGRATIONS
   RECALLS
   CREDIT_NOTES
+  CASHIERING
+  ACCOUNT_CUSTOMERS
+  SERVICE_PLANS
+  VEHICLE_PARC
+  MANAGEMENT_REPORTING
+  COMPLIANCE
 }
 
 enum PermissionAction {
@@ -777,6 +794,8 @@ model Part {
   allocations         PartAllocation[]
   poLines             PurchaseOrderLine[]
   jobCardRequirements JobCardPartRequirement[]
+  stockCountLines     StockCountLine[]
+  backorders          PartBackorder[]
 
   @@unique([dealerId, partNumber])
   @@map("parts")
@@ -2038,4 +2057,335 @@ model CreditNoteLine {
   createdAt    DateTime   @default(now())
 
   @@map("credit_note_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Cashiering & Payments (#1) and Account Customers / AR (#2)
+// ---------------------------------------------------------------------------
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  CHEQUE
+}
+
+enum PaymentKind {
+  PAYMENT
+  DEPOSIT
+  REFUND
+}
+
+/// A cash-desk transaction: money taken (or refunded) at the counter, optionally against an
+/// account customer's ledger. Deposits and refunds are the same table, distinguished by `kind`.
+model Payment {
+  id                String           @id @default(uuid())
+  dealerId          String
+  dealer            Dealer           @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  kind              PaymentKind      @default(PAYMENT)
+  method            PaymentMethod
+  amount            Decimal          @db.Decimal(10, 2)
+  customerName      String
+  reference         String?
+  accountCustomerId String?
+  accountCustomer   AccountCustomer? @relation(fields: [accountCustomerId], references: [id], onDelete: SetNull)
+  notes             String?
+  receivedBy        String?
+  receivedAt        DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+
+  @@map("payments")
+}
+
+enum AccountTransactionType {
+  INVOICE
+  PAYMENT
+  CREDIT
+}
+
+/// A trade/credit account customer with a running balance (positive = owes the dealer). Fleet and
+/// business customers who are invoiced and settle on account rather than paying at point of sale.
+model AccountCustomer {
+  id           String   @id @default(uuid())
+  dealerId     String
+  dealer       Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  name         String
+  contactEmail String?
+  contactPhone String?
+  creditLimit  Decimal  @default(0) @db.Decimal(10, 2)
+  balance      Decimal  @default(0) @db.Decimal(10, 2)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions AccountTransaction[]
+  payments     Payment[]
+
+  @@map("account_customers")
+}
+
+/// A line on an account customer's statement. `amount` is signed by its effect on the balance:
+/// INVOICE increases it, PAYMENT/CREDIT reduce it.
+model AccountTransaction {
+  id                String                 @id @default(uuid())
+  accountCustomerId String
+  accountCustomer   AccountCustomer        @relation(fields: [accountCustomerId], references: [id], onDelete: Cascade)
+  type              AccountTransactionType
+  description       String
+  amount            Decimal                @db.Decimal(10, 2)
+  reference         String?
+  occurredAt        DateTime               @default(now())
+  createdAt         DateTime               @default(now())
+
+  @@map("account_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// Service Plans & Reminders (#3)
+// ---------------------------------------------------------------------------
+
+/// A service-plan product a dealer offers (e.g. a 3-year fixed-price servicing plan).
+model ServicePlan {
+  id             String   @id @default(uuid())
+  dealerId       String
+  dealer         Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  priceMonthly   Decimal  @default(0) @db.Decimal(10, 2)
+  intervalMonths Int      @default(12)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  subscriptions ServicePlanSubscription[]
+
+  @@map("service_plans")
+}
+
+/// A customer/vehicle enrolled on a plan, carrying the MOT and service due dates that drive the
+/// automated reminder sweep (reminderSentAt stamped so a reminder fires once per due window).
+model ServicePlanSubscription {
+  id                    String      @id @default(uuid())
+  dealerId              String
+  dealer                Dealer      @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  planId                String
+  plan                  ServicePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  customerName          String
+  vehicleReg            String
+  contactEmail          String?
+  contactPhone          String?
+  startedAt             DateTime    @default(now())
+  motDueDate            DateTime?
+  serviceDueDate        DateTime?
+  motReminderSentAt     DateTime?
+  serviceReminderSentAt DateTime?
+  active                Boolean     @default(true)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@map("service_plan_subscriptions")
+}
+
+// ---------------------------------------------------------------------------
+// Customer Portal / Online Booking (#4)
+// ---------------------------------------------------------------------------
+
+enum OnlineBookingStatus {
+  NEW
+  CONTACTED
+  SCHEDULED
+  DECLINED
+}
+
+/// A service booking request submitted by a customer through the public portal page. Staff triage
+/// it (NEW → CONTACTED → SCHEDULED/DECLINED) and convert it into a real workshop booking.
+model OnlineBookingRequest {
+  id            String              @id @default(uuid())
+  dealerId      String
+  dealer        Dealer              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  customerName  String
+  contactEmail  String?
+  contactPhone  String?
+  vehicleReg    String
+  serviceType   String
+  preferredDate DateTime?
+  notes         String?
+  status        OnlineBookingStatus @default(NEW)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@map("online_booking_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Vehicle Parc & Service History (#5)
+// ---------------------------------------------------------------------------
+
+/// A lifetime service-history event for a vehicle (by registration), the backbone of the vehicle
+/// parc view. entryType is a free string (SERVICE, MOT, REPAIR, RECALL, SALE) rather than an enum
+/// so ingested history from an OEM/DMS feed isn't constrained to this system's vocabulary.
+model ServiceHistoryEntry {
+  id          String   @id @default(uuid())
+  dealerId    String
+  dealer      Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  vehicleReg  String
+  vin         String?
+  entryType   String
+  description String
+  mileage     Int?
+  cost        Decimal? @db.Decimal(10, 2)
+  reference   String?
+  performedAt DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([dealerId, vehicleReg])
+  @@map("service_history_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Compliance & E-Signature (#7)
+// ---------------------------------------------------------------------------
+
+enum ConsentType {
+  MARKETING_EMAIL
+  MARKETING_SMS
+  DATA_PROCESSING
+  FINANCE_IDD
+}
+
+/// A GDPR/FCA consent captured against a customer — an auditable record of who consented to what
+/// and when (Consumer Duty / IDD for finance, marketing preferences, data processing).
+model ConsentRecord {
+  id          String      @id @default(uuid())
+  dealerId    String
+  dealer      Dealer      @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  customerName String
+  contactRef  String?
+  consentType ConsentType
+  granted     Boolean
+  capturedBy  String?
+  notes       String?
+  capturedAt  DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+
+  @@map("consent_records")
+}
+
+enum SignatureDocType {
+  DEAL
+  FINANCE_AGREEMENT
+  SERVICE_AUTH
+  GENERAL
+}
+
+/// A captured e-signature against a document (deal, finance agreement, service authorisation).
+/// signatureData holds the drawn signature as a data URL; signedAt/ipAddress make it auditable.
+model DocumentSignature {
+  id            String           @id @default(uuid())
+  dealerId      String
+  dealer        Dealer           @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  documentType  SignatureDocType
+  documentRef   String
+  signerName    String
+  signatureData String
+  ipAddress     String?
+  signedAt      DateTime         @default(now())
+  createdAt     DateTime         @default(now())
+
+  @@map("document_signatures")
+}
+
+// ---------------------------------------------------------------------------
+// Parts Depth (#8) — suppliers, price files, stock counts, backorders
+// ---------------------------------------------------------------------------
+
+/// A parts supplier the dealer buys from, with an optional catalogue/price file (SupplierPriceItem).
+model Supplier {
+  id           String   @id @default(uuid())
+  dealerId     String
+  dealer       Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  name         String
+  accountRef   String?
+  contactEmail String?
+  contactPhone String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  priceItems SupplierPriceItem[]
+
+  @@map("suppliers")
+}
+
+/// One line of a supplier's price file — a part number and its cost from that supplier.
+model SupplierPriceItem {
+  id          String   @id @default(uuid())
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  partNumber  String
+  description String?
+  costPrice   Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("supplier_price_items")
+}
+
+enum StockCountStatus {
+  OPEN
+  COMPLETED
+}
+
+/// A physical stock-take: a set of count lines (expected vs. counted) that, on completion, posts
+/// variance adjustments as stock movements.
+model StockCount {
+  id          String          @id @default(uuid())
+  dealerId    String
+  dealer      Dealer          @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  reference   String
+  status      StockCountStatus @default(OPEN)
+  countedBy   String?
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+
+  lines StockCountLine[]
+
+  @@map("stock_counts")
+}
+
+model StockCountLine {
+  id           String     @id @default(uuid())
+  stockCountId String
+  stockCount   StockCount @relation(fields: [stockCountId], references: [id], onDelete: Cascade)
+  partId       String
+  part         Part       @relation(fields: [partId], references: [id], onDelete: Cascade)
+  expectedQty  Int
+  countedQty   Int?
+  createdAt    DateTime   @default(now())
+
+  @@map("stock_count_lines")
+}
+
+enum BackorderStatus {
+  OUTSTANDING
+  RECEIVED
+  CANCELLED
+}
+
+/// A part on backorder from a supplier — outstanding demand that couldn't be met from stock.
+model PartBackorder {
+  id           String          @id @default(uuid())
+  dealerId     String
+  dealer       Dealer          @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  partId       String
+  part         Part            @relation(fields: [partId], references: [id], onDelete: Cascade)
+  quantity     Int
+  supplierId   String?
+  status       BackorderStatus @default(OUTSTANDING)
+  expectedDate DateTime?
+  reference    String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@map("part_backorders")
 }

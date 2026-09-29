@@ -17,3 +17,4 @@ export * from './integration.enum';
 export * from './settings.enum';
 export * from './recall.enum';
 export * from './credit-note.enum';
+export * from './finance-ops.enum';

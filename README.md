@@ -320,6 +320,37 @@ API and Angular Material screens:
   CANCELLED. Line-level tax means mixed VAT rates roll up correctly. Granted to the Accounts role
   (and Dealer Principal / GM).
 
+## Traditional DMS operations (cashiering, AR, service plans, portal, parc, DOC, compliance, parts depth)
+
+Eight modules that round out the classic dealer-management-system feature set the dealer still
+owns under the agency model (the OEM keeps pricing/stock/ordering). Each has its own Prisma models,
+NestJS API, Angular Material screens and RBAC:
+
+- **Cashiering / cash desk** (`/cashiering`, `CASHIERING`) — takes payments, deposits and refunds
+  across cash/card/bank/cheque, optionally posted against an account customer's ledger, with an
+  end-of-day reconciliation by method. This is the piece that actually *collects* money.
+- **Account customers & statements** (`/account-customers`, `ACCOUNT_CUSTOMERS`) — trade/credit
+  customers with a running balance, per-transaction statements, and an aged-debtors report.
+- **Service plans & reminders** (`/service-plans`, `SERVICE_PLANS`) — service-plan products,
+  customer/vehicle subscriptions carrying MOT and service due dates, and a reminder sweep that
+  emails/SMSes customers as those dates approach (stamped so each fires once). A "Run now" action
+  triggers the sweep on demand.
+- **Customer portal / online booking** (`/book-service/:dealerId` public, `/online-bookings` staff)
+  — an unauthenticated service-booking page customers reach from the dealer's own site, and a staff
+  triage queue (NEW → CONTACTED → SCHEDULED/DECLINED).
+- **Vehicle parc & service history** (`/parc`, `VEHICLE_PARC`) — a lifetime record per registration
+  aggregating hand-entered/ingested service history with used-stock and recall involvement for that
+  reg.
+- **Management reporting / DOC** (`/reports/doc`, `MANAGEMENT_REPORTING`) — a Daily Operating
+  Control: one composite snapshot across sales, aftersales, parts and finance, built from live
+  aggregates.
+- **Compliance & e-signature** (`/compliance`, `COMPLIANCE`) — auditable GDPR/FCA consent capture
+  (Consumer Duty, IDD, marketing preferences) and drawn e-signatures against documents (canvas
+  signature pad, stored as a data URL with signer/timestamp/IP).
+- **Parts depth** (`/parts/suppliers`, reuses `PARTS`) — supplier catalogues/price files, physical
+  stock-takes that post variance movements on completion, and backorder tracking that books stock
+  in on receipt. Layered on top of the existing basic Parts stock ledger.
+
 ## PWA & offline PDI checklists
 
 The spec calls for the PDI checklist to work offline (§Non-functional Requirements) — a
