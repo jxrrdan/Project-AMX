@@ -194,6 +194,101 @@ async function main() {
     },
   });
 
+  // Recall campaign management — an OEM safety recall with a couple of affected vehicles.
+  const recallCampaign = await prisma.recallCampaign.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000030' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000030',
+      dealerId: dealer.id,
+      code: '0067340700',
+      title: 'Front passenger airbag inflator inspection',
+      description: 'Inspect and, if required, replace the front passenger airbag inflator module.',
+      affectedModels: '3 Series (G20), 4 Series (G22)',
+      launchedAt: new Date('2026-08-01'),
+      status: 'OPEN',
+    },
+  });
+
+  await prisma.recallVehicle.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000031' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000031',
+      dealerId: dealer.id,
+      campaignId: recallCampaign.id,
+      vehicleId: vehicle.id,
+      vin: vehicle.vin,
+      registration: 'NN21 ABC',
+      customerName: 'Sarah Hughes',
+      customerContact: 'sarah.hughes@example.com',
+      status: 'OUTSTANDING',
+    },
+  });
+
+  await prisma.recallVehicle.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000032' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000032',
+      dealerId: dealer.id,
+      campaignId: recallCampaign.id,
+      vin: 'WBA00000000009999',
+      registration: 'NN19 DEF',
+      customerName: 'Tom Reilly',
+      customerContact: '07700 900123',
+      status: 'BOOKED',
+      bookedDate: new Date('2026-09-20'),
+    },
+  });
+
+  // Credit note — a goodwill credit raised against a customer, already issued and numbered.
+  await prisma.creditNote.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000040' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000040',
+      dealerId: dealer.id,
+      number: 'CN-2026-00001',
+      customerName: 'Sarah Hughes',
+      reason: 'Goodwill gesture — courtesy car unavailable for booked service',
+      relatedInvoiceRef: 'INV-2026-00042',
+      status: 'ISSUED',
+      subtotal: 50.0,
+      taxAmount: 10.0,
+      total: 60.0,
+      issuedAt: new Date('2026-09-15'),
+      lines: {
+        create: [
+          {
+            id: '00000000-0000-0000-0000-000000000041',
+            description: 'Goodwill credit — service inconvenience',
+            quantity: 1,
+            unitPrice: 50.0,
+            taxRate: 0.2,
+            lineTotal: 50.0,
+          },
+        ],
+      },
+    },
+  });
+
+  // Keep the CN document-number sequence consistent with the seeded credit note above
+  // (which took CN-2026-00001), so the next note a user issues gets CN-2026-00002.
+  await prisma.documentSequence.upsert({
+    where: {
+      dealerId_docType_year: { dealerId: dealer.id, docType: 'CREDIT_NOTE', year: new Date().getFullYear() },
+    },
+    update: {},
+    create: {
+      dealerId: dealer.id,
+      docType: 'CREDIT_NOTE',
+      year: new Date().getFullYear(),
+      prefix: 'CN',
+      nextNumber: 2,
+    },
+  });
+
   console.log('Seed complete.');
   console.log('Dealer subdomain: bmwnorthampton');
   console.log('Login: principal@bmwnorthampton.ams-app.co.uk / workshop@... / tech@... — password: Password123!');

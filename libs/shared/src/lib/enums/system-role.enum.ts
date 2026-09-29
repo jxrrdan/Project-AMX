@@ -66,7 +66,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<
     PermissionAction.EDIT,
   ]),
   [SystemRole.WORKSHOP_CONTROLLER]: grant(
-    [ModuleKey.NEW_CAR_PDI, ModuleKey.WORKSHOP, ModuleKey.PARTS, ModuleKey.WARRANTY],
+    [ModuleKey.NEW_CAR_PDI, ModuleKey.WORKSHOP, ModuleKey.PARTS, ModuleKey.WARRANTY, ModuleKey.RECALLS],
     FULL,
   ),
   [SystemRole.SERVICE_ADVISOR]: [
@@ -84,11 +84,17 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<
   ],
   [SystemRole.PARTS_MANAGER]: grant([ModuleKey.PARTS], FULL),
   [SystemRole.ACCOUNTS]: [
-    ...grant([ModuleKey.ACCOUNTING, ModuleKey.GENERAL_LEDGER], FULL),
+    ...grant([ModuleKey.ACCOUNTING, ModuleKey.GENERAL_LEDGER, ModuleKey.CREDIT_NOTES], FULL),
     ...grant([ModuleKey.DASHBOARD], FULL),
     ...grant(
       ALL_MODULES.filter(
-        (m) => ![ModuleKey.ACCOUNTING, ModuleKey.GENERAL_LEDGER, ModuleKey.DASHBOARD].includes(m),
+        (m) =>
+          ![
+            ModuleKey.ACCOUNTING,
+            ModuleKey.GENERAL_LEDGER,
+            ModuleKey.CREDIT_NOTES,
+            ModuleKey.DASHBOARD,
+          ].includes(m),
       ),
       READ_ONLY,
     ),

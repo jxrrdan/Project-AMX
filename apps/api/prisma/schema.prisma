@@ -167,6 +167,9 @@ model Dealer {
   vehicleModelMetadata    VehicleModelMetadata[]
   newCarSales             NewCarSale[]
   vehicleConditionReports VehicleConditionReport[]
+  recallCampaigns         RecallCampaign[]
+  recallVehicles          RecallVehicle[]
+  creditNotes             CreditNote[]
 
   @@map("dealers")
 }
@@ -217,6 +220,8 @@ enum ModuleKey {
   AI_CHATBOT
   GENERAL_LEDGER
   OEM_INTEGRATIONS
+  RECALLS
+  CREDIT_NOTES
 }
 
 enum PermissionAction {
@@ -466,6 +471,7 @@ model Vehicle {
   warrantyClaims       WarrantyClaim[]
   financeProducts      DealFinanceProduct[]
   sales                NewCarSale[]
+  recallVehicles       RecallVehicle[]
 
   @@unique([dealerId, vin])
   @@map("vehicles")
@@ -1923,4 +1929,113 @@ model ActionTriggerMapping {
   sortOrder       Int           @default(0)
 
   @@map("action_trigger_mappings")
+}
+
+// ---------------------------------------------------------------------------
+// Recall Campaign Management
+// ---------------------------------------------------------------------------
+
+enum RecallCampaignStatus {
+  OPEN
+  CLOSED
+}
+
+enum RecallVehicleStatus {
+  OUTSTANDING
+  BOOKED
+  COMPLETED
+}
+
+/// An OEM safety/quality recall (or service action) the dealership tracks to completion across
+/// every affected vehicle in its parc. The OEM issues the campaign; the dealer works the list.
+model RecallCampaign {
+  id             String               @id @default(uuid())
+  dealerId       String
+  dealer         Dealer               @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  code           String
+  title          String
+  description    String?
+  affectedModels String?
+  launchedAt     DateTime?
+  status         RecallCampaignStatus @default(OPEN)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  vehicles RecallVehicle[]
+
+  @@map("recall_campaigns")
+}
+
+/// One affected vehicle within a recall campaign, with its own remediation progress. Optionally
+/// links to a known Vehicle record; also carries free-text VIN/reg/customer for parc entries that
+/// aren't in the dealer's own stock/pipeline.
+model RecallVehicle {
+  id              String              @id @default(uuid())
+  dealerId        String
+  dealer          Dealer              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  campaignId      String
+  campaign        RecallCampaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  vehicleId       String?
+  vehicle         Vehicle?            @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  vin             String
+  registration    String?
+  customerName    String?
+  customerContact String?
+  status          RecallVehicleStatus @default(OUTSTANDING)
+  bookedDate      DateTime?
+  completedDate   DateTime?
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@map("recall_vehicles")
+}
+
+// ---------------------------------------------------------------------------
+// Credit Notes
+// ---------------------------------------------------------------------------
+
+enum CreditNoteStatus {
+  DRAFT
+  ISSUED
+  APPLIED
+  CANCELLED
+}
+
+/// A credit note (refund/adjustment) raised against a customer — e.g. a goodwill credit, an
+/// overcharge correction, or a returned-part refund. Numbered via DocumentSequenceService
+/// ("CN-2026-00001") on issue, through the same engine as every other AMX document.
+model CreditNote {
+  id                String           @id @default(uuid())
+  dealerId          String
+  dealer            Dealer           @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  number            String?
+  customerName      String
+  reason            String
+  relatedInvoiceRef String?
+  status            CreditNoteStatus @default(DRAFT)
+  subtotal          Decimal          @default(0) @db.Decimal(10, 2)
+  taxAmount         Decimal          @default(0) @db.Decimal(10, 2)
+  total             Decimal          @default(0) @db.Decimal(10, 2)
+  issuedAt          DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  lines CreditNoteLine[]
+
+  @@map("credit_notes")
+}
+
+model CreditNoteLine {
+  id           String     @id @default(uuid())
+  creditNoteId String
+  creditNote   CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+  description  String
+  quantity     Decimal    @default(1) @db.Decimal(10, 2)
+  unitPrice    Decimal    @default(0) @db.Decimal(10, 2)
+  taxRate      Decimal    @default(0.2) @db.Decimal(5, 4)
+  lineTotal    Decimal    @default(0) @db.Decimal(10, 2)
+  createdAt    DateTime   @default(now())
+
+  @@map("credit_note_lines")
 }

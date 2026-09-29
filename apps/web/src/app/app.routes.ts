@@ -80,6 +80,24 @@ export const appRoutes: Route[] = [
           import('./features/warranty/warranty-claim-detail.component').then((m) => m.WarrantyClaimDetailComponent),
       },
       {
+        path: 'recalls',
+        loadComponent: () => import('./features/recalls/recalls-list.component').then((m) => m.RecallsListComponent),
+      },
+      {
+        path: 'recalls/:id',
+        loadComponent: () => import('./features/recalls/recall-detail.component').then((m) => m.RecallDetailComponent),
+      },
+      {
+        path: 'credit-notes',
+        loadComponent: () =>
+          import('./features/credit-notes/credit-notes-list.component').then((m) => m.CreditNotesListComponent),
+      },
+      {
+        path: 'credit-notes/:id',
+        loadComponent: () =>
+          import('./features/credit-notes/credit-note-detail.component').then((m) => m.CreditNoteDetailComponent),
+      },
+      {
         path: 'crm',
         loadComponent: () => import('./features/crm/leads-board.component').then((m) => m.LeadsBoardComponent),
       },

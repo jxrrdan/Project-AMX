@@ -302,6 +302,24 @@ function, not just a scheduled feed":
   "who's liable for this damage" record either way, logged from the courtesy list and job-card
   detail pages respectively.
 
+## Recall campaigns & credit notes
+
+Two aftersales/accounting modules, each with its own RBAC module key, Prisma models, NestJS
+API and Angular Material screens:
+
+- **Recall campaign management** (`/recalls`) — track an OEM-issued safety recall or service
+  action to completion across every affected vehicle. A campaign (`RecallCampaign`) holds the
+  affected-vehicle list (`RecallVehicle`, optionally linked to a known `Vehicle`); each vehicle
+  moves OUTSTANDING → BOOKED → COMPLETED independently, stamping the booked/completed dates as it
+  advances. The list view shows per-campaign progress and a headline outstanding-work summary
+  across all open campaigns. Granted to the Workshop Controller role (and Dealer Principal / GM).
+- **Credit notes** (`/credit-notes`) — refunds/adjustments raised against a customer (goodwill
+  credits, overcharge corrections, returned-part refunds). A note is editable while DRAFT, gets a
+  document number on **issue** via the shared `DocumentSequenceService` ("CN-2026-00001", the same
+  numbering engine as every other AMX document), then can be APPLIED against a balance or
+  CANCELLED. Line-level tax means mixed VAT rates roll up correctly. Granted to the Accounts role
+  (and Dealer Principal / GM).
+
 ## PWA & offline PDI checklists
 
 The spec calls for the PDI checklist to work offline (§Non-functional Requirements) — a

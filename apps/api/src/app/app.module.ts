@@ -30,6 +30,8 @@ import { DocumentTemplatesModule } from '../modules/document-templates/document-
 import { OrgModule } from '../modules/org/org.module';
 import { ActionTriggersModule } from '../modules/action-triggers/action-triggers.module';
 import { AftersalesModule } from '../modules/aftersales/aftersales.module';
+import { RecallsModule } from '../modules/recalls/recalls.module';
+import { CreditNotesModule } from '../modules/credit-notes/credit-notes.module';
 
 @Module({
   imports: [
@@ -61,6 +63,8 @@ import { AftersalesModule } from '../modules/aftersales/aftersales.module';
     OrgModule,
     ActionTriggersModule,
     AftersalesModule,
+    RecallsModule,
+    CreditNotesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

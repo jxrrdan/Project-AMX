@@ -15,3 +15,5 @@ export * from './fi.enum';
 export * from './ai.enum';
 export * from './integration.enum';
 export * from './settings.enum';
+export * from './recall.enum';
+export * from './credit-note.enum';
