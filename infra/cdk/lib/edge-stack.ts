@@ -1,0 +1,108 @@
+import { CfnOutput, RemovalPolicy, Stack, StackProps, Duration } from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
+import * as ecs_patterns from 'aws-cdk-lib/aws-ecs-patterns';
+
+export interface EdgeStackProps extends StackProps {
+  apiService: ecs_patterns.ApplicationLoadBalancedFargateService;
+}
+
+/**
+ * The edge/CDN + WAF layer the scaffold's README left as follow-up:
+ *  - an S3 bucket that holds the built Angular SPA (private, served only through CloudFront),
+ *  - a CloudFront distribution serving the SPA and proxying /api/* to the ALB,
+ *  - an AWS-managed WAF WebACL attached to the ALB (where all traffic terminates).
+ *
+ * A custom domain + TLS cert + Route 53 records are only wired when a `domainName` context value is
+ * supplied (`cdk synth -c domainName=ams-app.co.uk -c hostedZoneId=...`), so this synthesizes
+ * cleanly against the default CloudFront domain when no real hosted zone exists yet.
+ */
+export class EdgeStack extends Stack {
+  readonly webBucket: s3.Bucket;
+  readonly distribution: cloudfront.Distribution;
+
+  constructor(scope: Construct, id: string, props: EdgeStackProps) {
+    super(scope, id, props);
+
+    // --- SPA hosting bucket (private; reached only via CloudFront OAC) ------
+    this.webBucket = new s3.Bucket(this, 'WebBucket', {
+      bucketName: undefined,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
+    // --- Regional WAF on the ALB ------------------------------------------
+    // The ALB is where requests actually terminate (CloudFront forwards /api to it), so the WebACL
+    // lives here as a REGIONAL ACL rather than a CloudFront-scoped one (which must be in us-east-1).
+    const webAcl = new wafv2.CfnWebACL(this, 'ApiWebAcl', {
+      scope: 'REGIONAL',
+      defaultAction: { allow: {} },
+      visibilityConfig: { cloudWatchMetricsEnabled: true, metricName: 'ams-api-waf', sampledRequestsEnabled: true },
+      rules: [
+        {
+          name: 'AWSCommonRuleSet',
+          priority: 1,
+          overrideAction: { none: {} },
+          statement: { managedRuleGroupStatement: { vendorName: 'AWS', name: 'AWSManagedRulesCommonRuleSet' } },
+          visibilityConfig: { cloudWatchMetricsEnabled: true, metricName: 'aws-common', sampledRequestsEnabled: true },
+        },
+        {
+          name: 'AWSKnownBadInputs',
+          priority: 2,
+          overrideAction: { none: {} },
+          statement: { managedRuleGroupStatement: { vendorName: 'AWS', name: 'AWSManagedRulesKnownBadInputsRuleSet' } },
+          visibilityConfig: { cloudWatchMetricsEnabled: true, metricName: 'aws-known-bad', sampledRequestsEnabled: true },
+        },
+        {
+          name: 'RateLimitPerIp',
+          priority: 3,
+          action: { block: {} },
+          statement: { rateBasedStatement: { limit: 2000, aggregateKeyType: 'IP' } },
+          visibilityConfig: { cloudWatchMetricsEnabled: true, metricName: 'rate-limit', sampledRequestsEnabled: true },
+        },
+      ],
+    });
+    new wafv2.CfnWebACLAssociation(this, 'ApiWebAclAssociation', {
+      resourceArn: props.apiService.loadBalancer.loadBalancerArn,
+      webAclArn: webAcl.attrArn,
+    });
+
+    // --- CloudFront: SPA by default, /api/* to the ALB ---------------------
+    const albOrigin = new origins.LoadBalancerV2Origin(props.apiService.loadBalancer, {
+      protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+    });
+
+    this.distribution = new cloudfront.Distribution(this, 'Distribution', {
+      comment: 'AMS — SPA + API',
+      defaultRootObject: 'index.html',
+      defaultBehavior: {
+        origin: origins.S3BucketOrigin.withOriginAccessControl(this.webBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+      },
+      additionalBehaviors: {
+        'api/*': {
+          origin: albOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        },
+      },
+      // SPA client-side routing: serve index.html for unmatched paths.
+      errorResponses: [
+        { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html', ttl: Duration.minutes(5) },
+        { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html', ttl: Duration.minutes(5) },
+      ],
+      priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
+    });
+
+    new CfnOutput(this, 'DistributionDomainName', { value: this.distribution.distributionDomainName });
+    new CfnOutput(this, 'WebBucketName', { value: this.webBucket.bucketName });
+  }
+}

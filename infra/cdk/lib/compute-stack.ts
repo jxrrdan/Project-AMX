@@ -23,6 +23,9 @@ export interface ComputeStackProps extends StackProps {
  * BMW's broker and publishes to SQS.
  */
 export class ComputeStack extends Stack {
+  /** Exposed so the Edge (CloudFront/WAF) and Observability stacks can front and monitor the API. */
+  readonly apiService: ecs_patterns.ApplicationLoadBalancedFargateService;
+
   constructor(scope: Construct, id: string, props: ComputeStackProps) {
     super(scope, id, props);
 
@@ -36,7 +39,7 @@ export class ComputeStack extends Stack {
     });
 
     // Main API — GET /health backs both the ECS health check and the Route 53 health check.
-    const apiService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'ApiService', {
+    const apiService = (this.apiService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'ApiService', {
       cluster,
       cpu: 512,
       memoryLimitMiB: 1024,
@@ -51,7 +54,7 @@ export class ComputeStack extends Stack {
       publicLoadBalancer: true,
       circuitBreaker: { rollback: true },
       minHealthyPercent: 100,
-    });
+    }));
     apiService.targetGroup.configureHealthCheck({ path: '/api/health', interval: Duration.seconds(30) });
     props.databaseSecret.grantRead(apiService.taskDefinition.taskRole);
     props.filesBucket.grantReadWrite(apiService.taskDefinition.taskRole);

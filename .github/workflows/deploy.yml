@@ -1,0 +1,83 @@
+name: Deploy
+
+# CI/CD pipeline the CDK scaffold's README listed as a gap: verify → build & push the API image to
+# ECR → deploy the CDK stacks → publish the built SPA to S3/CloudFront.
+#
+# It is NOT run by this repo yet — it requires an AWS account reachable via GitHub OIDC and the
+# secrets/variables listed below. Deploy steps are gated on the main branch.
+#
+# Required repository configuration:
+#   secrets.AWS_DEPLOY_ROLE_ARN   IAM role assumed via OIDC (permissions to ECR, CloudFormation, S3, CloudFront)
+#   vars.AWS_REGION               e.g. eu-west-2
+#   vars.WEB_BUCKET_NAME          S3 bucket from the Ams-Edge stack output (set after the first infra deploy)
+#   vars.CLOUDFRONT_DISTRIBUTION_ID  Distribution id from the Ams-Edge stack output
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write # required for AWS OIDC
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate --schema apps/api/prisma/schema.prisma
+      - run: npx nx run-many -t lint test build -p shared api web
+
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push API image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMAGE="$REGISTRY/ams-api"
+          docker build -f apps/api/Dockerfile -t "$IMAGE:$GITHUB_SHA" -t "$IMAGE:latest" .
+          docker push "$IMAGE:$GITHUB_SHA"
+          docker push "$IMAGE:latest"
+
+      - name: Deploy infrastructure (CDK)
+        working-directory: infra/cdk
+        run: |
+          npm ci
+          npx cdk deploy --all --require-approval never
+
+      - name: Build and publish the web SPA
+        if: ${{ vars.WEB_BUCKET_NAME != '' }}
+        run: |
+          npm ci
+          npx nx build web --configuration=production
+          aws s3 sync dist/apps/web/browser "s3://${{ vars.WEB_BUCKET_NAME }}" --delete
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/*"
