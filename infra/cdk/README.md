@@ -28,9 +28,12 @@ CloudFront. `.github/workflows/deploy.yml` does all of this (see below).
   a dedicated API Gateway (custom REST throttling, the WebSocket API for the live workshop board)
   is still a follow-up once those usage patterns are known. The WebSocket board currently rides
   the ALB via Socket.IO.
-- **Custom domain + Route 53 + ACM** — `Ams-Edge` serves on the default CloudFront domain. Supply
-  `-c domainName=ams-app.co.uk -c hostedZoneId=Z...` to wire a real hosted zone + cert once the
-  domain exists; without it the stack still synthesizes and deploys.
+- **Custom domain** — DNS is in Cloudflare, so there's no Route 53. `Ams-Edge` serves on the
+  default CloudFront domain unless you supply a bring-your-own ACM cert (validated in **us-east-1**,
+  CloudFront's required region): `cdk deploy Ams-Edge -c domainName=ams.example.com -c certificateArn=arn:aws:acm:us-east-1:<acct>:certificate/<id>`.
+  Then add a CNAME in Cloudflare from that hostname to the `DistributionDomainName` output. Cert
+  DNS-validation records are also added in Cloudflare. Cloudflare's proxy (orange cloud) can sit in
+  front of CloudFront on SSL mode Full (strict), or use DNS-only (grey cloud) to point straight at it.
 - **CloudFront-scoped WAF** — the WAF WebACL is `REGIONAL` and attached to the ALB (where requests
   terminate). A second CloudFront-scoped ACL (which must live in `us-east-1`) can be added if edge
   filtering ahead of the origin is wanted.

@@ -4,6 +4,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ecs_patterns from 'aws-cdk-lib/aws-ecs-patterns';
 
 export interface EdgeStackProps extends StackProps {
@@ -16,9 +17,15 @@ export interface EdgeStackProps extends StackProps {
  *  - a CloudFront distribution serving the SPA and proxying /api/* to the ALB,
  *  - an AWS-managed WAF WebACL attached to the ALB (where all traffic terminates).
  *
- * A custom domain + TLS cert + Route 53 records are only wired when a `domainName` context value is
- * supplied (`cdk synth -c domainName=ams-app.co.uk -c hostedZoneId=...`), so this synthesizes
- * cleanly against the default CloudFront domain when no real hosted zone exists yet.
+ * DNS lives in Cloudflare (not Route 53), so a custom domain is wired via a bring-your-own ACM
+ * certificate: create/validate a cert in us-east-1 (CloudFront's required region) using a DNS
+ * record you add in Cloudflare, then pass it in:
+ *
+ *   cdk deploy Ams-Edge -c domainName=ams.example.com -c certificateArn=arn:aws:acm:us-east-1:...:certificate/...
+ *
+ * You then add a CNAME in Cloudflare from that hostname to the distribution's domain (output
+ * `DistributionDomainName`). Without the context values the stack synthesizes and deploys cleanly
+ * on the default CloudFront domain.
  */
 export class EdgeStack extends Stack {
   readonly webBucket: s3.Bucket;
@@ -26,6 +33,14 @@ export class EdgeStack extends Stack {
 
   constructor(scope: Construct, id: string, props: EdgeStackProps) {
     super(scope, id, props);
+
+    // Optional custom domain via a bring-your-own (Cloudflare-validated) ACM cert in us-east-1.
+    const domainName = this.node.tryGetContext('domainName') as string | undefined;
+    const certificateArn = this.node.tryGetContext('certificateArn') as string | undefined;
+    const customDomain =
+      domainName && certificateArn
+        ? { domainNames: [domainName], certificate: acm.Certificate.fromCertificateArn(this, 'Cert', certificateArn) }
+        : {};
 
     // --- SPA hosting bucket (private; reached only via CloudFront OAC) ------
     this.webBucket = new s3.Bucket(this, 'WebBucket', {
@@ -80,6 +95,7 @@ export class EdgeStack extends Stack {
     this.distribution = new cloudfront.Distribution(this, 'Distribution', {
       comment: 'AMS — SPA + API',
       defaultRootObject: 'index.html',
+      ...customDomain,
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(this.webBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -102,7 +118,11 @@ export class EdgeStack extends Stack {
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
     });
 
+    // The CNAME target to create in Cloudflare (point ams.<domain> at this, DNS-only / grey-cloud).
     new CfnOutput(this, 'DistributionDomainName', { value: this.distribution.distributionDomainName });
     new CfnOutput(this, 'WebBucketName', { value: this.webBucket.bucketName });
+    if (domainName) {
+      new CfnOutput(this, 'ConfiguredCustomDomain', { value: domainName });
+    }
   }
 }
