@@ -1,7 +1,9 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { AccountTransactionType } from '@project-amx/shared';
 import { EmailService } from '../../common/email/email.service';
 import { SmsService } from '../../common/sms/sms.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { AccountCustomersService } from '../account-customers/account-customers.service';
 import {
   CreateServicePlanDto,
   CreateSubscriptionDto,
@@ -25,6 +27,7 @@ export class ServicePlansService {
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
     private readonly sms: SmsService,
+    private readonly accountCustomers: AccountCustomersService,
   ) {}
 
   // --- Plans ----------------------------------------------------------------
@@ -80,6 +83,7 @@ export class ServicePlansService {
         vehicleReg: dto.vehicleReg,
         contactEmail: dto.contactEmail,
         contactPhone: dto.contactPhone,
+        accountCustomerId: dto.accountCustomerId,
         motDueDate: dto.motDueDate ? new Date(dto.motDueDate) : undefined,
         serviceDueDate: dto.serviceDueDate ? new Date(dto.serviceDueDate) : undefined,
       },
@@ -97,6 +101,7 @@ export class ServicePlansService {
       data: {
         contactEmail: dto.contactEmail,
         contactPhone: dto.contactPhone,
+        accountCustomerId: dto.accountCustomerId,
         active: dto.active,
         motDueDate: dto.motDueDate ? new Date(dto.motDueDate) : undefined,
         serviceDueDate: dto.serviceDueDate ? new Date(dto.serviceDueDate) : undefined,
@@ -152,6 +157,46 @@ export class ServicePlansService {
       }
     }
     return { motSent, serviceSent, total: motSent + serviceSent };
+  }
+
+  /**
+   * Bill the monthly plan charge to AR for each active subscription linked to an account customer,
+   * once per calendar month. Posts an INVOICE transaction (which moves the account balance) and
+   * stamps lastBilledAt so a re-run in the same month is a no-op.
+   */
+  async runBilling(dealerId: string) {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const subs = await this.prisma.servicePlanSubscription.findMany({
+      where: {
+        dealerId,
+        active: true,
+        accountCustomerId: { not: null },
+        OR: [{ lastBilledAt: null }, { lastBilledAt: { lt: startOfMonth } }],
+      },
+      include: { plan: { select: { name: true, priceMonthly: true } } },
+    });
+
+    let billed = 0;
+    let total = 0;
+    for (const sub of subs) {
+      const amount = Number(sub.plan.priceMonthly);
+      if (amount <= 0 || !sub.accountCustomerId) {
+        continue;
+      }
+      await this.accountCustomers.addTransaction(dealerId, sub.accountCustomerId, {
+        type: AccountTransactionType.INVOICE,
+        description: `${sub.plan.name} — monthly plan charge (${sub.vehicleReg})`,
+        amount,
+        reference: `PLAN-${sub.id.slice(0, 8)}`,
+      });
+      await this.prisma.servicePlanSubscription.update({ where: { id: sub.id }, data: { lastBilledAt: new Date() } });
+      billed++;
+      total += amount;
+    }
+    return { billed, total: Math.round((total + Number.EPSILON) * 100) / 100 };
   }
 
   private async notify(

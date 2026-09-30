@@ -64,4 +64,10 @@ export class ServicePlansController {
   runReminders(@CurrentUser() user: AuthUser) {
     return this.service.runDueReminders(user.dealerId);
   }
+
+  @Post('billing/run')
+  @RequirePermissions({ module: ModuleKey.SERVICE_PLANS, action: PermissionAction.EDIT })
+  runBilling(@CurrentUser() user: AuthUser) {
+    return this.service.runBilling(user.dealerId);
+  }
 }

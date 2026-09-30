@@ -352,6 +352,20 @@ NestJS API, Angular Material screens and RBAC:
   stock-takes that post variance movements on completion, and backorder tracking that books stock
   in on receipt. Layered on top of the existing basic Parts stock ledger.
 
+### Closed loops between these modules
+
+The aftersales/finance modules are wired together rather than standing alone:
+
+- **Online booking → workshop job:** marking a booking request SCHEDULED creates a real
+  `ServiceBooking` (guarded by `serviceBookingId` so re-triaging can't duplicate it).
+- **Automated reminders & billing:** the `batch-jobs` scheduler runs the service-plan reminder
+  sweep nightly (02:30) and the monthly plan-charge billing on the 1st (03:30), in addition to the
+  manual "Run now" buttons.
+- **New-booking notification:** a public booking submission raises an in-app notification to the
+  workshop triage team (Workshop Controller / Service Advisor).
+- **Service-plan billing → AR:** a subscription can be linked to an account customer; the billing
+  sweep posts the monthly plan charge to that account's ledger (once per calendar month).
+
 ## PWA & offline PDI checklists
 
 The spec calls for the PDI checklist to work offline (§Non-functional Requirements) — a

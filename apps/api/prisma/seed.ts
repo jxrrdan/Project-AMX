@@ -351,6 +351,7 @@ async function main() {
       customerName: 'Sarah Hughes',
       vehicleReg: 'NN21ABC',
       contactEmail: 'sarah.hughes@example.com',
+      accountCustomerId: accountCustomer.id,
       motDueDate: new Date(Date.now() + 20 * 86_400_000),
       serviceDueDate: new Date(Date.now() + 45 * 86_400_000),
     },

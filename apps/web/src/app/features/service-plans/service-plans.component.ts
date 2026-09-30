@@ -23,8 +23,12 @@ interface DueSummary { motDue: number; serviceDue: number; }
   template: `
     <div class="header">
       <h1>Service Plans & Reminders</h1>
-      <button mat-flat-button color="primary" (click)="runReminders()"><mat-icon>notifications_active</mat-icon> Run reminders now</button>
+      <div class="actions">
+        <button mat-stroked-button (click)="runBilling()"><mat-icon>request_quote</mat-icon> Run billing now</button>
+        <button mat-flat-button color="primary" (click)="runReminders()"><mat-icon>notifications_active</mat-icon> Run reminders now</button>
+      </div>
     </div>
+    <p class="hint">Reminders run automatically every night and billing on the 1st of each month; the buttons above trigger them on demand.</p>
 
     @if (summary(); as s) {
       <div class="tiles">
@@ -61,6 +65,13 @@ interface DueSummary { motDue: number; serviceDue: number; }
             <mat-form-field appearance="outline"><mat-label>Customer</mat-label><input matInput [(ngModel)]="subForm.customerName" /></mat-form-field>
             <mat-form-field appearance="outline"><mat-label>Reg</mat-label><input matInput [(ngModel)]="subForm.vehicleReg" /></mat-form-field>
             <mat-form-field appearance="outline"><mat-label>Email</mat-label><input matInput [(ngModel)]="subForm.contactEmail" /></mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Bill to account (optional)</mat-label>
+              <mat-select [(ngModel)]="subForm.accountCustomerId">
+                <mat-option [value]="null">— None —</mat-option>
+                @for (a of accounts(); track a.id) { <mat-option [value]="a.id">{{ a.name }}</mat-option> }
+              </mat-select>
+            </mat-form-field>
             <mat-form-field appearance="outline"><mat-label>MOT due</mat-label><input matInput type="date" [(ngModel)]="subForm.motDueDate" /></mat-form-field>
             <mat-form-field appearance="outline"><mat-label>Service due</mat-label><input matInput type="date" [(ngModel)]="subForm.serviceDueDate" /></mat-form-field>
             <button mat-flat-button color="primary" [disabled]="!subForm.planId || !subForm.customerName || !subForm.vehicleReg" (click)="createSub()">Create</button>
@@ -79,7 +90,9 @@ interface DueSummary { motDue: number; serviceDue: number; }
     </div>
   `,
   styles: [`
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .header .actions { display: flex; gap: 8px; }
+    .hint { color: rgba(0,0,0,0.6); margin: 0 0 16px; font-size: 13px; }
     .tiles { display: flex; gap: 12px; margin-bottom: 16px; }
     .tile { flex: 0 0 220px; padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; }
     .tile .num { font-size: 26px; font-weight: 600; }
@@ -96,12 +109,13 @@ interface DueSummary { motDue: number; serviceDue: number; }
 export class ServicePlansComponent implements OnInit {
   readonly plans = signal<Plan[]>([]);
   readonly subscriptions = signal<Subscription[]>([]);
+  readonly accounts = signal<{ id: string; name: string }[]>([]);
   readonly summary = signal<DueSummary | null>(null);
   readonly showPlanForm = signal(false);
   readonly showSubForm = signal(false);
   readonly subColumns = ['customer', 'reg', 'mot', 'service'];
   planForm = { name: '', priceMonthly: null as number | null, intervalMonths: 12 };
-  subForm = { planId: '', customerName: '', vehicleReg: '', contactEmail: '', motDueDate: '', serviceDueDate: '' };
+  subForm = { planId: '', customerName: '', vehicleReg: '', contactEmail: '', accountCustomerId: null as string | null, motDueDate: '', serviceDueDate: '' };
 
   private readonly http = inject(HttpClient);
   private readonly snackBar = inject(MatSnackBar);
@@ -112,6 +126,7 @@ export class ServicePlansComponent implements OnInit {
     this.http.get<Plan[]>(`${environment.apiUrl}/service-plans`).subscribe((d) => this.plans.set(d));
     this.http.get<Subscription[]>(`${environment.apiUrl}/service-plans/subscriptions/all`).subscribe((d) => this.subscriptions.set(d));
     this.http.get<DueSummary>(`${environment.apiUrl}/service-plans/reminders/summary`).subscribe((d) => this.summary.set(d));
+    this.http.get<{ id: string; name: string }[]>(`${environment.apiUrl}/account-customers?active=true`).subscribe((d) => this.accounts.set(d));
   }
 
   createPlan(): void {
@@ -128,14 +143,22 @@ export class ServicePlansComponent implements OnInit {
       customerName: this.subForm.customerName,
       vehicleReg: this.subForm.vehicleReg,
       contactEmail: this.subForm.contactEmail || undefined,
+      accountCustomerId: this.subForm.accountCustomerId || undefined,
       motDueDate: this.subForm.motDueDate ? new Date(this.subForm.motDueDate).toISOString() : undefined,
       serviceDueDate: this.subForm.serviceDueDate ? new Date(this.subForm.serviceDueDate).toISOString() : undefined,
-    }).subscribe(() => { this.subForm = { planId: '', customerName: '', vehicleReg: '', contactEmail: '', motDueDate: '', serviceDueDate: '' }; this.showSubForm.set(false); this.load(); });
+    }).subscribe(() => { this.subForm = { planId: '', customerName: '', vehicleReg: '', contactEmail: '', accountCustomerId: null, motDueDate: '', serviceDueDate: '' }; this.showSubForm.set(false); this.load(); });
   }
 
   runReminders(): void {
     this.http.post<{ total: number }>(`${environment.apiUrl}/service-plans/reminders/run`, {}).subscribe((r) => {
       this.snackBar.open(`Sent ${r.total} reminder(s)`, 'Dismiss', { duration: 3000 });
+      this.load();
+    });
+  }
+
+  runBilling(): void {
+    this.http.post<{ billed: number; total: number }>(`${environment.apiUrl}/service-plans/billing/run`, {}).subscribe((r) => {
+      this.snackBar.open(`Billed ${r.billed} subscription(s), £${r.total.toFixed(2)} to AR`, 'Dismiss', { duration: 3500 });
       this.load();
     });
   }

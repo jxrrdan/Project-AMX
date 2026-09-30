@@ -62,6 +62,10 @@ export class CreateSubscriptionDto {
   contactPhone?: string;
 
   @IsOptional()
+  @IsString()
+  accountCustomerId?: string;
+
+  @IsOptional()
   @IsDateString()
   motDueDate?: string;
 
@@ -78,6 +82,10 @@ export class UpdateSubscriptionDto {
   @IsOptional()
   @IsString()
   contactPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  accountCustomerId?: string;
 
   @IsOptional()
   @IsDateString()

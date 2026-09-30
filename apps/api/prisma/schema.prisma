@@ -2118,8 +2118,9 @@ model AccountCustomer {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  transactions AccountTransaction[]
-  payments     Payment[]
+  transactions             AccountTransaction[]
+  payments                 Payment[]
+  servicePlanSubscriptions ServicePlanSubscription[]
 
   @@map("account_customers")
 }
@@ -2165,23 +2166,28 @@ model ServicePlan {
 /// A customer/vehicle enrolled on a plan, carrying the MOT and service due dates that drive the
 /// automated reminder sweep (reminderSentAt stamped so a reminder fires once per due window).
 model ServicePlanSubscription {
-  id                    String      @id @default(uuid())
+  id                    String           @id @default(uuid())
   dealerId              String
-  dealer                Dealer      @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  dealer                Dealer           @relation(fields: [dealerId], references: [id], onDelete: Cascade)
   planId                String
-  plan                  ServicePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  plan                  ServicePlan      @relation(fields: [planId], references: [id], onDelete: Cascade)
   customerName          String
   vehicleReg            String
   contactEmail          String?
   contactPhone          String?
-  startedAt             DateTime    @default(now())
+  /// Optional link to an account customer — when set, the monthly plan charge is billed to their AR ledger.
+  accountCustomerId     String?
+  accountCustomer       AccountCustomer? @relation(fields: [accountCustomerId], references: [id], onDelete: SetNull)
+  startedAt             DateTime         @default(now())
   motDueDate            DateTime?
   serviceDueDate        DateTime?
   motReminderSentAt     DateTime?
   serviceReminderSentAt DateTime?
-  active                Boolean     @default(true)
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
+  /// Last time the monthly plan charge was billed to AR — used to bill once per calendar month.
+  lastBilledAt          DateTime?
+  active                Boolean          @default(true)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
 
   @@map("service_plan_subscriptions")
 }
@@ -2211,6 +2217,9 @@ model OnlineBookingRequest {
   preferredDate DateTime?
   notes         String?
   status        OnlineBookingStatus @default(NEW)
+  /// Set once this request has been converted into a real workshop ServiceBooking (on SCHEDULED),
+  /// so re-triaging can't create duplicate bookings.
+  serviceBookingId String?
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
