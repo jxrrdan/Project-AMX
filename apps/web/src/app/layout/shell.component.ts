@@ -9,6 +9,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatBadgeModule } from '@angular/material/badge';
 import { ModuleKey, PermissionAction } from '@project-amx/shared';
 import { AuthService } from '../core/auth.service';
+import { ConnectivityService } from '../core/connectivity.service';
 import { ThemeService } from '../core/theme.service';
 import { AiAssistantDockComponent } from '../features/ai/ai-assistant-dock.component';
 import { NotificationsBellComponent } from '../features/notifications/notifications-bell.component';
@@ -24,13 +25,23 @@ const NAV_ITEMS: NavItem[] = [
   { path: 'dashboard', label: 'Dashboard', icon: 'space_dashboard', module: ModuleKey.DASHBOARD },
   { path: 'vehicles', label: 'New Car & PDI', icon: 'directions_car', module: ModuleKey.NEW_CAR_PDI },
   { path: 'workshop', label: 'Workshop', icon: 'build', module: ModuleKey.WORKSHOP },
+  { path: 'online-bookings', label: 'Online Bookings', icon: 'event_available', module: ModuleKey.WORKSHOP },
+  { path: 'service-plans', label: 'Service Plans', icon: 'event_repeat', module: ModuleKey.SERVICE_PLANS },
+  { path: 'parc', label: 'Vehicle Parc', icon: 'history', module: ModuleKey.VEHICLE_PARC },
   { path: 'parts', label: 'Parts', icon: 'inventory_2', module: ModuleKey.PARTS },
+  { path: 'parts/suppliers', label: 'Parts Suppliers', icon: 'local_shipping', module: ModuleKey.PARTS },
   { path: 'used-cars', label: 'Used Cars', icon: 'car_repair', module: ModuleKey.USED_CARS },
   { path: 'warranty', label: 'Warranty', icon: 'verified', module: ModuleKey.WARRANTY },
+  { path: 'recalls', label: 'Recalls', icon: 'campaign', module: ModuleKey.RECALLS },
   { path: 'crm', label: 'CRM', icon: 'contacts', module: ModuleKey.CRM },
   { path: 'vhc', label: 'Vehicle Health Check', icon: 'health_and_safety', module: ModuleKey.VHC },
   { path: 'listings', label: 'Stock Listings', icon: 'storefront', module: ModuleKey.LISTINGS },
   { path: 'accounting', label: 'Accounting', icon: 'receipt_long', module: ModuleKey.ACCOUNTING },
+  { path: 'credit-notes', label: 'Credit Notes', icon: 'request_quote', module: ModuleKey.CREDIT_NOTES },
+  { path: 'cashiering', label: 'Cash Desk', icon: 'point_of_sale', module: ModuleKey.CASHIERING },
+  { path: 'account-customers', label: 'Account Customers', icon: 'groups', module: ModuleKey.ACCOUNT_CUSTOMERS },
+  { path: 'reports/doc', label: 'Management Reporting', icon: 'insights', module: ModuleKey.MANAGEMENT_REPORTING },
+  { path: 'compliance', label: 'Compliance', icon: 'gavel', module: ModuleKey.COMPLIANCE },
   { path: 'courtesy', label: 'Courtesy Fleet', icon: 'time_to_leave', module: ModuleKey.COURTESY_FLEET },
   { path: 'fi', label: 'Finance & Insurance', icon: 'account_balance', module: ModuleKey.FI },
   { path: 'ai', label: 'AI Assistant', icon: 'auto_awesome', module: ModuleKey.AI_INSIGHTS },
@@ -63,6 +74,12 @@ const NAV_ITEMS: NavItem[] = [
         <span class="brand">AMS — {{ theme.dealerName() }}</span>
       }
       <span class="spacer"></span>
+      @if (!connectivity.online()) {
+        <span class="offline-chip" title="You're offline — changes are saved on this device and will sync when you reconnect">
+          <mat-icon>cloud_off</mat-icon>
+          Offline
+        </span>
+      }
       <app-notifications-bell />
       <button mat-icon-button [matMenuTriggerFor]="userMenu">
         <mat-icon>account_circle</mat-icon>
@@ -141,12 +158,28 @@ const NAV_ITEMS: NavItem[] = [
         font-size: 12px;
         color: rgba(0, 0, 0, 0.6);
       }
+      .offline-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 10px;
+        margin-right: 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        background: rgba(255, 255, 255, 0.2);
+      }
+      .offline-chip mat-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+      }
     `,
   ],
 })
 export class ShellComponent implements OnInit {
   readonly auth = inject(AuthService);
   readonly theme = inject(ThemeService);
+  readonly connectivity = inject(ConnectivityService);
   readonly aiModule = ModuleKey.AI_INSIGHTS;
   readonly viewAction = PermissionAction.VIEW;
 

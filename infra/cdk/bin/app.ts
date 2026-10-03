@@ -7,6 +7,8 @@ import { AuthStack } from '../lib/auth-stack';
 import { StorageStack } from '../lib/storage-stack';
 import { QueueStack } from '../lib/queue-stack';
 import { ComputeStack } from '../lib/compute-stack';
+import { ObservabilityStack } from '../lib/observability-stack';
+import { EdgeStack } from '../lib/edge-stack';
 
 const app = new cdk.App();
 
@@ -20,10 +22,22 @@ const data = new DataStack(app, 'Ams-Data', { env, vpc: network.vpc });
 new AuthStack(app, 'Ams-Auth', { env });
 const storage = new StorageStack(app, 'Ams-Storage', { env });
 const queue = new QueueStack(app, 'Ams-Queue', { env });
-new ComputeStack(app, 'Ams-Compute', {
+const compute = new ComputeStack(app, 'Ams-Compute', {
   env,
   vpc: network.vpc,
   databaseSecret: data.databaseSecret,
   filesBucket: storage.filesBucket,
   vehicleUpdateQueue: queue.vehicleUpdateQueue,
+});
+
+new ObservabilityStack(app, 'Ams-Observability', {
+  env,
+  apiService: compute.apiService,
+  cluster: data.cluster,
+  vehicleUpdateQueue: queue.vehicleUpdateQueue,
+});
+
+new EdgeStack(app, 'Ams-Edge', {
+  env,
+  apiService: compute.apiService,
 });

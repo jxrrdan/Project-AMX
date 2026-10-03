@@ -15,24 +15,43 @@ than guessed at.
 | `Ams-Storage` | S3 bucket for dealer files (photos, PDFs, documents), versioned, Glacier lifecycle rule |
 | `Ams-Queue` | SQS queue + DLQ for the BMW RIS vehicle-update pipeline, EventBridge bus, DLQ-depth alarm |
 | `Ams-Compute` | ECS Fargate cluster: the NestJS API behind an ALB, and the always-on MQTT Subscriber service |
+| `Ams-Observability` | CloudWatch dashboard (`ams-operations`) + P1/P2 alarms (ALB 5xx, p95 latency, no healthy hosts, Aurora CPU, queue age) → one SNS ops topic |
+| `Ams-Edge` | CloudFront distribution (S3-hosted SPA by default, `/api/*` proxied to the ALB), a private SPA bucket, and an AWS-managed WAF WebACL attached to the ALB |
+
+Deploying the app then means: push the API image to the `ams-api` ECR repo (see `apps/api/Dockerfile`),
+`cdk deploy --all`, then publish the built Angular SPA to the `Ams-Edge` web bucket and invalidate
+CloudFront. `.github/workflows/deploy.yml` does all of this (see below).
 
 ## What's deliberately not here yet
 
-- **API Gateway (REST + WebSocket) and WAF** — the local dev API talks to the ALB directly;
-  fronting it with API Gateway per the spec is a follow-up stack once real usage patterns
-  (custom domains, throttling needs) are known.
-- **CloudFront + Route 53** — needs a real hosted zone and ACM certificate for `ams-app.co.uk`;
-  wiring this up against a domain nobody owns yet would just be guesswork.
-- **Lambda functions** (Vehicle Update Handler, report generation, cron jobs) — `apps/workers` in
-  the Nx workspace is where these would live; none exist yet because the equivalent logic
-  currently runs as NestJS services in `apps/api` (see `RisImportService`, `WorkflowsService`)
-  for local development.
-- **X-Ray tracing, CloudWatch dashboards/alarms beyond the one DLQ alarm, WAF rules, Cognito
-  Lambda triggers** — the observability section of the spec is extensive; this scaffold wires up
-  the one alarm explicitly called out as P1 (DLQ depth) and leaves the rest for a dedicated pass.
-- **CI/CD (GitHub Actions → ECR → ECS)** — no pipeline is defined; images referenced by
-  `Ams-Compute` (`ams-api`, `ams-mqtt-subscriber`) must be pushed to the ECR repos this stack
-  creates before a deploy would succeed.
+- **API Gateway (REST + WebSocket)** — CloudFront + the ALB cover HTTPS ingress and SPA hosting;
+  a dedicated API Gateway (custom REST throttling, the WebSocket API for the live workshop board)
+  is still a follow-up once those usage patterns are known. The WebSocket board currently rides
+  the ALB via Socket.IO.
+- **Custom domain** — DNS is in Cloudflare, so there's no Route 53. `Ams-Edge` serves on the
+  default CloudFront domain unless you supply a bring-your-own ACM cert (validated in **us-east-1**,
+  CloudFront's required region): `cdk deploy Ams-Edge -c domainName=ams.example.com -c certificateArn=arn:aws:acm:us-east-1:<acct>:certificate/<id>`.
+  Then add a CNAME in Cloudflare from that hostname to the `DistributionDomainName` output. Cert
+  DNS-validation records are also added in Cloudflare. Cloudflare's proxy (orange cloud) can sit in
+  front of CloudFront on SSL mode Full (strict), or use DNS-only (grey cloud) to point straight at it.
+- **CloudFront-scoped WAF** — the WAF WebACL is `REGIONAL` and attached to the ALB (where requests
+  terminate). A second CloudFront-scoped ACL (which must live in `us-east-1`) can be added if edge
+  filtering ahead of the origin is wanted.
+- **Lambda functions** (Vehicle Update Handler, report generation) — `apps/workers` is where these
+  would live; none exist yet because the equivalent logic currently runs as NestJS services in
+  `apps/api` (see `RisImportService`, `WorkflowsService`) and the `batch-jobs` scheduler.
+- **X-Ray tracing, Cognito Lambda triggers** — deferred; the dashboard + alarm pass above covers
+  the spec's alerting table, but distributed tracing and auth-flow customisation are a later pass.
+
+## CI/CD
+
+`.github/workflows/deploy.yml` defines a GitHub Actions pipeline: **verify** (lint/test/build) on
+every push, then on `main` a **deploy** job that assumes an AWS role via OIDC, builds & pushes the
+API image to ECR, runs `cdk deploy --all`, and syncs the built SPA to S3 + invalidates CloudFront.
+It is committed but **not yet run** — it needs an AWS account and the secrets/variables documented
+at the top of the workflow file (`AWS_DEPLOY_ROLE_ARN`, `AWS_REGION`, `WEB_BUCKET_NAME`,
+`CLOUDFRONT_DISTRIBUTION_ID`). Likewise `apps/api/Dockerfile` is the intended API image but has not
+been built here (no Docker daemon in the build sandbox).
 
 ## Running this
 

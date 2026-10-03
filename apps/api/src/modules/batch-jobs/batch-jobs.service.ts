@@ -4,6 +4,7 @@ import { BatchJobName, BatchJobStatus, LeadStage, NotificationChannel, SystemRol
 import { addDays, subDays } from 'date-fns';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ServicePlansService } from '../service-plans/service-plans.service';
 
 /**
  * Scheduled maintenance jobs that don't belong to any one module's request/response cycle —
@@ -19,6 +20,7 @@ export class BatchJobsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly servicePlans: ServicePlansService,
   ) {}
 
   @Cron('0 2 * * *')
@@ -34,6 +36,16 @@ export class BatchJobsService {
   @Cron('0 3 1 * *')
   async monthlyCourtesyFleetExpirySweep(): Promise<void> {
     await this.runForAllDealers(BatchJobName.COURTESY_FLEET_EXPIRY_SWEEP, (dealerId) => this.courtesyFleetExpirySweep(dealerId));
+  }
+
+  @Cron('30 2 * * *')
+  async nightlyServicePlanReminders(): Promise<void> {
+    await this.runForAllDealers(BatchJobName.SERVICE_PLAN_REMINDERS, (dealerId) => this.servicePlanReminders(dealerId));
+  }
+
+  @Cron('30 3 1 * *')
+  async monthlyServicePlanBilling(): Promise<void> {
+    await this.runForAllDealers(BatchJobName.SERVICE_PLAN_BILLING, (dealerId) => this.servicePlanBilling(dealerId));
   }
 
   /** Manual "run now" — lets a job be tested/demonstrated without waiting for its schedule. */
@@ -53,6 +65,8 @@ export class BatchJobsService {
     [BatchJobName.STALE_LEAD_ESCALATION]: (dealerId) => this.staleLeadEscalation(dealerId),
     [BatchJobName.PARTS_REORDER_ALERT]: (dealerId) => this.partsReorderAlert(dealerId),
     [BatchJobName.COURTESY_FLEET_EXPIRY_SWEEP]: (dealerId) => this.courtesyFleetExpirySweep(dealerId),
+    [BatchJobName.SERVICE_PLAN_REMINDERS]: (dealerId) => this.servicePlanReminders(dealerId),
+    [BatchJobName.SERVICE_PLAN_BILLING]: (dealerId) => this.servicePlanBilling(dealerId),
   };
 
   private async runForAllDealers(jobName: BatchJobName, fn: (dealerId: string) => Promise<string>): Promise<void> {
@@ -163,5 +177,17 @@ export class BatchJobsService {
       NotificationChannel.EMAIL,
     );
     return `${expiring.length} courtesy vehicle(s) due for renewal; notified ${managers.length} manager(s)`;
+  }
+
+  /** MOT/service-due reminders for service-plan subscriptions — emails/SMSes customers automatically. */
+  private async servicePlanReminders(dealerId: string): Promise<string> {
+    const { motSent, serviceSent, total } = await this.servicePlans.runDueReminders(dealerId);
+    return `${total} reminder(s) sent (${motSent} MOT, ${serviceSent} service)`;
+  }
+
+  /** Monthly plan-charge billing to AR for account-linked subscriptions. */
+  private async servicePlanBilling(dealerId: string): Promise<string> {
+    const { billed, total } = await this.servicePlans.runBilling(dealerId);
+    return `${billed} subscription(s) billed, £${total.toFixed(2)} posted to AR`;
   }
 }

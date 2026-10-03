@@ -1,0 +1,114 @@
+# Production-shaped local stack — run the whole app the way it runs in AWS, without AWS.
+#
+#   docker compose -f docker-compose.prod.yml up --build        # start everything
+#   docker compose -f docker-compose.prod.yml --profile tools run --rm seed   # (optional) load demo data
+#
+# Then open http://localhost:8080 (nginx serves the SPA and proxies /api to the API, exactly as
+# CloudFront → ALB does in production). Postgres stands in for Aurora, Redis for ElastiCache.
+#
+# This is a stand-in for the AWS runtime, not a spoof of AWS itself: ECS/Aurora/CloudFront/WAF are
+# not emulated — the same container images and env/driver config run against local Postgres/Redis.
+
+x-api-env: &api-env
+  NODE_ENV: production
+  DATABASE_URL: postgresql://ams:ams_local_password@postgres:5432/ams?schema=public
+  REDIS_URL: redis://redis:6379
+  JWT_ACCESS_SECRET: local-prod-access-secret-change-me
+  JWT_REFRESH_SECRET: local-prod-refresh-secret-change-me
+  JWT_ACCESS_EXPIRY: 15m
+  JWT_REFRESH_EXPIRY: 7d
+  API_PORT: "3000"
+  CORS_ORIGIN: http://localhost:8080
+  STORAGE_DRIVER: local
+  STORAGE_LOCAL_PATH: /app/.data/storage
+  EMAIL_DRIVER: console
+  SMS_DRIVER: console
+  AI_DRIVER: mock
+  DVLA_DRIVER: mock
+  CAPTCHA_DRIVER: local
+  CAPTCHA_SECRET: local-prod-captcha-secret-change-me
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ams
+      POSTGRES_PASSWORD: ams_local_password
+      POSTGRES_DB: ams
+    ports:
+      - "5432:5432"
+    volumes:
+      - ams-prod-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ams -d ams"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-off: apply Prisma migrations, then exit. Uses the build stage (which has the Prisma CLI).
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: build
+    environment: *api-env
+    command: ["npx", "prisma", "migrate", "deploy", "--schema", "apps/api/prisma/schema.prisma"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment: *api-env
+    ports:
+      - "3000:3000" # exposed for direct API testing; the SPA reaches it via nginx on :8080
+    volumes:
+      - ams-prod-api-storage:/app/.data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+  # Optional: load the demo dealer/users/data (profile "tools" so it doesn't run on a normal up).
+  #   docker compose -f docker-compose.prod.yml --profile tools run --rm seed
+  seed:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: build
+    environment: *api-env
+    command: ["npx", "prisma", "db", "seed"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  ams-prod-postgres-data:
+  ams-prod-api-storage:
