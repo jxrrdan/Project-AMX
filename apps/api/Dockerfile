@@ -38,6 +38,7 @@ COPY --from=build /workspace/node_modules/@prisma/client ./node_modules/@prisma/
 
 EXPOSE 3000
 
-# Apply any pending migrations, then start. In a stricter setup migrations run as a separate
-# one-off task/init container so app tasks never race to migrate — see deploy.yml.
-CMD ["sh", "-c", "npx prisma migrate deploy --schema ./prisma/schema.prisma && node main.js"]
+# Migrations are applied by a separate one-off step (the `migrate` service in docker-compose.prod.yml,
+# or an ECS run-task before rollout) rather than here, so replicas never race to migrate and the
+# runtime image needs no Prisma CLI. This container only runs the compiled server.
+CMD ["node", "main.js"]

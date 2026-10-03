@@ -132,6 +132,29 @@ login). Get the demo dealer's ID from `GET /api/dealers/me` while logged in, or 
 Studio. Submitting it creates a real contact + lead you'll see land in the CRM contacts list and
 lead pipeline.
 
+## Run the full stack in production shape (Docker)
+
+To test the app the way it runs in AWS — the compiled API image, the built SPA served by nginx,
+Postgres standing in for Aurora, Redis for ElastiCache — without needing an AWS account:
+
+```bash
+docker compose -f docker-compose.prod.yml up --build
+# (optional) load the demo dealer/users/data once it's up:
+docker compose -f docker-compose.prod.yml --profile tools run --rm seed
+```
+
+Then open **http://localhost:8080** — nginx serves the Angular app and proxies `/api` to the API
+exactly as CloudFront → the ALB does in production (same origin, so the SPA uses the relative `/api`
+URL from `environment.prod.ts`). Migrations are applied by a one-off `migrate` service before the
+API starts; the API is also published on `:3000` for direct calls.
+
+This is a faithful stand-in for the AWS **runtime**, not a spoof of AWS itself — ECS, Aurora
+Serverless v2, CloudFront and WAF aren't emulated. It runs the same container images and the same
+env/driver config (`STORAGE_DRIVER`, `CAPTCHA_DRIVER`, etc.) against local Postgres/Redis, so it
+exercises the real code paths, migrations, and same-origin routing end to end. (LocalStack can be
+added later to spoof the discrete services the app *calls* — S3/SQS/SNS — but note the S3 storage
+driver is still a local-only stub.)
+
 ## Local vs. production
 
 Every AWS service this system depends on but that a local dev sandbox can't provide is behind an
