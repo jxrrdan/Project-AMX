@@ -28,6 +28,13 @@ interface NewCarSale {
   tradeIn: { usedVehicleId: string; agreedValue: number } | null;
 }
 
+interface PdiJobSummary {
+  id: string;
+  status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETE';
+  scheduledDate: string;
+  checklistItems: { rating: string | null }[];
+}
+
 interface VehicleDetail {
   id: string;
   vin: string;
@@ -36,6 +43,7 @@ interface VehicleDetail {
   customerName: string | null;
   status: string;
   sales: NewCarSale[];
+  pdiJobs: PdiJobSummary[];
 }
 
 @Component({
@@ -63,6 +71,28 @@ interface VehicleDetail {
         </div>
       </div>
       <p class="subtitle">VIN {{ v.vin }} @if (v.colour) { · {{ v.colour }} } @if (v.customerName) { · {{ v.customerName }} }</p>
+
+      <mat-card class="section">
+        <h3>Pre-delivery inspection</h3>
+        @if (pdiJob(); as job) {
+          <p>
+            <mat-chip [class]="'pdi-' + job.status">{{ pdiStatusLabel(job.status) }}</mat-chip>
+            · {{ pdiRatedCount(job) }} of {{ job.checklistItems.length }} items rated
+          </p>
+          <a mat-flat-button color="primary" [routerLink]="['/vehicles', v.id, 'pdi']">
+            <mat-icon>fact_check</mat-icon>
+            {{ job.status === 'COMPLETE' ? 'View PDI checklist' : 'Open PDI checklist' }}
+          </a>
+          <p class="hint">The checklist works offline — ratings save on the device and upload when back in range.</p>
+        } @else if (v.status === 'ARRIVED') {
+          <p>This vehicle has arrived and is ready for its PDI.</p>
+          <button mat-flat-button color="primary" [disabled]="scheduling" (click)="schedulePdi()">
+            <mat-icon>event_available</mat-icon> Schedule PDI
+          </button>
+        } @else {
+          <p class="hint">A PDI can be scheduled once the vehicle is marked as arrived.</p>
+        }
+      </mat-card>
 
       <mat-card class="section">
         <h3>Sale</h3>
@@ -229,6 +259,15 @@ interface VehicleDetail {
         background: #fbe9e7;
         text-decoration: line-through;
       }
+      .pdi-SCHEDULED {
+        background: #e3f2fd;
+      }
+      .pdi-IN_PROGRESS {
+        background: #fff8e1;
+      }
+      .pdi-COMPLETE {
+        background: #e8f5e9;
+      }
     `,
   ],
 })
@@ -238,6 +277,15 @@ export class VehicleDetailComponent implements OnInit {
   readonly saleModelLabels = SALE_MODEL_LABELS;
   readonly activeSale = () => this.vehicle()?.sales.find((s) => s.status === 'ACTIVE') ?? null;
   readonly pastSales = () => this.vehicle()?.sales.filter((s) => s.status !== 'ACTIVE') ?? [];
+  readonly pdiJob = (): PdiJobSummary | null => {
+    const jobs = this.vehicle()?.pdiJobs ?? [];
+    if (!jobs.length) {
+      return null;
+    }
+    const byDateDesc = [...jobs].sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime());
+    return byDateDesc.find((j) => j.status !== 'COMPLETE') ?? byDateDesc[0];
+  };
+  scheduling = false;
 
   saleForm = { saleModel: SaleModel.RETAIL, sellingPrice: null as number | null, agencyCommission: null as number | null };
   hasTradeIn = false;
@@ -265,6 +313,31 @@ export class VehicleDetailComponent implements OnInit {
 
   load(): void {
     this.http.get<VehicleDetail>(`${environment.apiUrl}/vehicles/${this.vehicleId}`).subscribe((data) => this.vehicle.set(data));
+  }
+
+  pdiStatusLabel(status: string): string {
+    return status === 'COMPLETE' ? 'Complete' : status === 'IN_PROGRESS' ? 'In progress' : 'Scheduled';
+  }
+
+  pdiRatedCount(job: PdiJobSummary): number {
+    return job.checklistItems.filter((i) => !!i.rating).length;
+  }
+
+  schedulePdi(): void {
+    this.scheduling = true;
+    this.http
+      .post(`${environment.apiUrl}/vehicles/${this.vehicleId}/pdi`, { scheduledDate: new Date().toISOString() })
+      .subscribe({
+        next: () => {
+          this.scheduling = false;
+          this.snackBar.open('PDI scheduled — checklist ready', 'Dismiss', { duration: 3000 });
+          this.load();
+        },
+        error: (err) => {
+          this.scheduling = false;
+          this.snackBar.open(err?.error?.message ?? 'Could not schedule PDI', 'Dismiss', { duration: 4000 });
+        },
+      });
   }
 
   isTradeInValid(): boolean {

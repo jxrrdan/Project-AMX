@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
-import { Component, inject, signal } from '@angular/core';
+import { Component, ViewChild, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -8,6 +8,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { environment } from '../../../environments/environment';
+import { CaptchaComponent } from './captcha.component';
 
 /**
  * The public, embeddable enquiry form (Feature Spec §8.1) — no login, dealer-scoped by the
@@ -16,7 +17,7 @@ import { environment } from '../../../environments/environment';
  */
 @Component({
   selector: 'app-enquiry-form',
-  imports: [FormsModule, MatCardModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatCheckboxModule],
+  imports: [FormsModule, MatCardModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatCheckboxModule, CaptchaComponent],
   template: `
     <div class="page">
       <mat-card class="card">
@@ -51,6 +52,8 @@ import { environment } from '../../../environments/environment';
           </mat-form-field>
 
           <mat-checkbox [(ngModel)]="gdprConsent">I agree to be contacted about this enquiry (GDPR consent)</mat-checkbox>
+
+          <app-captcha #captcha />
 
           @if (error()) {
             <p class="error">{{ error() }}</p>
@@ -99,6 +102,7 @@ import { environment } from '../../../environments/environment';
   ],
 })
 export class EnquiryFormComponent {
+  @ViewChild('captcha') captcha!: CaptchaComponent;
   firstName = '';
   lastName = '';
   email = '';
@@ -114,13 +118,14 @@ export class EnquiryFormComponent {
   private readonly route = inject(ActivatedRoute);
 
   canSubmit(): boolean {
-    return !!(this.firstName && this.lastName && (this.email || this.phone) && this.gdprConsent);
+    return !!(this.firstName && this.lastName && (this.email || this.phone) && this.gdprConsent && this.captcha?.valid());
   }
 
   submit(): void {
     const dealerId = this.route.snapshot.paramMap.get('dealerId');
     this.error.set(null);
     this.submitting.set(true);
+    const captcha = this.captcha.getResponse();
 
     this.http
       .post(`${environment.apiUrl}/dealers/${dealerId}/enquiries`, {
@@ -130,15 +135,18 @@ export class EnquiryFormComponent {
         phone: this.phone || undefined,
         message: this.message || undefined,
         gdprConsent: this.gdprConsent,
+        captchaToken: captcha.captchaToken,
+        captchaAnswer: captcha.captchaAnswer,
       })
       .subscribe({
         next: () => {
           this.submitting.set(false);
           this.submitted.set(true);
         },
-        error: () => {
+        error: (err) => {
           this.submitting.set(false);
-          this.error.set('Something went wrong sending your enquiry — please try again.');
+          this.error.set(err?.error?.message ?? 'Something went wrong sending your enquiry — please try again.');
+          this.captcha.reset();
         },
       });
   }

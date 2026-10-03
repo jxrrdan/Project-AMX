@@ -17,6 +17,7 @@ export interface DataStackProps extends StackProps {
 export class DataStack extends Stack {
   readonly databaseSecret: secretsmanager.ISecret;
   readonly dbSecurityGroup: ec2.SecurityGroup;
+  readonly cluster: rds.DatabaseCluster;
 
   constructor(scope: Construct, id: string, props: DataStackProps) {
     super(scope, id, props);
@@ -30,7 +31,7 @@ export class DataStack extends Stack {
     // create a dependency cycle with ComputeStack (its ALB service depends on this stack's secret).
     this.dbSecurityGroup.addIngressRule(ec2.Peer.ipv4(props.vpc.vpcCidrBlock), ec2.Port.tcp(5432));
 
-    const cluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
+    this.cluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({ version: rds.AuroraPostgresEngineVersion.VER_16_4 }),
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
@@ -45,7 +46,7 @@ export class DataStack extends Stack {
       removalPolicy: RemovalPolicy.SNAPSHOT,
     });
 
-    this.databaseSecret = cluster.secret!;
+    this.databaseSecret = this.cluster.secret!;
 
     const cacheSubnetGroup = new elasticache.CfnSubnetGroup(this, 'RedisSubnetGroup', {
       description: 'Private subnets for ElastiCache Redis',

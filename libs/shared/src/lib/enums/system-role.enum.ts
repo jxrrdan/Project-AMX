@@ -66,11 +66,19 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<
     PermissionAction.EDIT,
   ]),
   [SystemRole.WORKSHOP_CONTROLLER]: grant(
-    [ModuleKey.NEW_CAR_PDI, ModuleKey.WORKSHOP, ModuleKey.PARTS, ModuleKey.WARRANTY],
+    [
+      ModuleKey.NEW_CAR_PDI,
+      ModuleKey.WORKSHOP,
+      ModuleKey.PARTS,
+      ModuleKey.WARRANTY,
+      ModuleKey.RECALLS,
+      ModuleKey.SERVICE_PLANS,
+      ModuleKey.VEHICLE_PARC,
+    ],
     FULL,
   ),
   [SystemRole.SERVICE_ADVISOR]: [
-    ...grant([ModuleKey.WORKSHOP], [
+    ...grant([ModuleKey.WORKSHOP, ModuleKey.SERVICE_PLANS, ModuleKey.VEHICLE_PARC], [
       PermissionAction.VIEW,
       PermissionAction.CREATE,
       PermissionAction.EDIT,
@@ -84,11 +92,30 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<
   ],
   [SystemRole.PARTS_MANAGER]: grant([ModuleKey.PARTS], FULL),
   [SystemRole.ACCOUNTS]: [
-    ...grant([ModuleKey.ACCOUNTING, ModuleKey.GENERAL_LEDGER], FULL),
+    ...grant(
+      [
+        ModuleKey.ACCOUNTING,
+        ModuleKey.GENERAL_LEDGER,
+        ModuleKey.CREDIT_NOTES,
+        ModuleKey.CASHIERING,
+        ModuleKey.ACCOUNT_CUSTOMERS,
+        ModuleKey.MANAGEMENT_REPORTING,
+      ],
+      FULL,
+    ),
     ...grant([ModuleKey.DASHBOARD], FULL),
     ...grant(
       ALL_MODULES.filter(
-        (m) => ![ModuleKey.ACCOUNTING, ModuleKey.GENERAL_LEDGER, ModuleKey.DASHBOARD].includes(m),
+        (m) =>
+          ![
+            ModuleKey.ACCOUNTING,
+            ModuleKey.GENERAL_LEDGER,
+            ModuleKey.CREDIT_NOTES,
+            ModuleKey.CASHIERING,
+            ModuleKey.ACCOUNT_CUSTOMERS,
+            ModuleKey.MANAGEMENT_REPORTING,
+            ModuleKey.DASHBOARD,
+          ].includes(m),
       ),
       READ_ONLY,
     ),

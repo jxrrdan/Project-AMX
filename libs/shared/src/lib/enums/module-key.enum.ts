@@ -20,6 +20,14 @@ export enum ModuleKey {
   AI_CHATBOT = 'AI_CHATBOT',
   GENERAL_LEDGER = 'GENERAL_LEDGER',
   OEM_INTEGRATIONS = 'OEM_INTEGRATIONS',
+  RECALLS = 'RECALLS',
+  CREDIT_NOTES = 'CREDIT_NOTES',
+  CASHIERING = 'CASHIERING',
+  ACCOUNT_CUSTOMERS = 'ACCOUNT_CUSTOMERS',
+  SERVICE_PLANS = 'SERVICE_PLANS',
+  VEHICLE_PARC = 'VEHICLE_PARC',
+  MANAGEMENT_REPORTING = 'MANAGEMENT_REPORTING',
+  COMPLIANCE = 'COMPLIANCE',
 }
 
 export const MODULE_LABELS: Record<ModuleKey, string> = {
@@ -40,4 +48,12 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   [ModuleKey.AI_CHATBOT]: 'AI Customer Chatbot',
   [ModuleKey.GENERAL_LEDGER]: 'General Ledger',
   [ModuleKey.OEM_INTEGRATIONS]: 'OEM Integration Hub',
+  [ModuleKey.RECALLS]: 'Recall Campaign Management',
+  [ModuleKey.CREDIT_NOTES]: 'Credit Notes',
+  [ModuleKey.CASHIERING]: 'Cashiering & Payments',
+  [ModuleKey.ACCOUNT_CUSTOMERS]: 'Account Customers & Statements',
+  [ModuleKey.SERVICE_PLANS]: 'Service Plans & Reminders',
+  [ModuleKey.VEHICLE_PARC]: 'Vehicle Parc & Service History',
+  [ModuleKey.MANAGEMENT_REPORTING]: 'Management Reporting',
+  [ModuleKey.COMPLIANCE]: 'Compliance & E-Signature',
 };

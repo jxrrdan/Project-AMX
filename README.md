@@ -132,6 +132,29 @@ login). Get the demo dealer's ID from `GET /api/dealers/me` while logged in, or 
 Studio. Submitting it creates a real contact + lead you'll see land in the CRM contacts list and
 lead pipeline.
 
+## Run the full stack in production shape (Docker)
+
+To test the app the way it runs in AWS — the compiled API image, the built SPA served by nginx,
+Postgres standing in for Aurora, Redis for ElastiCache — without needing an AWS account:
+
+```bash
+docker compose -f docker-compose.prod.yml up --build
+# (optional) load the demo dealer/users/data once it's up:
+docker compose -f docker-compose.prod.yml --profile tools run --rm seed
+```
+
+Then open **http://localhost:8080** — nginx serves the Angular app and proxies `/api` to the API
+exactly as CloudFront → the ALB does in production (same origin, so the SPA uses the relative `/api`
+URL from `environment.prod.ts`). Migrations are applied by a one-off `migrate` service before the
+API starts; the API is also published on `:3000` for direct calls.
+
+This is a faithful stand-in for the AWS **runtime**, not a spoof of AWS itself — ECS, Aurora
+Serverless v2, CloudFront and WAF aren't emulated. It runs the same container images and the same
+env/driver config (`STORAGE_DRIVER`, `CAPTCHA_DRIVER`, etc.) against local Postgres/Redis, so it
+exercises the real code paths, migrations, and same-origin routing end to end. (LocalStack can be
+added later to spoof the discrete services the app *calls* — S3/SQS/SNS — but note the S3 storage
+driver is still a local-only stub.)
+
 ## Local vs. production
 
 Every AWS service this system depends on but that a local dev sandbox can't provide is behind an
@@ -149,6 +172,7 @@ locally and in production:
 | BMW RIS MQTT ingest | A cron job that fabricates a plausible new order every 30 minutes (`RisImportService`) | Always-on MQTT subscriber (`infra/cdk/lib/compute-stack.ts`) → SQS → Lambda |
 | AWP webhook integration | Mocked job references (`AWP-MOCK-...`) generated on PDI scheduling | Real webhook exchange with AWP |
 | DVLA Vehicle Enquiry Service | Deterministic mock spec, seeded from the registration itself (`DvlaService`, `DVLA_DRIVER=mock`) — try the "Look up on DVLA" button on the Used Cars page | Real DVLA API (needs a government-issued API key) |
+| CAPTCHA on public forms | Dependency-free signed arithmetic challenge (`CaptchaService`, `CAPTCHA_DRIVER=local`) — works offline, protects the enquiry and service-booking forms | Cloudflare Turnstile (`CAPTCHA_DRIVER=turnstile`, verified server-side) or reCAPTCHA |
 
 Every one of these is a small, isolated class — swapping the local branch for a real AWS call is
 a contained change, not a rewrite.
@@ -302,6 +326,92 @@ function, not just a scheduled feed":
   "who's liable for this damage" record either way, logged from the courtesy list and job-card
   detail pages respectively.
 
+## Recall campaigns & credit notes
+
+Two aftersales/accounting modules, each with its own RBAC module key, Prisma models, NestJS
+API and Angular Material screens:
+
+- **Recall campaign management** (`/recalls`) — track an OEM-issued safety recall or service
+  action to completion across every affected vehicle. A campaign (`RecallCampaign`) holds the
+  affected-vehicle list (`RecallVehicle`, optionally linked to a known `Vehicle`); each vehicle
+  moves OUTSTANDING → BOOKED → COMPLETED independently, stamping the booked/completed dates as it
+  advances. The list view shows per-campaign progress and a headline outstanding-work summary
+  across all open campaigns. Granted to the Workshop Controller role (and Dealer Principal / GM).
+- **Credit notes** (`/credit-notes`) — refunds/adjustments raised against a customer (goodwill
+  credits, overcharge corrections, returned-part refunds). A note is editable while DRAFT, gets a
+  document number on **issue** via the shared `DocumentSequenceService` ("CN-2026-00001", the same
+  numbering engine as every other AMX document), then can be APPLIED against a balance or
+  CANCELLED. Line-level tax means mixed VAT rates roll up correctly. Granted to the Accounts role
+  (and Dealer Principal / GM).
+
+## Traditional DMS operations (cashiering, AR, service plans, portal, parc, DOC, compliance, parts depth)
+
+Eight modules that round out the classic dealer-management-system feature set the dealer still
+owns under the agency model (the OEM keeps pricing/stock/ordering). Each has its own Prisma models,
+NestJS API, Angular Material screens and RBAC:
+
+- **Cashiering / cash desk** (`/cashiering`, `CASHIERING`) — takes payments, deposits and refunds
+  across cash/card/bank/cheque, optionally posted against an account customer's ledger, with an
+  end-of-day reconciliation by method. This is the piece that actually *collects* money.
+- **Account customers & statements** (`/account-customers`, `ACCOUNT_CUSTOMERS`) — trade/credit
+  customers with a running balance, per-transaction statements, and an aged-debtors report.
+- **Service plans & reminders** (`/service-plans`, `SERVICE_PLANS`) — service-plan products,
+  customer/vehicle subscriptions carrying MOT and service due dates, and a reminder sweep that
+  emails/SMSes customers as those dates approach (stamped so each fires once). A "Run now" action
+  triggers the sweep on demand.
+- **Customer portal / online booking** (`/book-service/:dealerId` public, `/online-bookings` staff)
+  — an unauthenticated service-booking page customers reach from the dealer's own site, and a staff
+  triage queue (NEW → CONTACTED → SCHEDULED/DECLINED).
+- **Vehicle parc & service history** (`/parc`, `VEHICLE_PARC`) — a lifetime record per registration
+  aggregating hand-entered/ingested service history with used-stock and recall involvement for that
+  reg.
+- **Management reporting / DOC** (`/reports/doc`, `MANAGEMENT_REPORTING`) — a Daily Operating
+  Control: one composite snapshot across sales, aftersales, parts and finance, built from live
+  aggregates.
+- **Compliance & e-signature** (`/compliance`, `COMPLIANCE`) — auditable GDPR/FCA consent capture
+  (Consumer Duty, IDD, marketing preferences) and drawn e-signatures against documents (canvas
+  signature pad, stored as a data URL with signer/timestamp/IP).
+- **Parts depth** (`/parts/suppliers`, reuses `PARTS`) — supplier catalogues/price files, physical
+  stock-takes that post variance movements on completion, and backorder tracking that books stock
+  in on receipt. Layered on top of the existing basic Parts stock ledger.
+
+### Closed loops between these modules
+
+The aftersales/finance modules are wired together rather than standing alone:
+
+- **Online booking → workshop job:** marking a booking request SCHEDULED creates a real
+  `ServiceBooking` (guarded by `serviceBookingId` so re-triaging can't duplicate it).
+- **Automated reminders & billing:** the `batch-jobs` scheduler runs the service-plan reminder
+  sweep nightly (02:30) and the monthly plan-charge billing on the 1st (03:30), in addition to the
+  manual "Run now" buttons.
+- **New-booking notification:** a public booking submission raises an in-app notification to the
+  workshop triage team (Workshop Controller / Service Advisor).
+- **Service-plan billing → AR:** a subscription can be linked to an account customer; the billing
+  sweep posts the monthly plan charge to that account's ledger (once per calendar month).
+
+## PWA & offline PDI checklists
+
+The spec calls for the PDI checklist to work offline (§Non-functional Requirements) — a
+technician often completes it in a workshop bay with no signal. The app is now an installable
+PWA and the PDI checklist is offline-first:
+
+- **Installable app shell** — a web app manifest (`apps/web/public/manifest.webmanifest`) plus a
+  dependency-free service worker (`apps/web/public/sw.js`, registered in production only). The
+  worker serves the app shell offline (network-first navigations falling back to the cached
+  `index.html`, stale-while-revalidate for hashed assets) and never shadows `/api` calls, which
+  the offline data layer owns.
+- **Offline PDI checklist** (`/vehicles/:id/pdi`) — the checklist reads from the network when
+  online and caches the whole job in IndexedDB, so it survives a reload with no connection. Every
+  rating, note, and even the final sign-off is applied to the local cache immediately and appended
+  to a durable **mutation queue** (`PdiOfflineService`), which is replayed in order the moment
+  connectivity returns — driven by an Angular `effect` on a `ConnectivityService` `online` signal.
+  A sync bar shows the technician exactly what's saved locally and how many changes are still
+  waiting to upload; a global "Offline" chip appears in the toolbar app-wide. Network failures
+  keep the queue for a later retry, while server rejections are dropped so the queue can't wedge.
+- **Testable in dev** — the IndexedDB layer is plain app code, so offline capture works with
+  `npm run dev:web` (toggle DevTools → Network → Offline). The service worker itself is
+  production-gated, mirroring Angular's own PWA convention.
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks
@@ -310,8 +420,6 @@ function, not just a scheduled feed":
   has test credentials for.
 - **CloudFront/Route 53/API Gateway/WAF, Lambda workers, most of the observability stack beyond
   one alarm** — see `infra/cdk/README.md` for the full list and why.
-- **Angular PWA / offline support** for PDI checklists — the spec calls for this explicitly
-  (§Non-functional Requirements); the app is a standard SPA today.
 
 ## Development commands
 

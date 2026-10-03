@@ -6,6 +6,13 @@ function makeNotifications() {
   return { create: jest.fn(), createMany: jest.fn() };
 }
 
+function makeServicePlans() {
+  return {
+    runDueReminders: jest.fn().mockResolvedValue({ motSent: 0, serviceSent: 0, total: 0 }),
+    runBilling: jest.fn().mockResolvedValue({ billed: 0, total: 0 }),
+  };
+}
+
 function makePrisma(overrides: Record<string, unknown> = {}) {
   const run = { id: 'run-1' };
   return {
@@ -27,13 +34,13 @@ describe('BatchJobsService.runNow', () => {
   const dealerId = 'dealer-1';
 
   it('rejects an unknown job name', async () => {
-    const service = new BatchJobsService(makePrisma() as never, makeNotifications() as never);
+    const service = new BatchJobsService(makePrisma() as never, makeNotifications() as never, makeServicePlans() as never);
     await expect(service.runNow(dealerId, 'NOT_A_JOB' as BatchJobName)).rejects.toThrow(BadRequestException);
   });
 
   it('records a SUCCESS run with a summary when the job completes', async () => {
     const prisma = makePrisma({ lead: { findMany: jest.fn().mockResolvedValue([]) } });
-    const service = new BatchJobsService(prisma as never, makeNotifications() as never);
+    const service = new BatchJobsService(prisma as never, makeNotifications() as never, makeServicePlans() as never);
 
     const result = await service.runNow(dealerId, BatchJobName.STALE_LEAD_ESCALATION);
 
@@ -57,7 +64,7 @@ describe('BatchJobsService.runNow', () => {
         ]),
       },
     });
-    const service = new BatchJobsService(prisma as never, notifications as never);
+    const service = new BatchJobsService(prisma as never, notifications as never, makeServicePlans() as never);
 
     const result = await service.runNow(dealerId, BatchJobName.STALE_LEAD_ESCALATION);
 
@@ -82,7 +89,7 @@ describe('BatchJobsService.runNow', () => {
       },
       user: { findMany: jest.fn().mockResolvedValue([{ id: 'pm-1' }]) },
     });
-    const service = new BatchJobsService(prisma as never, notifications as never);
+    const service = new BatchJobsService(prisma as never, notifications as never, makeServicePlans() as never);
 
     const result = await service.runNow(dealerId, BatchJobName.PARTS_REORDER_ALERT);
 
@@ -106,7 +113,7 @@ describe('BatchJobsService.runNow', () => {
       courtesyVehicle: { findMany: jest.fn().mockResolvedValue([{ id: 'cv-1', motExpiry: soon, insuranceExpiry: null, taxExpiry: null }]) },
       user: { findMany: jest.fn().mockResolvedValue([{ id: 'gm-1' }]) },
     });
-    const service = new BatchJobsService(prisma as never, notifications as never);
+    const service = new BatchJobsService(prisma as never, notifications as never, makeServicePlans() as never);
 
     const result = await service.runNow(dealerId, BatchJobName.COURTESY_FLEET_EXPIRY_SWEEP);
 
@@ -125,7 +132,7 @@ describe('BatchJobsService.runNow', () => {
     const prisma = makePrisma({
       lead: { findMany: jest.fn().mockRejectedValue(new Error('db down')) },
     });
-    const service = new BatchJobsService(prisma as never, makeNotifications() as never);
+    const service = new BatchJobsService(prisma as never, makeNotifications() as never, makeServicePlans() as never);
 
     const result = await service.runNow(dealerId, BatchJobName.STALE_LEAD_ESCALATION);
 
@@ -136,7 +143,7 @@ describe('BatchJobsService.runNow', () => {
 describe('BatchJobsService.listRuns', () => {
   it('scopes run history to the given dealer', async () => {
     const prisma = makePrisma();
-    const service = new BatchJobsService(prisma as never, makeNotifications() as never);
+    const service = new BatchJobsService(prisma as never, makeNotifications() as never, makeServicePlans() as never);
 
     await service.listRuns('dealer-1');
 

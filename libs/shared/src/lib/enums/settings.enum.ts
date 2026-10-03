@@ -140,6 +140,8 @@ export enum BatchJobName {
   STALE_LEAD_ESCALATION = 'STALE_LEAD_ESCALATION',
   PARTS_REORDER_ALERT = 'PARTS_REORDER_ALERT',
   COURTESY_FLEET_EXPIRY_SWEEP = 'COURTESY_FLEET_EXPIRY_SWEEP',
+  SERVICE_PLAN_REMINDERS = 'SERVICE_PLAN_REMINDERS',
+  SERVICE_PLAN_BILLING = 'SERVICE_PLAN_BILLING',
 }
 
 export interface BatchJobDefinition {
@@ -167,5 +169,17 @@ export const BATCH_JOB_DEFINITIONS: BatchJobDefinition[] = [
     label: 'Courtesy fleet expiry sweep',
     description: 'Notifies general managers about courtesy vehicles due for MOT/insurance/tax renewal within 30 days.',
     schedule: 'Monthly, 1st at 03:00',
+  },
+  {
+    name: BatchJobName.SERVICE_PLAN_REMINDERS,
+    label: 'Service plan reminders',
+    description: 'Emails/SMSes customers whose MOT or service is due within 30 days (once per due window).',
+    schedule: 'Nightly at 02:30',
+  },
+  {
+    name: BatchJobName.SERVICE_PLAN_BILLING,
+    label: 'Service plan billing',
+    description: 'Posts the monthly charge for each active service-plan subscription to its account customer.',
+    schedule: 'Monthly, 1st at 03:30',
   },
 ];

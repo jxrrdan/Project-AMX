@@ -14,6 +14,11 @@ export const appRoutes: Route[] = [
     loadComponent: () => import('./features/public/vhc-report.component').then((m) => m.VhcReportComponent),
   },
   {
+    // Public, unauthenticated — customer portal service-booking page (#4).
+    path: 'book-service/:dealerId',
+    loadComponent: () => import('./features/public/book-service.component').then((m) => m.BookServiceComponent),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./layout/shell.component').then((m) => m.ShellComponent),
@@ -45,12 +50,28 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/vehicles/vehicle-detail.component').then((m) => m.VehicleDetailComponent),
       },
       {
+        // Offline-capable PDI checklist (Feature Spec §Non-functional: works with no connection).
+        path: 'vehicles/:id/pdi',
+        loadComponent: () =>
+          import('./features/vehicles/pdi/pdi-checklist.component').then((m) => m.PdiChecklistComponent),
+      },
+      {
         path: 'parts',
         loadComponent: () => import('./features/parts/parts-list.component').then((m) => m.PartsListComponent),
       },
       {
         path: 'parts/purchase-orders',
         loadComponent: () => import('./features/parts/purchase-orders.component').then((m) => m.PurchaseOrdersComponent),
+      },
+      {
+        // Literal segments — must come before the 'parts/:id' wildcard below.
+        path: 'parts/suppliers',
+        loadComponent: () => import('./features/parts-depth/parts-depth.component').then((m) => m.PartsDepthComponent),
+      },
+      {
+        path: 'parts/stock-counts/:id',
+        loadComponent: () =>
+          import('./features/parts-depth/stock-count-detail.component').then((m) => m.StockCountDetailComponent),
       },
       {
         path: 'parts/:id',
@@ -72,6 +93,58 @@ export const appRoutes: Route[] = [
         path: 'warranty/:id',
         loadComponent: () =>
           import('./features/warranty/warranty-claim-detail.component').then((m) => m.WarrantyClaimDetailComponent),
+      },
+      {
+        path: 'recalls',
+        loadComponent: () => import('./features/recalls/recalls-list.component').then((m) => m.RecallsListComponent),
+      },
+      {
+        path: 'recalls/:id',
+        loadComponent: () => import('./features/recalls/recall-detail.component').then((m) => m.RecallDetailComponent),
+      },
+      {
+        path: 'credit-notes',
+        loadComponent: () =>
+          import('./features/credit-notes/credit-notes-list.component').then((m) => m.CreditNotesListComponent),
+      },
+      {
+        path: 'credit-notes/:id',
+        loadComponent: () =>
+          import('./features/credit-notes/credit-note-detail.component').then((m) => m.CreditNoteDetailComponent),
+      },
+      {
+        path: 'cashiering',
+        loadComponent: () => import('./features/cashiering/cashiering.component').then((m) => m.CashieringComponent),
+      },
+      {
+        path: 'account-customers',
+        loadComponent: () =>
+          import('./features/account-customers/account-customers-list.component').then((m) => m.AccountCustomersListComponent),
+      },
+      {
+        path: 'account-customers/:id',
+        loadComponent: () =>
+          import('./features/account-customers/account-customer-detail.component').then((m) => m.AccountCustomerDetailComponent),
+      },
+      {
+        path: 'service-plans',
+        loadComponent: () => import('./features/service-plans/service-plans.component').then((m) => m.ServicePlansComponent),
+      },
+      {
+        path: 'online-bookings',
+        loadComponent: () => import('./features/workshop/online-bookings.component').then((m) => m.OnlineBookingsComponent),
+      },
+      {
+        path: 'parc',
+        loadComponent: () => import('./features/parc/parc.component').then((m) => m.ParcComponent),
+      },
+      {
+        path: 'reports/doc',
+        loadComponent: () => import('./features/reporting/doc-report.component').then((m) => m.DocReportComponent),
+      },
+      {
+        path: 'compliance',
+        loadComponent: () => import('./features/compliance/compliance.component').then((m) => m.ComplianceComponent),
       },
       {
         path: 'crm',

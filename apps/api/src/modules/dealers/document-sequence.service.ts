@@ -10,6 +10,7 @@ const DEFAULT_PREFIXES: Record<string, string> = {
   PART_EXCHANGE_RECEIPT: 'PX',
   SERVICE_ESTIMATE: 'EST',
   HANDOVER_DOCUMENT: 'HO',
+  CREDIT_NOTE: 'CN',
 };
 
 /**
