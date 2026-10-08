@@ -1,14 +1,20 @@
-import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { AuthUser, ModuleKey, PermissionAction } from '@project-amx/shared';
 import * as bcrypt from 'bcrypt';
-import { addDays } from 'date-fns';
+import { addDays, subMinutes } from 'date-fns';
 import { authenticator } from 'otplib';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { parseDurationToSeconds } from '../../common/util/duration.util';
 import { LoginDto } from './dto/login.dto';
+
+const MAX_FAILED_LOGINS = 5;
+const LOCKOUT_MINUTES = 15;
+
+/** Refresh tokens are stored only as a SHA-256 digest, so a database leak does not yield usable sessions. */
+const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 @Injectable()
 export class AuthService {
@@ -28,6 +34,10 @@ export class AuthService {
       where: { dealerId_email: { dealerId: dealer.id, email: dto.email } },
       include: { roles: { include: { role: { include: { permissions: true } } } }, moduleOverrides: true },
     });
+
+    if (user) {
+      await this.assertNotLockedOut(user.id);
+    }
 
     const passwordOk = user ? await bcrypt.compare(dto.password, user.passwordHash) : false;
 
@@ -62,9 +72,32 @@ export class AuthService {
     return this.issueTokens(authUser, ipAddress, userAgent);
   }
 
+  /**
+   * Per-account brute-force lockout, complementing the per-IP throttle (which a botnet or a
+   * rotating proxy sidesteps). Counted from LoginAudit — no extra state — and reset by any
+   * successful login. The response is identical whether or not the password was right.
+   */
+  private async assertNotLockedOut(userId: string): Promise<void> {
+    const since = subMinutes(new Date(), LOCKOUT_MINUTES);
+    const lastSuccess = await this.prisma.loginAudit.findFirst({
+      where: { userId, success: true, createdAt: { gte: since } },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    const failures = await this.prisma.loginAudit.count({
+      where: { userId, success: false, createdAt: { gte: lastSuccess?.createdAt ?? since } },
+    });
+    if (failures >= MAX_FAILED_LOGINS) {
+      throw new HttpException(
+        `Too many failed sign-in attempts. Try again in ${LOCKOUT_MINUTES} minutes.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
   async refresh(refreshToken: string) {
     const session = await this.prisma.userSession.findUnique({
-      where: { refreshToken },
+      where: { refreshToken: hashToken(refreshToken) },
       include: {
         user: {
           include: { roles: { include: { role: { include: { permissions: true } } } }, moduleOverrides: true },
@@ -87,7 +120,7 @@ export class AuthService {
 
   async logout(refreshToken: string) {
     await this.prisma.userSession.updateMany({
-      where: { refreshToken },
+      where: { refreshToken: hashToken(refreshToken) },
       data: { revokedAt: new Date() },
     });
   }
@@ -105,7 +138,7 @@ export class AuthService {
     await this.prisma.userSession.create({
       data: {
         userId: user.id,
-        refreshToken,
+        refreshToken: hashToken(refreshToken),
         ipAddress,
         userAgent,
         expiresAt: addDays(new Date(), 7),

@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigScope, IntegrationRunStatus, IntegrationStatus, IntegrationTargetEntity } from '@project-amx/shared';
 import axios from 'axios';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { assertSafeOutboundUrl } from '../../common/security/outbound-url.util';
+import { assertSafeOutboundUrl, safeAxiosOptions } from '../../common/security/outbound-url.util';
 import { TenancyScopeService } from '../../common/tenancy/tenancy-scope.service';
 import { applyTransform, coerceForColumn, ENTITY_MODEL_NAME, isKnownTargetField, resolvePath } from './field-mapping.util';
 
@@ -173,7 +173,7 @@ export class IntegrationIngestService {
       // Not seen before anywhere in this dealer's/franchise's/group's cache — fetch it once.
       const url = config.metadataUrlTemplate.replace('{model}', encodeURIComponent(modelKey));
       assertSafeOutboundUrl(url);
-      const response = await axios.request({ url, method: 'GET', timeout: 10_000 });
+      const response = await axios.request({ url, method: 'GET', timeout: 10_000, ...safeAxiosOptions });
       const data = config.resultsPath ? resolvePath(response.data, config.resultsPath) : response.data;
 
       // A franchise-wide brand (e.g. every MINI outlet) benefits from sharing this fetch; fall

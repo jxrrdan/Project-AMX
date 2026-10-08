@@ -3,7 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { IntegrationRunStatus, IntegrationStatus, IntegrationType } from '@project-amx/shared';
 import axios from 'axios';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { assertSafeOutboundUrl } from '../../common/security/outbound-url.util';
+import { assertSafeOutboundUrl, safeAxiosOptions } from '../../common/security/outbound-url.util';
 import { resolvePath } from './field-mapping.util';
 import { IngestableConnector, IntegrationIngestService } from './integration-ingest.service';
 import { buildRequestHeaders, HeaderPair, RestAuthConfig } from './rest-auth.util';
@@ -69,6 +69,7 @@ export class RestPollerService {
         method: config.method ?? 'GET',
         headers: buildRequestHeaders(config.headers, config.auth),
         timeout: 15_000,
+        ...safeAxiosOptions,
       });
       const records = config.resultsPath ? resolvePath(response.data, config.resultsPath) : response.data;
       await this.ingestService.ingest(connector, records ?? []);

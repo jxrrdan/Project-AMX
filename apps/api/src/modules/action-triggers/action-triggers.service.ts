@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { ActionTriggerPoint, ConfigScope, IntegrationTargetEntity } from '@project-amx/shared';
 import axios from 'axios';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { assertSafeOutboundUrl } from '../../common/security/outbound-url.util';
+import { assertSafeOutboundUrl, safeAxiosOptions } from '../../common/security/outbound-url.util';
 import { TenancyScopeService } from '../../common/tenancy/tenancy-scope.service';
 import { applyTransform, coerceForColumn, isKnownTargetField, resolvePath } from '../integrations/field-mapping.util';
 import { buildRequestHeaders, mergeConfigPreservingSecrets, redactConfigSecrets, type HeaderPair, type RestAuthConfig } from '../integrations/rest-auth.util';
@@ -167,6 +167,7 @@ export class ActionTriggersService {
         method: config.method ?? 'GET',
         headers: buildRequestHeaders(config.headers, config.auth),
         timeout: 10_000,
+        ...safeAxiosOptions,
       });
       const body = config.resultsPath ? resolvePath(response.data, config.resultsPath) : response.data;
 

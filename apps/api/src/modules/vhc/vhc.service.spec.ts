@@ -152,6 +152,12 @@ describe('VhcService public report access', () => {
     await expect(service.findPublic('inspection-1', service.reportToken('inspection-2'))).rejects.toThrow(NotFoundException);
   });
 
+  it('rejects an expired token', async () => {
+    const prisma = { vhcInspection: { findUnique: jest.fn() } };
+    const service = new VhcService(prisma as never, makeEmail() as never, makeConfig() as never);
+    await expect(service.findPublic('inspection-1', service.reportToken('inspection-1', Date.now() - 1000))).rejects.toThrow(NotFoundException);
+  });
+
   it('returns the report with internal ids stripped when the token is valid', async () => {
     const prisma = { vhcInspection: { findUnique: jest.fn().mockResolvedValue(inspection) } };
     const service = new VhcService(prisma as never, makeEmail() as never, makeConfig() as never);

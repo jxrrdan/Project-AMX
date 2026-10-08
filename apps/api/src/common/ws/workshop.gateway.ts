@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
   OnGatewayConnection,
@@ -14,19 +15,27 @@ import { Server, Socket } from 'socket.io';
  * multiple Fargate tasks; locally, Socket.IO's in-memory adapter is sufficient for a single
  * instance and rooms are keyed by dealerId to preserve tenant isolation.
  */
-@WebSocketGateway({ cors: { origin: '*' }, namespace: 'workshop' })
+// CORS origin is applied centrally by CorsIoAdapter (main.ts) from CORS_ORIGIN — never '*'.
+@WebSocketGateway({ namespace: 'workshop' })
 export class WorkshopGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
   private readonly logger = new Logger(WorkshopGateway.name);
 
-  constructor(private readonly jwt: JwtService) {}
+  constructor(
+    private readonly jwt: JwtService,
+    private readonly config: ConfigService,
+  ) {}
 
   handleConnection(client: Socket) {
     try {
       const token = client.handshake.auth?.token ?? client.handshake.query?.token;
-      const payload = this.jwt.decode(String(token)) as { dealerId?: string } | null;
+      // verify(), not decode(): decode() trusts an unsigned/forged token, which would let anyone
+      // subscribe to any dealer's live job-card events by inventing a dealerId.
+      const payload = this.jwt.verify<{ dealerId?: string }>(String(token), {
+        secret: this.config.get<string>('JWT_ACCESS_SECRET'),
+      });
       if (!payload?.dealerId) {
         client.disconnect();
         return;

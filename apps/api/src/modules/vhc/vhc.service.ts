@@ -6,6 +6,9 @@ import { EmailService } from '../../common/email/email.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AddVhcItemDto, CreateVhcInspectionDto, RespondToItemDto } from './dto/vhc.dto';
 
+/** Customer report links stay valid for 30 days, then the dealer must resend. */
+const REPORT_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 /** Module 9 — Digital Vehicle Health Check. */
 @Injectable()
 export class VhcService {
@@ -21,15 +24,22 @@ export class VhcService {
    * approve/decline action both require this HMAC of the inspection id. Stateless — no schema change
    * — and rotating VHC_LINK_SECRET invalidates every issued link.
    */
-  reportToken(inspectionId: string): string {
+  reportToken(inspectionId: string, expiresAt = Date.now() + REPORT_LINK_TTL_MS): string {
+    return `${expiresAt}.${this.sign(inspectionId, expiresAt)}`;
+  }
+
+  private sign(inspectionId: string, expiresAt: number): string {
     const secret = this.config.get<string>('VHC_LINK_SECRET') ?? this.config.get<string>('JWT_ACCESS_SECRET', 'dev-vhc-link-secret');
-    return createHmac('sha256', secret).update(`vhc-report:${inspectionId}`).digest('base64url');
+    return createHmac('sha256', secret).update(`vhc-report:${inspectionId}:${expiresAt}`).digest('base64url');
   }
 
   private assertReportToken(inspectionId: string, token: string | undefined): void {
-    const expected = Buffer.from(this.reportToken(inspectionId));
-    const provided = Buffer.from(token ?? '');
-    if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+    const [expiresRaw = '', signature = ''] = (token ?? '').split('.');
+    const expiresAt = Number(expiresRaw);
+    const expected = Buffer.from(this.sign(inspectionId, expiresAt));
+    const provided = Buffer.from(signature);
+    const valid = Number.isFinite(expiresAt) && provided.length === expected.length && timingSafeEqual(provided, expected);
+    if (!valid || Date.now() > expiresAt) {
       // Same error as a missing record so the token check can't be used to probe which ids exist.
       throw new NotFoundException('Report not found');
     }

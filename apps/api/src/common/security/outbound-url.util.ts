@@ -1,4 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
+import { Agent as HttpAgent } from 'node:http';
+import { Agent as HttpsAgent } from 'node:https';
+import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import { isIP } from 'node:net';
 
 /**
@@ -49,6 +52,43 @@ export function assertSafeOutboundUrl(rawUrl: string): void {
     throw new BadRequestException('Private/internal IP addresses are not allowed');
   }
 }
+
+/**
+ * Connect-time SSRF defence. `assertSafeOutboundUrl` only sees the literal hostname, so a name that
+ * resolves to a private address (or is re-pointed after validation — DNS rebinding) would pass.
+ * These agents resolve the name themselves and refuse private/reserved results on every
+ * connection, so the address that is checked is the address that is dialled. Redirects are
+ * disabled in `safeAxiosOptions` so a 302 cannot hop to an internal host.
+ */
+function guardedLookup(hostname: string, options: unknown, callback: (...args: unknown[]) => void): void {
+  const opts = (typeof options === 'object' && options ? options : {}) as { all?: boolean };
+  dnsLookup(hostname, { all: true }, (err, addresses: LookupAddress[]) => {
+    if (err) {
+      callback(err);
+      return;
+    }
+    const blocked = addresses.find((a) => isPrivateOrReservedIp(a.address, a.family) || BLOCKED_HOSTNAMES.has(a.address));
+    if (blocked || addresses.length === 0) {
+      callback(new BadRequestException('Resolved address is not allowed'));
+      return;
+    }
+    if (opts.all) {
+      callback(null, addresses);
+    } else {
+      callback(null, addresses[0].address, addresses[0].family);
+    }
+  });
+}
+
+const guardedHttpAgent = new HttpAgent({ lookup: guardedLookup as never });
+const guardedHttpsAgent = new HttpsAgent({ lookup: guardedLookup as never });
+
+/** Spread into every axios call that targets an admin-configured URL. */
+export const safeAxiosOptions = {
+  httpAgent: guardedHttpAgent,
+  httpsAgent: guardedHttpsAgent,
+  maxRedirects: 0,
+};
 
 function isPrivateOrReservedIpv4(ip: string): boolean {
   const [a, b] = ip.split('.').map(Number);

@@ -51,20 +51,47 @@ Helmet security headers, CORS restricted to `CORS_ORIGIN`, a global `ValidationP
 - [ ] Give each integration webhook a `requiredHeaderName` / `requiredHeaderValue` shared secret.
 - [ ] Serve `/storage` from S3 with signed URLs. The local static route is for development only.
 
-## 4. Known open items
+## 4. Second hardening pass
 
-- **Account lockout:** login is rate limited per IP, but there is no per-account lockout after repeated failures. Add one (e.g. 5 failures then a 15 minute cool-down) before go-live.
-- **SSRF:** the outbound URL guard checks the literal hostname only, not the resolved IP (DNS rebinding). See `common/security/outbound-url.util.ts`.
-- **Refresh tokens** are stored in plain text in `UserSession`. Hashing them would limit exposure from a database leak.
-- **Socket.IO namespace** authentication and tenant room isolation need a dedicated review.
-- **VHC link lifetime:** tokens do not expire. If that matters, add an expiry to the signed payload.
-- **Dependencies:** run `npm audit` in CI.
+| Issue | Fix |
+|---|---|
+| **Live-update WebSocket trusted unsigned tokens** (`jwt.decode`) and allowed any origin, so anyone could forge a `dealerId` and stream another dealer's job-card events | Tokens are now verified with `JWT_ACCESS_SECRET`; Socket.IO CORS uses the same `CORS_ORIGIN` allow-list as the REST API. Unit tested, including forged and `alg: none` tokens |
+| No per-account brute-force protection | 5 failed sign-ins locks the account for 15 minutes (counted from `LoginAudit`, reset by a successful login) |
+| Refresh tokens stored in plain text | Stored as SHA-256 digests. **Existing sessions are invalidated on deploy; users sign in again** |
+| SSRF via DNS rebinding / redirects | Outbound calls (OEM connectors, REST polling, action triggers) now use agents that validate the resolved IP at connect time, and redirects are disabled |
+| VHC links never expired | Tokens now carry a 30-day expiry inside the signature |
+| Vulnerable dependencies | `npm audit fix` plus axios upgraded to 1.20 (clears the high/critical items in runtime code paths) |
+
+### Still open
+
+- `@angular/router` (SSR-only denial-of-service advisory; AMX does not use SSR) needs the whole Angular set bumped to 22.2.x together.
+- `prisma` CLI's transitive `@prisma/config` / `deepmerge-ts` advisories are build-time tooling only; npm's suggested "fix" is a downgrade, so it is left.
+- Run `npm audit --omit=dev` in CI and review monthly.
+- Run Mantis (below) and an external penetration test before go-live.
 
 ## 5. Running Google Mantis against AMX
 
 [Mantis](https://github.com/google/mantis) is a separate, experimental multi-agent security-review tool from Google. It reads code and reports suspected vulnerabilities. It is not part of AMX and is not an officially supported Google product, so **treat every finding as a lead to verify by hand, not a confirmed bug.**
 
-Requirements: Linux or WSL2 (not native Windows), Python 3.12+, a Google Cloud project with Vertex AI enabled. Model calls are billed to that project, so set a budget alert first.
+Requirements: Linux or WSL2 (not native Windows) and Python 3.12+. A Google Cloud project is **not** required: Mantis talks to models through LiteLLM and also accepts a Gemini API key, an Anthropic key, an OpenAI key or any OpenAI-compatible endpoint (including a local Ollama). Model calls are billed to whichever account owns the key, so set a spending limit first.
+
+### Without Google Cloud
+
+Skip `gcloud auth application-default login` and export one key instead:
+
+```bash
+export GEMINI_API_KEY=...        # free-tier key from Google AI Studio, no GCP project needed
+# or: export ANTHROPIC_API_KEY=...   and run with  --model anthropic/<model-name>
+# or: export OPENAI_API_KEY=...      and run with  --model openai/<model-name>
+# or: a local/self-hosted model:     --model openai/<name> --api-base http://localhost:11434/v1
+python3 scripts/configure.py --auto
+python3 scripts/configure.py --test --probe
+./run.sh ~/amx-review/apps/api/src --sandbox static-only --focus "authorisation and tenant isolation"
+```
+
+`--sandbox static-only` reads the code without executing anything, which is the right mode when you have no GCE or microVM sandbox. Without a sandbox Mantis cannot try its proof-of-concept exploits, so expect more false positives to triage by hand. Free-tier Gemini keys are rate limited; use a small target and a low `--parallel`. A local model is private and free but noticeably weaker at security reasoning.
+
+### With Google Cloud (Vertex AI)
 
 ```bash
 # 1. Install (WSL2 Ubuntu shown)

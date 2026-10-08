@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { ModuleKey, PermissionAction } from '@project-amx/shared';
 import * as bcrypt from 'bcrypt';
@@ -37,7 +38,7 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
   return {
     dealer: { findUnique: jest.fn().mockResolvedValue(DEALER) },
     user: { findUnique: jest.fn().mockResolvedValue(makeUser()), update: jest.fn().mockResolvedValue({}) },
-    loginAudit: { create: jest.fn() },
+    loginAudit: { create: jest.fn(), findFirst: jest.fn().mockResolvedValue(null), count: jest.fn().mockResolvedValue(0) },
     userSession: { create: jest.fn().mockResolvedValue({}), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     $transaction: jest.fn((ops) => Promise.all(ops)),
     ...overrides,
@@ -64,6 +65,16 @@ describe('AuthService', () => {
         UnauthorizedException,
       );
       expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('locks the account after repeated failures without checking the password', async () => {
+      const { service } = makeService({
+        loginAudit: { create: jest.fn(), findFirst: jest.fn().mockResolvedValue(null), count: jest.fn().mockResolvedValue(5) },
+      });
+      await expect(
+        service.login({ subdomain: 'bmwnorthampton', email: 'principal@bmwnorthampton.ams-app.co.uk', password: 'anything' }),
+      ).rejects.toThrow('Too many failed sign-in attempts');
+      expect(bcrypt.compare).not.toHaveBeenCalled();
     });
 
     it('rejects a wrong password and records a failed login audit', async () => {
@@ -230,7 +241,7 @@ describe('AuthService', () => {
       const { service, prisma } = makeService();
       await service.logout('some-token');
       expect(prisma.userSession.updateMany).toHaveBeenCalledWith({
-        where: { refreshToken: 'some-token' },
+        where: { refreshToken: createHash('sha256').update('some-token').digest('hex') },
         data: { revokedAt: expect.any(Date) },
       });
     });
