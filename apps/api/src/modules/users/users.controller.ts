@@ -43,6 +43,13 @@ export class UsersController {
     return this.usersService.update(user.dealerId, id, dto, user.id, user.permissions);
   }
 
+  /** Clears a sign-in lockout (essential when AUTH_LOCKOUT_MINUTES is 0 / "indefinite"). */
+  @Post(':id/unlock')
+  @RequirePermissions({ module: ModuleKey.ADMIN, action: PermissionAction.EDIT })
+  unlock(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.usersService.unlock(user.dealerId, id, user.id);
+  }
+
   @Post(':id/force-logout')
   @RequirePermissions({ module: ModuleKey.ADMIN, action: PermissionAction.EDIT })
   forceLogout(@CurrentUser() user: AuthUser, @Param('id') id: string) {

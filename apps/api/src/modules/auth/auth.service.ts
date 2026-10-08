@@ -10,8 +10,8 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { parseDurationToSeconds } from '../../common/util/duration.util';
 import { LoginDto } from './dto/login.dto';
 
-const MAX_FAILED_LOGINS = 5;
-const LOCKOUT_MINUTES = 15;
+/** Epoch start, used as the lookback when the lockout never expires on its own. */
+const EPOCH = new Date(0);
 
 /** Refresh tokens are stored only as a SHA-256 digest, so a database leak does not yield usable sessions. */
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -78,7 +78,13 @@ export class AuthService {
    * successful login. The response is identical whether or not the password was right.
    */
   private async assertNotLockedOut(userId: string): Promise<void> {
-    const since = subMinutes(new Date(), LOCKOUT_MINUTES);
+    // AUTH_LOCKOUT_MINUTES: a number of minutes, or 0 / "indefinite" to stay locked until an
+    // administrator unlocks the account (POST /users/:id/unlock).
+    const rawMinutes = this.config.get<string | number>('AUTH_LOCKOUT_MINUTES', 15);
+    const parsed = String(rawMinutes).trim().toLowerCase() === 'indefinite' ? 0 : Number(rawMinutes);
+    const lockoutMinutes = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    const maxFailures = Number(this.config.get<string | number>('AUTH_MAX_FAILED_LOGINS', 5)) || 5;
+    const since = lockoutMinutes > 0 ? subMinutes(new Date(), lockoutMinutes) : EPOCH;
     const lastSuccess = await this.prisma.loginAudit.findFirst({
       where: { userId, success: true, createdAt: { gte: since } },
       orderBy: { createdAt: 'desc' },
@@ -87,9 +93,11 @@ export class AuthService {
     const failures = await this.prisma.loginAudit.count({
       where: { userId, success: false, createdAt: { gte: lastSuccess?.createdAt ?? since } },
     });
-    if (failures >= MAX_FAILED_LOGINS) {
+    if (failures >= maxFailures) {
       throw new HttpException(
-        `Too many failed sign-in attempts. Try again in ${LOCKOUT_MINUTES} minutes.`,
+        lockoutMinutes > 0
+          ? `Too many failed sign-in attempts. Try again in ${lockoutMinutes} minutes.`
+          : 'This account is locked after too many failed sign-in attempts. Contact your administrator.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }

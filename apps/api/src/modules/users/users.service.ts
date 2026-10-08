@@ -93,6 +93,21 @@ export class UsersService {
    * themselves — or anyone else in the dealer — full access by writing an override for every
    * module/action.
    */
+  /**
+   * Resets the failed-login counter. The lockout is derived from LoginAudit, so an unlock is
+   * recorded as an audit row marked `admin-unlock:<actor>` that sits after the failures.
+   */
+  async unlock(dealerId: string, userId: string, actingUserId: string) {
+    const user = await this.prisma.user.findFirst({ where: { id: userId, dealerId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    await this.prisma.loginAudit.create({
+      data: { userId, email: user.email, success: true, userAgent: `admin-unlock:${actingUserId}` },
+    });
+    return { unlocked: true };
+  }
+
   async update(
     dealerId: string,
     userId: string,

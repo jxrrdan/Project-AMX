@@ -56,7 +56,7 @@ Helmet security headers, CORS restricted to `CORS_ORIGIN`, a global `ValidationP
 | Issue | Fix |
 |---|---|
 | **Live-update WebSocket trusted unsigned tokens** (`jwt.decode`) and allowed any origin, so anyone could forge a `dealerId` and stream another dealer's job-card events | Tokens are now verified with `JWT_ACCESS_SECRET`; Socket.IO CORS uses the same `CORS_ORIGIN` allow-list as the REST API. Unit tested, including forged and `alg: none` tokens |
-| No per-account brute-force protection | 5 failed sign-ins locks the account for 15 minutes (counted from `LoginAudit`, reset by a successful login) |
+| No per-account brute-force protection | Account lockout, counted from `LoginAudit` and reset by a successful login. Configurable: `AUTH_MAX_FAILED_LOGINS` (default 5) and `AUTH_LOCKOUT_MINUTES` (default 15; any number of minutes, or `0` / `indefinite` to stay locked until an administrator calls `POST /users/:id/unlock`) |
 | Refresh tokens stored in plain text | Stored as SHA-256 digests. **Existing sessions are invalidated on deploy; users sign in again** |
 | SSRF via DNS rebinding / redirects | Outbound calls (OEM connectors, REST polling, action triggers) now use agents that validate the resolved IP at connect time, and redirects are disabled |
 | VHC links never expired | Tokens now carry a 30-day expiry inside the signature |

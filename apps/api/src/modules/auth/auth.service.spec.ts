@@ -77,6 +77,16 @@ describe('AuthService', () => {
       expect(bcrypt.compare).not.toHaveBeenCalled();
     });
 
+    it('stays locked indefinitely when AUTH_LOCKOUT_MINUTES is "indefinite"', async () => {
+      const count = jest.fn().mockResolvedValue(5);
+      const { service, config } = makeService({ loginAudit: { create: jest.fn(), findFirst: jest.fn().mockResolvedValue(null), count } });
+      config.get.mockImplementation((key: string, fallback?: unknown) => (key === 'AUTH_LOCKOUT_MINUTES' ? 'indefinite' : fallback));
+      await expect(
+        service.login({ subdomain: 'bmwnorthampton', email: 'principal@bmwnorthampton.ams-app.co.uk', password: 'x' }),
+      ).rejects.toThrow('Contact your administrator');
+      expect(count.mock.calls[0][0].where.createdAt.gte).toEqual(new Date(0));
+    });
+
     it('rejects a wrong password and records a failed login audit', async () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
       const { service, prisma } = makeService();
