@@ -214,7 +214,12 @@ export class WorkshopService {
     return this.prisma.serviceBooking.findMany({ where: { dealerId }, orderBy: { requestedSlot: 'asc' } });
   }
 
-  createServiceBooking(dealerId: string, dto: CreateServiceBookingDto) {
+  async createServiceBooking(dealerId: string, dto: CreateServiceBookingDto) {
+    // Public route: reject unknown dealers with a clean 404 rather than an FK 500.
+    const dealer = await this.prisma.dealer.findUnique({ where: { id: dealerId }, select: { id: true } });
+    if (!dealer) {
+      throw new NotFoundException('Dealer not found');
+    }
     return this.prisma.serviceBooking.create({
       data: {
         dealerId,

@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IntegrationTargetEntity, ModuleKey, PermissionAction } from '@project-amx/shared';
 import type { AuthUser } from '@project-amx/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import {
@@ -102,6 +103,7 @@ export class IntegrationsController {
    * Inbound REST_PUSH webhook — deliberately gated on the connector's own unguessable
    * `webhookToken`, never a plain id, same pattern as the workshop TV board's token.
    */
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
   @Public()
   @Post('integrations/webhooks/:webhookToken')
   receiveWebhook(@Param('webhookToken') webhookToken: string, @Body() body: unknown, @Headers() headers: Record<string, string>) {
@@ -137,6 +139,10 @@ export class IntegrationsController {
   @Public()
   @Get('integrations/_sample-oem-feed/vehicles')
   sampleOemVehicleFeed() {
+    // Demo-only fixture: invisible in production so it can't be used as an unauthenticated probe.
+    if (process.env['NODE_ENV'] === 'production') {
+      throw new NotFoundException();
+    }
     return {
       vehicles: [
         { vin: 'WBA1SAMPLE0000001', model: 'BMW 3 Series Touring', colour: 'Alpine White', oemOrderRef: 'RIS-SAMPLE-1', oemNetworkCode: 'GB-045' },

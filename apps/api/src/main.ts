@@ -10,6 +10,10 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
 
+  // Behind ALB/CloudFront the socket IP is the proxy's; trust it so rate limits key on the real client.
+  if (config.get<string>('TRUST_PROXY')) {
+    app.set('trust proxy', config.get<string>('TRUST_PROXY') === 'true' ? 1 : config.get<string>('TRUST_PROXY'));
+  }
   app.use(helmet());
   app.use(cookieParser());
   app.enableCors({ origin: config.get<string>('CORS_ORIGIN', 'http://localhost:4200'), credentials: true });

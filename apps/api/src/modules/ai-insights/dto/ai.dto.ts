@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class NlQueryDto {
   @IsString()
@@ -31,14 +31,25 @@ export class ChatbotMessageDto {
   @IsString()
   conversationId?: string;
 
+  /** Capped: every character is sent to the (billed) AI provider. */
   @IsString()
+  @MaxLength(1000)
   message!: string;
 
   @IsOptional()
-  @IsString()
+  @IsEmail()
   customerEmail?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   customerName?: string;
+
+  @IsOptional()
+  @IsString()
+  captchaToken?: string;
+
+  @IsOptional()
+  @IsString()
+  captchaAnswer?: string;
 }

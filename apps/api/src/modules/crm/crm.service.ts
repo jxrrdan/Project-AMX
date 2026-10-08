@@ -70,6 +70,10 @@ export class CrmService {
    * for a form real visitors submit more than once.
    */
   async createEnquiry(dealerId: string, dto: CreateEnquiryDto) {
+    const dealer = await this.prisma.dealer.findUnique({ where: { id: dealerId }, select: { id: true } });
+    if (!dealer) {
+      throw new NotFoundException('Dealer not found');
+    }
     const existing = await this.findDuplicateContact(dealerId, dto.email, dto.phone);
 
     const contact = existing

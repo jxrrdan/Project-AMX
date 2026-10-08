@@ -3,6 +3,7 @@ import { ModuleKey, OnlineBookingStatus, PermissionAction } from '@project-amx/s
 import type { AuthUser } from '@project-amx/shared';
 import { CaptchaService } from '../../common/captcha/captcha.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CreateOnlineBookingDto, UpdateOnlineBookingDto } from './dto/online-booking.dto';
@@ -16,6 +17,7 @@ export class OnlineBookingController {
   ) {}
 
   /** Public portal submission — the dealer's own site / a QR code points customers here. */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Public()
   @Post('public/booking/:dealerId')
   async createPublic(@Param('dealerId') dealerId: string, @Body() dto: CreateOnlineBookingDto) {

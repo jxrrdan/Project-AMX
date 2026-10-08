@@ -3,6 +3,7 @@ import { LeadStage, ModuleKey, PermissionAction } from '@project-amx/shared';
 import type { AuthUser } from '@project-amx/shared';
 import { CaptchaService } from '../../common/captcha/captcha.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CommunicationsService } from './communications.service';
@@ -67,6 +68,7 @@ export class CrmController {
    * directly, no auth. Mirrors the pattern already used for the service-booking widget
    * (Module 2.5) and the customer chatbot (Module 15).
    */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Public()
   @Post('dealers/:dealerId/enquiries')
   async createEnquiry(@Param('dealerId') dealerId: string, @Body() dto: CreateEnquiryDto) {

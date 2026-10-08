@@ -412,6 +412,10 @@ PWA and the PDI checklist is offline-first:
   `npm run dev:web` (toggle DevTools → Network → Offline). The service worker itself is
   production-gated, mirroring Angular's own PWA convention.
 
+## Security
+
+See [docs/SECURITY.md](docs/SECURITY.md) for the public-endpoint review, hardening applied, the production checklist, open items, and how to run Google Mantis against this codebase.
+
 ## What's deliberately not built
 
 - **Real third-party integrations** — AutoTrader/Motors.co.uk (Module 10), Xero/Sage/QuickBooks

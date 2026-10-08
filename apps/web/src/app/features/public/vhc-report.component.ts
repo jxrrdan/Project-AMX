@@ -150,17 +150,19 @@ export class VhcReportComponent implements OnInit {
 
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
+  private token = '';
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id') ?? '';
-    this.http.get<VhcInspectionPublic>(`${environment.apiUrl}/vhc/inspections/${id}/report`).subscribe({
+    this.token = this.route.snapshot.queryParamMap.get('t') ?? '';
+    this.http.get<VhcInspectionPublic>(`${environment.apiUrl}/vhc/inspections/${id}/report`, { params: { t: this.token } }).subscribe({
       next: (data) => this.inspection.set(data),
       error: () => this.notFound.set(true),
     });
   }
 
   respond(item: VhcItem, approved: boolean): void {
-    this.http.patch(`${environment.apiUrl}/vhc/items/${item.id}/respond`, { approved }).subscribe(() => {
+    this.http.patch(`${environment.apiUrl}/vhc/items/${item.id}/respond`, { approved }, { params: { t: this.token } }).subscribe(() => {
       item.approved = approved;
     });
   }

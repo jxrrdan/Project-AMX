@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayNotEmpty, IsArray, IsBoolean, IsEmail, IsEnum, IsOptional, IsString, Matches, ValidateNested } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsBoolean, IsEmail, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { ModuleKey, PermissionAction } from '@project-amx/shared';
 
 export class InviteUserDto {
@@ -23,6 +23,8 @@ export class AcceptInvitationDto {
   token!: string;
 
   @IsString()
+  @MinLength(12, { message: 'Password must be at least 12 characters' })
+  @MaxLength(128)
   password!: string;
 }
 

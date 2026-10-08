@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ModuleKey, PermissionAction } from '@project-amx/shared';
 import type { AuthUser } from '@project-amx/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -24,10 +25,11 @@ export class VhcController {
   }
 
   /** Public customer-facing report page (§9.2) — no login required. */
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Public()
   @Get('inspections/:id/report')
-  findPublic(@Param('id') id: string) {
-    return this.vhcService.findPublic(id);
+  findPublic(@Param('id') id: string, @Query('t') token?: string) {
+    return this.vhcService.findPublic(id, token);
   }
 
   @Get('inspections/:id')
@@ -49,10 +51,11 @@ export class VhcController {
   }
 
   /** Customer approves/declines on the report page — no login required (§9.3). */
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Public()
   @Patch('items/:id/respond')
-  respondToItem(@Param('id') id: string, @Body() dto: RespondToItemDto) {
-    return this.vhcService.respondToItem(id, dto);
+  respondToItem(@Param('id') id: string, @Query('t') token: string | undefined, @Body() dto: RespondToItemDto) {
+    return this.vhcService.respondToItem(id, token, dto);
   }
 
   @Get('reports/conversion-rate')

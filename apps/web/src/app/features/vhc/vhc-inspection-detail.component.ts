@@ -31,6 +31,7 @@ interface InspectionDetail {
   vehicleReg: string;
   mileage: number | null;
   sentAt: string | null;
+  reportToken?: string;
   items: VhcItem[];
 }
 
@@ -245,7 +246,7 @@ export class VhcInspectionDetailComponent implements OnInit {
   }
 
   reportUrl(): string {
-    return `${window.location.origin}/vhc-report/${this.inspectionId}`;
+    return `${window.location.origin}/vhc-report/${this.inspectionId}?t=${encodeURIComponent(this.inspection()?.reportToken ?? '')}`;
   }
 
   copyLink(): void {

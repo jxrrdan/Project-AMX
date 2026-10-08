@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CustomFieldDataType, IntegrationTargetEntity, IntegrationType } from '@project-amx/shared';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { assertSafeOutboundUrl } from '../../common/security/outbound-url.util';
 import {
@@ -218,8 +218,10 @@ export class IntegrationsService {
 
     const config = (connector.config ?? {}) as { requiredHeaderName?: string; requiredHeaderValue?: string };
     if (config.requiredHeaderName) {
-      const received = requestHeaders[config.requiredHeaderName.toLowerCase()];
-      if (received !== config.requiredHeaderValue) {
+      const raw = requestHeaders[config.requiredHeaderName.toLowerCase()];
+      const received = Buffer.from(Array.isArray(raw) ? (raw[0] ?? '') : (raw ?? ''));
+      const expected = Buffer.from(config.requiredHeaderValue ?? '');
+      if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
         throw new ForbiddenException('Missing or incorrect shared-secret header');
       }
     }

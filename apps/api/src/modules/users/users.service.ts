@@ -82,7 +82,8 @@ export class UsersService {
       return created;
     });
 
-    return user;
+    // Never echo the entity back: it carries passwordHash and mfaSecret.
+    return { id: user.id, email: user.email };
   }
 
   /**

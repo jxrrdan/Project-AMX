@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { AiConversationChannel, AiMessageRole, LeadStage } from '@project-amx/shared';
 import { AiService } from '../../common/ai/ai.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -136,8 +136,17 @@ export class AiInsightsService {
 
   /** Module 15 — customer-facing chatbot; creates a CRM lead on first message per dealer. */
   async chatbotMessage(dealerId: string, dto: ChatbotMessageDto) {
+    const dealer = await this.prisma.dealer.findUnique({ where: { id: dealerId }, select: { id: true } });
+    if (!dealer) {
+      throw new NotFoundException('Dealer not found');
+    }
+    // Scope to this dealer's customer-chatbot conversations only — a bare id lookup would let a
+    // caller read/append to another tenant's (or a staff assistant) conversation.
     let conversation = dto.conversationId
-      ? await this.prisma.aiConversation.findUnique({ where: { id: dto.conversationId }, include: { messages: true } })
+      ? await this.prisma.aiConversation.findFirst({
+          where: { id: dto.conversationId, dealerId, channel: AiConversationChannel.CUSTOMER_CHATBOT },
+          include: { messages: true },
+        })
       : null;
 
     if (!conversation) {

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { CommonModule } from '../common/common.module';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -45,6 +46,10 @@ import { CaptchaModule } from '../modules/captcha/captcha.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Global per-IP rate limit (OWASP API4). Tighter limits are applied with @Throttle() on login
+    // and the public, unauthenticated routes. Behind a load balancer set TRUST_PROXY so the real
+    // client IP is used (see main.ts).
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }]),
     PrismaModule,
     CommonModule,
     AuthModule,
@@ -85,6 +90,7 @@ import { CaptchaModule } from '../modules/captcha/captcha.module';
     CaptchaModule,
   ],
   providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],

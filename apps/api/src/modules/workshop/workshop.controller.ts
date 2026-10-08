@@ -2,6 +2,8 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ModuleKey, PermissionAction } from '@project-amx/shared';
 import type { AuthUser } from '@project-amx/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Throttle } from '@nestjs/throttler';
+import { CaptchaService } from '../../common/captcha/captcha.service';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CreateConditionReportDto } from '../vehicle-condition/dto/condition-report.dto';
@@ -16,6 +18,7 @@ export class WorkshopController {
   constructor(
     private readonly workshopService: WorkshopService,
     private readonly vehicleConditionService: VehicleConditionService,
+    private readonly captcha: CaptchaService,
   ) {}
 
   @Get('bays')
@@ -115,6 +118,7 @@ export class WorkshopController {
    * Gated by a dedicated unguessable `workshopBoardToken` (see GET /dealers/me), never the
    * dealer's own id, which this app already publishes elsewhere (public widget URLs).
    */
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @Public()
   @Get('workshop-board/:boardToken')
   getBoard(@Param('boardToken') boardToken: string) {
@@ -147,9 +151,11 @@ export class WorkshopController {
   }
 
   /** Public booking widget endpoint — embeddable on the dealer website (Feature Spec §2.5). */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Public()
   @Post('dealers/:dealerId/service-bookings')
-  createServiceBooking(@Param('dealerId') dealerId: string, @Body() dto: CreateServiceBookingDto) {
+  async createServiceBooking(@Param('dealerId') dealerId: string, @Body() dto: CreateServiceBookingDto) {
+    await this.captcha.verify(dto.captchaToken, dto.captchaAnswer);
     return this.workshopService.createServiceBooking(dealerId, dto);
   }
 

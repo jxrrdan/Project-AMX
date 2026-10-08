@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { ModuleKey, PermissionAction } from '@project-amx/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { AcceptInvitationDto, InviteUserDto, UpdateMyProfileDto, UpdateUserDto } from './dto/user.dto';
@@ -23,6 +24,7 @@ export class UsersController {
     return this.usersService.invite(user.dealerId, dto);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Public()
   @Post('accept-invitation')
   acceptInvitation(@Body() dto: AcceptInvitationDto) {

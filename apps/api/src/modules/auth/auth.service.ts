@@ -21,7 +21,7 @@ export class AuthService {
   async login(dto: LoginDto, ipAddress?: string, userAgent?: string) {
     const dealer = await this.prisma.dealer.findUnique({ where: { subdomain: dto.subdomain } });
     if (!dealer) {
-      throw new UnauthorizedException('Unknown dealer');
+      throw new UnauthorizedException('Invalid credentials');
     }
 
     const user = await this.prisma.user.findUnique({
