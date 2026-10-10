@@ -412,6 +412,10 @@ PWA and the PDI checklist is offline-first:
   `npm run dev:web` (toggle DevTools → Network → Offline). The service worker itself is
   production-gated, mirroring Angular's own PWA convention.
 
+## Demo
+
+A 30-second tour of the app: [docs/demo/amx-demo.mp4](docs/demo/amx-demo.mp4).
+
 ## Production deployment
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full AWS runbook: one-off setup, the CI/CD pipeline, migrations, operations and the short list of items that depend on third parties.
