@@ -316,3 +316,47 @@ a.mat-mdc-card:active,
     border: 1px solid CanvasText;
   }
 }
+
+// --- Fluid drag (FlickDragDirective) --------------------------------------------------------------
+// The card lifts the instant it is pressed; the dragged copy floats above the page on a heavy shadow.
+.amx-pressed {
+  transform: scale(1.02);
+  box-shadow: var(--amx-shadow-large);
+  transition: transform var(--amx-dur-press) ease-out, box-shadow var(--amx-dur) var(--amx-ease);
+}
+.amx-drag-preview {
+  cursor: grabbing;
+  transform-origin: center;
+  box-shadow: var(--amx-shadow-large) !important;
+  will-change: transform;
+  opacity: 0.97;
+}
+// What the card leaves behind: a quiet outline marking its slot, not a duplicate.
+.amx-drag-origin {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 2px dashed var(--amx-border) !important;
+  > * {
+    visibility: hidden;
+  }
+}
+// The zone under a dragged card lights up so the destination is clear before release.
+[data-drop-zone] {
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition: outline-color 200ms var(--amx-ease), background-color 200ms var(--amx-ease);
+}
+[data-drop-zone].amx-drop-over {
+  outline-color: var(--mat-sys-primary);
+  background: color-mix(in srgb, var(--mat-sys-primary) 8%, var(--amx-surface-sunken));
+}
+body.amx-dragging {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .amx-pressed {
+    transform: none;
+  }
+}

@@ -137,6 +137,14 @@ const NAV_ITEMS: NavItem[] = [
         box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
         letter-spacing: 0.005em;
       }
+      /* In dark appearance the brand colour is deepened so white text keeps its contrast and the bar
+         does not glare against the dark content. */
+      @media screen and (prefers-color-scheme: dark) {
+        .toolbar {
+          background: color-mix(in srgb, var(--amx-brand, #0066b1) 58%, #000 42%);
+          border-top-color: rgba(255, 255, 255, 0.18);
+        }
+      }
       .brand {
         font-weight: 600;
         letter-spacing: -0.012em;

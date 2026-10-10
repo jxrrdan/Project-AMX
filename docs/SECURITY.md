@@ -72,9 +72,12 @@ Helmet security headers, CORS restricted to `CORS_ORIGIN`, a global `ValidationP
 - CloudFront no longer rewrites API 403/404 responses into a 200 page.
 - `npm audit --omit=dev --audit-level=critical` gates every pull request in CI.
 
+### Verified against a running server
+
+Beyond unit tests, the built API was run in production mode against a real PostgreSQL database (migrations applied, dealer created with the bootstrap script) and exercised over HTTP and WebSocket: health and readiness probes; CAPTCHA required on the chatbot and service-booking widgets (400) and accepted when solved on the enquiry form (201); forged VHC report token rejected (404); sample feed hidden in production (404); WebSocket accepts a valid token and rejects a forged `alg: none` token; five failed sign-ins lock the account (429) even for the correct password, an administrator unlock restores access; login bursts are rate limited (429); `X-Powered-By` removed and `nosniff` set. A 17-screen browser sweep against the same stack produced no console or API errors.
+
 ### Still open
 
-- `@angular/router` (SSR-only denial-of-service advisory; AMX does not use SSR) needs the whole Angular set bumped to 22.2.x together.
 - `prisma` CLI's transitive `@prisma/config` / `deepmerge-ts` advisories are build-time tooling only; npm's suggested "fix" is a downgrade, so it is left.
 - Run `npm audit --omit=dev` in CI and review monthly.
 - Run Mantis (below) and an external penetration test before go-live.

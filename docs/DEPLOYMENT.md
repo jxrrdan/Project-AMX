@@ -43,7 +43,20 @@ Merge to `main`. `.github/workflows/deploy.yml`:
 
 ## 3. First production data
 
-The seed script creates **demo** data (`Password123!`). Do not run it in production. Create the first dealer and principal user with a one-off ECS task or a reviewed SQL script, then invite everyone else from the app.
+Do not run the seed script in production: it creates a demo dealer with a well-known password. Instead create the first dealer and its principal user with the bootstrap script, as a one-off ECS task using the `migrate` image (it has the tooling and the same DB environment):
+
+```bash
+aws ecs run-task --cluster <ClusterName> --launch-type FARGATE --task-definition ams-migrate \
+  --network-configuration "awsvpcConfiguration={subnets=[<PrivateSubnetIds>],securityGroups=[<MigrateSecurityGroupId>],assignPublicIp=DISABLED}" \
+  --overrides '{"containerOverrides":[{"name":"MigrateContainer","command":["npm","run","bootstrap:dealer"],"environment":[
+    {"name":"BOOTSTRAP_DEALER_NAME","value":"BMW Northampton"},
+    {"name":"BOOTSTRAP_SUBDOMAIN","value":"bmwnorthampton"},
+    {"name":"BOOTSTRAP_ADMIN_EMAIL","value":"principal@example.co.uk"},
+    {"name":"BOOTSTRAP_ADMIN_FIRST_NAME","value":"Alex"},
+    {"name":"BOOTSTRAP_ADMIN_LAST_NAME","value":"Whitfield"}]}]}'
+```
+
+The generated one-time password is printed once in the `/ams/migrate` log group; the principal must change it at first sign-in. The script refuses to touch a dealer that already exists, validates its inputs, and enforces a 12-character minimum if you supply your own password. Everyone else is invited from the app.
 
 ## 4. Operating it
 

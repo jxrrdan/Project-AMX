@@ -1,6 +1,5 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
-import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -11,6 +10,7 @@ import { JOB_TYPE_COLOURS, JobType } from '@project-amx/shared';
 import { io, Socket } from 'socket.io-client';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/auth.service';
+import { FlickDragDirective, FlickDropEvent } from '../../shared/flick-drag.directive';
 
 interface Bay {
   id: string;
@@ -30,7 +30,7 @@ interface JobCard {
 
 @Component({
   selector: 'app-workshop-diary',
-  imports: [DragDropModule, RouterLink, MatButtonModule, MatCardModule, MatChipsModule, MatIconModule, MatMenuModule],
+  imports: [FlickDragDirective, RouterLink, MatButtonModule, MatCardModule, MatChipsModule, MatIconModule, MatMenuModule],
   template: `
     <div class="header">
       <h1>Workshop Diary</h1>
@@ -47,13 +47,13 @@ interface JobCard {
     </div>
 
     <p class="sr-only" aria-live="polite">{{ announcement() }}</p>
-    <div class="board" cdkDropListGroup>
+    <div class="board" data-drag-bounds>
       @for (bay of bays(); track bay.id) {
         <div class="column">
           <h3>{{ bay.name }} <span class="count">{{ byBay(bay.id).length }}</span></h3>
-          <div class="drop-list" cdkDropList cdkDropListSortingDisabled [cdkDropListData]="byBay(bay.id)" [id]="bay.id" [class.over]="overList() === bay.id" (cdkDropListEntered)="overList.set(bay.id)" (cdkDropListExited)="overList.set(null)" (cdkDropListDropped)="drop($event, bay.id); overList.set(null)">
+          <div class="drop-list" [attr.data-drop-zone]="bay.id">
             @for (job of byBay(bay.id); track job.id) {
-              <mat-card class="job-card" cdkDrag [cdkDragData]="job" [style.border-left-color]="colourFor(job.jobType)">
+              <mat-card class="job-card" [appFlickDrag]="job" (flickDrop)="onFlickDrop($event)" [style.border-left-color]="colourFor(job.jobType)">
                 <div class="job-card-header">
                   <div class="job-type">{{ job.jobType }}</div>
                   <span class="card-actions">
@@ -82,9 +82,9 @@ interface JobCard {
       }
       <div class="column">
         <h3>Unassigned <span class="count">{{ byBay(null).length }}</span></h3>
-        <div class="drop-list" cdkDropList cdkDropListSortingDisabled [cdkDropListData]="byBay(null)" id="unassigned" [class.over]="overList() === 'unassigned'" (cdkDropListEntered)="overList.set('unassigned')" (cdkDropListExited)="overList.set(null)" (cdkDropListDropped)="drop($event, null); overList.set(null)">
+        <div class="drop-list" data-drop-zone="unassigned">
           @for (job of byBay(null); track job.id) {
-            <mat-card class="job-card" cdkDrag [cdkDragData]="job">
+            <mat-card class="job-card" [appFlickDrag]="job" (flickDrop)="onFlickDrop($event)">
               <div class="job-card-header">
                 <div class="job-type">{{ job.jobType }}</div>
                 <span class="card-actions">
@@ -172,26 +172,10 @@ interface JobCard {
           outline-color 200ms var(--amx-ease, ease),
           background-color 200ms var(--amx-ease, ease);
       }
-      /* The column a dragged card is over lights up, so the destination is obvious before release. */
-      .drop-list.over {
-        outline-color: var(--mat-sys-primary);
-        background: color-mix(in srgb, var(--mat-sys-primary) 8%, var(--amx-surface-sunken));
-      }
       .job-card {
         padding: 12px;
         cursor: grab;
         border-left: 4px solid #0066b1;
-        touch-action: none; /* let the pointer drive the drag, not browser scrolling */
-        user-select: none;
-        /* Press feedback is instant: the card lifts the moment it is grabbed, not when it moves. */
-        transition:
-          transform 100ms ease-out,
-          box-shadow 200ms var(--amx-ease, ease);
-      }
-      .job-card:active {
-        cursor: grabbing;
-        transform: scale(1.02);
-        box-shadow: var(--amx-shadow-large);
       }
       .card-actions {
         display: inline-flex;
@@ -210,40 +194,6 @@ interface JobCard {
         overflow: hidden;
         clip-path: inset(50%);
         white-space: nowrap;
-      }
-      /* The card follows the pointer 1:1 (CDK keeps the grab offset); it is lifted and slightly larger. */
-      :host ::ng-deep .cdk-drag-preview {
-        box-shadow: var(--amx-shadow-large);
-        border-radius: 16px;
-        opacity: 0.96;
-        cursor: grabbing;
-      }
-      /* The slot the card will land in: a quiet outline, not a copy of the card. */
-      :host ::ng-deep .cdk-drag-placeholder {
-        opacity: 1;
-        background: transparent;
-        border: 2px dashed var(--amx-border);
-        box-shadow: none;
-        border-radius: 16px;
-      }
-      :host ::ng-deep .cdk-drag-placeholder > * {
-        visibility: hidden;
-      }
-      /* Neighbours part smoothly to make room; settling is critically damped (no overshoot). */
-      :host ::ng-deep .cdk-drop-list-dragging .job-card:not(.cdk-drag-placeholder) {
-        transition: transform 280ms var(--amx-ease, cubic-bezier(0.22, 1, 0.36, 1));
-      }
-      :host ::ng-deep .cdk-drag-animating {
-        transition: transform 340ms var(--amx-ease, cubic-bezier(0.22, 1, 0.36, 1));
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .job-card:active {
-          transform: none;
-        }
-        :host ::ng-deep .cdk-drag-animating,
-        :host ::ng-deep .cdk-drop-list-dragging .job-card:not(.cdk-drag-placeholder) {
-          transition-duration: 1ms;
-        }
       }
       .job-card-header {
         display: flex;
@@ -299,13 +249,9 @@ export class WorkshopDiaryComponent implements OnInit, OnDestroy {
     return JOB_TYPE_COLOURS[jobType];
   }
 
-  /** Drag-and-drop: cards dropped in another column are moved; reordering inside a column is local. */
-  drop(event: CdkDragDrop<JobCard[]>, targetBayId: string | null): void {
-    if (event.previousContainer === event.container) {
-      return;
-    }
-    const job = event.previousContainer.data[event.previousIndex];
-    this.moveTo(job, targetBayId);
+  /** A card was dropped or flicked into a column (`unassigned` is the no-bay column). */
+  onFlickDrop(event: FlickDropEvent): void {
+    this.moveTo(event.data as JobCard, event.zone === 'unassigned' ? null : event.zone);
   }
 
   /**
