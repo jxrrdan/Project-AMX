@@ -68,9 +68,16 @@ import { AiAssistantService } from './ai-assistant.service';
       .panel {
         width: 340px;
         height: 440px;
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+        background: var(--amx-material-thick, rgba(255, 255, 255, 0.82));
+        backdrop-filter: var(--amx-material-blur, blur(20px) saturate(180%));
+        -webkit-backdrop-filter: var(--amx-material-blur, blur(20px) saturate(180%));
+        border-top: 1px solid var(--amx-material-edge, rgba(255, 255, 255, 0.55));
+        border-radius: 20px;
+        box-shadow: var(--amx-shadow-large, 0 8px 32px rgba(0, 0, 0, 0.14));
+        /* Anchored to its trigger (bottom-right FAB): grows out of it, with a touch of bounce since it
+           is a physical, button-launched object. */
+        transform-origin: bottom right;
+        animation: dock-open 420ms var(--amx-ease-spring, ease) both;
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -90,6 +97,23 @@ import { AiAssistantService } from './ai-assistant.service';
       .panel-header a,
       .panel-header button {
         color: white;
+      }
+      @keyframes dock-open {
+        from {
+          opacity: 0;
+          transform: scale(0.6);
+          filter: blur(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+          filter: blur(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .panel {
+          animation: none;
+        }
       }
       .messages {
         flex: 1;

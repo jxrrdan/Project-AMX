@@ -67,7 +67,7 @@ const NAV_ITEMS: NavItem[] = [
     AiAssistantDockComponent,
   ],
   template: `
-    <mat-toolbar class="toolbar" [style.background]="theme.primaryColour()" [style.color]="'#fff'">
+    <mat-toolbar class="toolbar" [style.--amx-brand]="theme.primaryColour()">
       @if (theme.logoUrl(); as logo) {
         <img [src]="logo" alt="Dealer logo" class="brand-logo" />
       } @else {
@@ -114,7 +114,7 @@ const NAV_ITEMS: NavItem[] = [
         </mat-nav-list>
       </mat-sidenav>
       <mat-sidenav-content class="content">
-        <router-outlet />
+        <div class="page amx-page-enter"><router-outlet /></div>
       </mat-sidenav-content>
     </mat-sidenav-container>
 
@@ -124,13 +124,22 @@ const NAV_ITEMS: NavItem[] = [
   `,
   styles: [
     `
+      /* Floating, translucent chrome: the brand colour as a material, content scrolls beneath it. */
       .toolbar {
         position: sticky;
         top: 0;
         z-index: 10;
+        color: #fff;
+        background: color-mix(in srgb, var(--amx-brand, #0066b1) 82%, transparent);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border-top: 1px solid rgba(255, 255, 255, 0.35);
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+        letter-spacing: 0.005em;
       }
       .brand {
         font-weight: 600;
+        letter-spacing: -0.012em;
       }
       .brand-logo {
         height: 32px;
@@ -142,16 +151,35 @@ const NAV_ITEMS: NavItem[] = [
       }
       .container {
         height: calc(100vh - 64px);
+        background: #f5f6f8;
       }
+      /* Heavier material for the structural region; no 1px divider, a soft shadow separates it. */
       .sidenav {
-        width: 240px;
+        width: 248px;
+        background: var(--amx-material-light, rgba(255, 255, 255, 0.72));
+        backdrop-filter: var(--amx-material-blur, blur(20px) saturate(180%));
+        -webkit-backdrop-filter: var(--amx-material-blur, blur(20px) saturate(180%));
+        border-right: none;
+        box-shadow: 1px 0 0 var(--amx-hairline, rgba(0, 0, 0, 0.08));
       }
       .content {
         padding: 24px;
         background: #f5f6f8;
+        /* Scroll-edge effect instead of a hard divider where content meets the toolbar. */
+        mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+        -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
       }
       .active-link {
         background: var(--amx-active-bg, rgba(0, 102, 177, 0.08));
+        border-radius: 12px;
+        font-weight: 600;
+      }
+      .sidenav a[mat-list-item] {
+        border-radius: 12px;
+        margin: 1px 8px;
+        transition:
+          background-color 280ms var(--amx-ease, ease),
+          transform 100ms ease-out;
       }
       .menu-user {
         padding: 8px 16px;

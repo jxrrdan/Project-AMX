@@ -1,9 +1,10 @@
 @use '@angular/material' as mat;
-@import '@fontsource/roboto/300.css';
-@import '@fontsource/roboto/400.css';
-@import '@fontsource/roboto/500.css';
-@import '@fontsource/roboto/700.css';
 @import 'material-icons/iconfont/material-icons.css';
+
+// Typography: the platform system font (SF Pro on Apple devices) ships optical sizing and tracking
+// tables, so we use it instead of bundling a webfont (apple-design §15).
+$amx-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', system-ui,
+  Roboto, 'Helvetica Neue', sans-serif;
 
 html {
   @include mat.theme(
@@ -13,19 +14,246 @@ html {
         primary: mat.$azure-palette,
         tertiary: mat.$blue-palette,
       ),
-      typography: Roboto,
+      typography: (
+        plain-family: $amx-font,
+        brand-family: $amx-font,
+        bold-weight: 600,
+        medium-weight: 500,
+        regular-weight: 400,
+      ),
       density: 0,
     )
   );
+
+  // Softer, rounder shapes.
+  --mat-sys-corner-medium: 12px;
+  --mat-sys-corner-large: 16px;
+  --mat-sys-corner-extra-large: 24px;
+
+  // Motion tokens. UI that the user touches uses a critically damped curve (no overshoot);
+  // `--amx-ease-spring` is the slightly under-damped one, reserved for momentum-like moments.
+  --amx-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --amx-ease-spring: linear(0, 0.32 8%, 0.78 18%, 1.04 30%, 1.06 36%, 0.99 52%, 1.005 66%, 1);
+  --amx-dur-press: 100ms;
+  --amx-dur: 280ms;
+
+  // Materials: translucent chrome with a bright top edge, content scrolls beneath (apple-design §12).
+  --amx-material-light: rgba(255, 255, 255, 0.72);
+  --amx-material-thick: rgba(255, 255, 255, 0.82);
+  --amx-material-edge: rgba(255, 255, 255, 0.55);
+  --amx-material-blur: blur(20px) saturate(180%);
+  --amx-hairline: rgba(0, 0, 0, 0.08);
+  --amx-shadow-small: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 8px rgba(0, 0, 0, 0.04);
+  --amx-shadow-large: 0 8px 32px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 html,
 body {
   height: 100%;
   margin: 0;
-  font-family: Roboto, 'Helvetica Neue', sans-serif;
+  font-family: $amx-font;
+  font-size: 100%;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-optical-sizing: auto;
 }
 
 * {
   box-sizing: border-box;
+}
+
+// --- Type: size-specific tracking and leading, never one value for all sizes (§15) -----------------
+h1,
+h2,
+h3,
+.mat-headline-large,
+.mat-headline-medium,
+.mat-headline-small {
+  font-weight: 600;
+  text-wrap: balance;
+}
+h1 {
+  font-size: clamp(1.75rem, 1.2rem + 1.6vw, 2.25rem);
+  line-height: 1.1;
+  letter-spacing: -0.022em;
+}
+h2 {
+  font-size: 1.5rem;
+  line-height: 1.15;
+  letter-spacing: -0.019em;
+}
+h3 {
+  font-size: 1.1875rem;
+  line-height: 1.25;
+  letter-spacing: -0.012em;
+}
+small,
+.mat-caption,
+.mat-label-small {
+  letter-spacing: 0.01em;
+}
+// Numbers in tables and KPIs must not jiggle as digits change.
+table,
+.mat-mdc-table,
+.kpi,
+.stat {
+  font-variant-numeric: tabular-nums;
+}
+// Icon fonts rely on ligatures; never let inherited numeric/feature settings switch them off.
+.mat-icon,
+.material-icons {
+  font-variant-numeric: normal;
+  font-feature-settings: 'liga';
+}
+
+// --- Response: feedback on press, instantly (§1) --------------------------------------------------
+.mat-mdc-button-base,
+.mat-mdc-list-item,
+.mat-mdc-menu-item,
+.mat-mdc-chip,
+.mdc-fab,
+.mdc-icon-button {
+  transition:
+    transform var(--amx-dur-press) ease-out,
+    background-color var(--amx-dur) var(--amx-ease),
+    box-shadow var(--amx-dur) var(--amx-ease);
+}
+.mat-mdc-button-base:active,
+.mdc-fab:active,
+.mdc-icon-button:active {
+  transform: scale(0.97);
+}
+.mat-mdc-list-item:active,
+.mat-mdc-menu-item:active {
+  transform: scale(0.99);
+}
+
+// Keyboard focus is always visible, never removed.
+:focus-visible {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 2px;
+}
+
+// --- Surfaces: cards read as soft, lifted layers rather than outlined boxes ----------------------
+.mat-mdc-card {
+  border-radius: var(--mat-sys-corner-large);
+  box-shadow: var(--amx-shadow-small);
+  transition: box-shadow var(--amx-dur) var(--amx-ease), transform var(--amx-dur) var(--amx-ease);
+}
+a.mat-mdc-card,
+.mat-mdc-card[routerLink],
+.mat-mdc-card.clickable {
+  cursor: pointer;
+}
+a.mat-mdc-card:active,
+.mat-mdc-card[routerLink]:active,
+.mat-mdc-card.clickable:active {
+  transform: scale(0.985);
+}
+
+// --- Overlays: dim to focus, materialise on enter (§12) -------------------------------------------
+.cdk-overlay-dark-backdrop {
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(4px);
+}
+.mat-mdc-dialog-surface,
+.mat-mdc-menu-panel,
+.mat-mdc-select-panel,
+.mat-mdc-autocomplete-panel,
+.mat-datepicker-content .mat-calendar {
+  background-color: var(--amx-material-thick) !important;
+  backdrop-filter: var(--amx-material-blur);
+  -webkit-backdrop-filter: var(--amx-material-blur);
+  border-top: 1px solid var(--amx-material-edge);
+  box-shadow: var(--amx-shadow-large) !important;
+}
+.mat-mdc-dialog-surface {
+  animation: amx-materialise 320ms var(--amx-ease) both;
+}
+@keyframes amx-materialise {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+// --- Page transitions: short, interruptible-friendly, transform + opacity only --------------------
+.amx-page-enter {
+  animation: amx-page-enter var(--amx-dur) var(--amx-ease) both;
+}
+@keyframes amx-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+// --- Accessibility: the three independent signals (§14) -------------------------------------------
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  // Keep a gentle cross-fade for comprehension, drop slides, scale and overshoot.
+  .amx-page-enter,
+  .mat-mdc-dialog-surface {
+    animation: amx-fade 160ms ease both !important;
+    filter: none !important;
+  }
+  .mat-mdc-button-base:active,
+  .mdc-fab:active,
+  .mdc-icon-button:active,
+  .mat-mdc-card:active {
+    transform: none !important;
+  }
+}
+@keyframes amx-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html {
+    --amx-material-light: #fff;
+    --amx-material-thick: #fff;
+    --amx-material-blur: none;
+  }
+  .cdk-overlay-dark-backdrop {
+    backdrop-filter: none;
+    background: rgba(0, 0, 0, 0.5);
+  }
+}
+
+@media (prefers-contrast: more) {
+  html {
+    --amx-material-light: #fff;
+    --amx-material-thick: #fff;
+    --amx-material-blur: none;
+    --amx-hairline: rgba(0, 0, 0, 0.5);
+  }
+  .mat-mdc-card,
+  .mat-mdc-dialog-surface,
+  .mat-mdc-menu-panel {
+    border: 1px solid rgba(0, 0, 0, 0.6);
+  }
 }
