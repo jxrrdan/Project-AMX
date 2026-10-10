@@ -43,7 +43,7 @@ Merge to `main`. `.github/workflows/deploy.yml`:
 
 ## 3. First production data
 
-Do not run the seed script in production: it creates a demo dealer with a well-known password. Instead create the first dealer and its principal user with the bootstrap script, as a one-off ECS task using the `migrate` image (it has the tooling and the same DB environment):
+Do not run the seed script in production: it creates a demo agent with a well-known password. Instead create the first agent and its principal user with the bootstrap script, as a one-off ECS task using the `migrate` image (it has the tooling and the same DB environment):
 
 ```bash
 aws ecs run-task --cluster <ClusterName> --launch-type FARGATE --task-definition ams-migrate \
@@ -56,7 +56,7 @@ aws ecs run-task --cluster <ClusterName> --launch-type FARGATE --task-definition
     {"name":"BOOTSTRAP_ADMIN_LAST_NAME","value":"Whitfield"}]}]}'
 ```
 
-The generated one-time password is printed once in the `/ams/migrate` log group; the principal must change it at first sign-in. The script refuses to touch a dealer that already exists, validates its inputs, and enforces a 12-character minimum if you supply your own password. Everyone else is invited from the app.
+The generated one-time password is printed once in the `/ams/migrate` log group; the principal must change it at first sign-in. The script refuses to touch an agent that already exists, validates its inputs, and enforces a 12-character minimum if you supply your own password. Everyone else is invited from the app.
 
 ## 4. Operating it
 

@@ -176,7 +176,7 @@ export class WorkflowsService {
         if (contact.email) {
           await this.email.send({
             to: contact.email,
-            subject: String(config['subject'] ?? 'Update from your dealer'),
+            subject: String(config['subject'] ?? 'Update from your agent'),
             html: String(config['body'] ?? `Hi ${contact.firstName},`),
           });
         }

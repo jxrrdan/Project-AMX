@@ -1,5 +1,5 @@
 /** Mirrors the Prisma `RecallCampaignStatus` enum — an OEM safety/quality recall campaign the
- * dealership is tracking to completion across all affected vehicles. */
+ * agent is tracking to completion across all affected vehicles. */
 export enum RecallCampaignStatus {
   OPEN = 'OPEN',
   CLOSED = 'CLOSED',

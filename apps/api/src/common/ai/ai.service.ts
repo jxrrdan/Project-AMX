@@ -30,7 +30,11 @@ export class AiService {
     if (this.driver === 'mock') {
       const lastUserMessage = [...input.messages].reverse().find((m) => m.role === 'user');
       this.logger.debug(`[AI mock] ${lastUserMessage?.content ?? '(no message)'}`);
-      return `(mock AI response — configure AI_DRIVER=bedrock in production) Based on the current dealer data, here is a placeholder answer to: "${lastUserMessage?.content ?? ''}"`;
+      const briefing = mockBriefing(lastUserMessage?.content);
+      if (briefing) {
+        return briefing;
+      }
+      return `(mock AI response — configure AI_DRIVER=bedrock in production) Based on the current agent data, here is a placeholder answer to: "${lastUserMessage?.content ?? ''}"`;
     }
 
     if (this.driver === 'bedrock') {
@@ -53,4 +57,34 @@ export class AiService {
 
     throw new Error(`Unknown AI_DRIVER "${this.driver}"`);
   }
+}
+
+interface KpiSnapshot {
+  pdi?: { scheduled: number; complete: number };
+  workshop?: { utilisationPct: number; jobsToday: number; completeToday: number };
+  usedCars?: { inStock: number; soldMtd: number };
+  crm?: { openLeads: number };
+  parts?: { belowReorderLevel: number };
+  warranty?: { openClaims: number; awaitingAuthorisation: number };
+}
+
+/** Local/demo only: turns the dashboard KPI JSON into a readable briefing so the mock reads sensibly. */
+function mockBriefing(content: string | undefined): string | null {
+  let k: KpiSnapshot;
+  try {
+    k = JSON.parse(content ?? '') as KpiSnapshot;
+  } catch {
+    return null;
+  }
+  if (!k || typeof k !== 'object' || !k.workshop) {
+    return null;
+  }
+  const lines = [
+    `Workshop is ${k.workshop.utilisationPct}% loaded with ${k.workshop.jobsToday} job${k.workshop.jobsToday === 1 ? '' : 's'} today (${k.workshop.completeToday} complete).`,
+    k.pdi ? `${k.pdi.complete} of ${k.pdi.scheduled} PDIs completed.` : '',
+    k.crm ? `${k.crm.openLeads} open lead${k.crm.openLeads === 1 ? '' : 's'} in the pipeline.` : '',
+    k.parts && k.parts.belowReorderLevel > 0 ? `${k.parts.belowReorderLevel} part line${k.parts.belowReorderLevel === 1 ? ' is' : 's are'} below reorder level.` : '',
+    k.warranty && k.warranty.awaitingAuthorisation > 0 ? `${k.warranty.awaitingAuthorisation} warranty claim${k.warranty.awaitingAuthorisation === 1 ? '' : 's'} awaiting authorisation.` : '',
+  ].filter(Boolean);
+  return lines.map((l) => `• ${l}`).join('\n');
 }

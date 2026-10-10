@@ -17,7 +17,7 @@ async function main() {
       address: 'Riverside Way, Northampton, NN1',
       timeZone: 'Europe/London',
       locale: 'en-GB',
-      primaryColour: '#0066B1',
+      primaryColour: '#1C69D4',
     },
   });
 
@@ -441,7 +441,7 @@ async function main() {
   });
 
   console.log('Seed complete.');
-  console.log('Dealer subdomain: bmwnorthampton');
+  console.log('Agent subdomain: bmwnorthampton');
   console.log('Login: principal@bmwnorthampton.ams-app.co.uk / workshop@... / tech@... — password: Password123!');
   console.log('Part on hand:', part.partNumber);
 }

@@ -36,7 +36,7 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   [ModuleKey.PARTS]: 'Parts Stock Management',
   [ModuleKey.USED_CARS]: 'Used Car Sales',
   [ModuleKey.WARRANTY]: 'Warranty',
-  [ModuleKey.DASHBOARD]: 'Dealer Dashboard & Reporting',
+  [ModuleKey.DASHBOARD]: 'Agent Dashboard & Reporting',
   [ModuleKey.ADMIN]: 'Admin, User Management & RBAC',
   [ModuleKey.CRM]: 'CRM & Customer Communications',
   [ModuleKey.VHC]: 'Digital Vehicle Health Check',

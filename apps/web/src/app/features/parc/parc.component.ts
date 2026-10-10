@@ -87,8 +87,8 @@ interface ParcRow { vehicleReg: string; entries: number; lastActivity: string | 
     .row { display: flex; gap: 12px; }
     .row mat-form-field { flex: 1; }
     .full { width: 100%; }
-    a { color: #0066b1; cursor: pointer; }
-    .linkbtn { background: none; border: none; padding: 0; color: #0066b1; cursor: pointer; font: inherit; }
+    a { color: var(--bmw-blue-text); cursor: pointer; }
+    .linkbtn { background: none; border: none; padding: 0; color: var(--bmw-blue-text); cursor: pointer; font: inherit; }
     .empty { color: var(--amx-text-tertiary); }
   `],
 })

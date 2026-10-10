@@ -110,11 +110,11 @@ interface ActionTriggerSummary {
   template: `
     <h1>Settings</h1>
     <mat-tab-group>
-      <mat-tab label="Dealer profile">
+      <mat-tab label="Agent profile">
         <mat-card class="section">
           <div class="row">
             <mat-form-field appearance="outline" class="grow">
-              <mat-label>Dealer name</mat-label>
+              <mat-label>Agent name</mat-label>
               <input matInput [(ngModel)]="profileForm.name" />
             </mat-form-field>
             <mat-form-field appearance="outline">
@@ -156,7 +156,7 @@ interface ActionTriggerSummary {
         <mat-card class="section">
           <p class="hint">
             Join a franchise (e.g. "BMW") to share document templates, branding, and action
-            triggers with every other outlet in it — and, transitively, with its dealer group. This
+            triggers with every other outlet in it — and, transitively, with its agent group. This
             outlet's own settings always take priority over anything shared. Joining uses an invite
             code from an outlet already in that franchise/group, rather than picking one from a
             list — nobody outside an org can browse or attach to it just by knowing its name.
@@ -325,7 +325,7 @@ interface ActionTriggerSummary {
 
       <mat-tab label="Document templates">
         <mat-card class="section">
-          <p class="hint">Create dealer-branded templates with variables, styling, and your logo for deal sheets, invoices, and other documents.</p>
+          <p class="hint">Create agent-branded templates with variables, styling, and your logo for deal sheets, invoices, and other documents.</p>
           <div class="row">
             @for (t of documentTemplateTypes; track t) {
               <button mat-stroked-button (click)="newTemplate(t)">+ New {{ typeLabels[t] }} template</button>
@@ -523,8 +523,8 @@ export class SettingsComponent implements OnInit {
     timeZone: '',
     locale: '',
     logoUrl: null,
-    primaryColour: '#0066B1',
-    secondaryColour: '#1C69D4',
+    primaryColour: '#1C69D4',
+    secondaryColour: '#0653B6',
     labourRatePerHour: 95,
     franchise: null,
   };
@@ -609,8 +609,8 @@ export class SettingsComponent implements OnInit {
     this.http.get<DealerProfile>(`${environment.apiUrl}/dealers/me`).subscribe((dealer) => {
       this.profileForm = {
         ...dealer,
-        primaryColour: dealer.primaryColour || '#0066B1',
-        secondaryColour: dealer.secondaryColour || '#1C69D4',
+        primaryColour: dealer.primaryColour || '#1C69D4',
+        secondaryColour: dealer.secondaryColour || '#0653B6',
       };
     });
   }

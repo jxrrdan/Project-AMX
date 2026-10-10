@@ -7,18 +7,24 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService } from '../../core/auth.service';
+import { BmwRoundelComponent } from '../../shared/bmw-roundel.component';
 
 @Component({
   selector: 'app-login',
-  imports: [FormsModule, MatCardModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatProgressSpinnerModule],
+  imports: [BmwRoundelComponent, FormsModule, MatCardModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatProgressSpinnerModule],
   template: `
     <div class="login-page">
       <mat-card class="login-card">
-        <h1>AMS</h1>
-        <p class="subtitle">Agent Management System — sign in</p>
+        <div class="login-head">
+          <app-bmw-roundel [size]="64" />
+          <div>
+            <h1>AMS</h1>
+            <p class="subtitle">Agent Management System</p>
+          </div>
+        </div>
 
         <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Dealer subdomain</mat-label>
+          <mat-label>Agent subdomain</mat-label>
           <input matInput [(ngModel)]="subdomain" placeholder="bmwnorthampton" />
         </mat-form-field>
 
@@ -57,15 +63,32 @@ import { AuthService } from '../../core/auth.service';
         align-items: center;
         justify-content: center;
         min-height: 100vh;
-        background: linear-gradient(135deg, #0066b1, #00305a);
+        background:
+          radial-gradient(1200px 600px at 20% 10%, rgba(28, 105, 212, 0.45), transparent 60%),
+          linear-gradient(160deg, #1a1a1a, #000);
       }
       .login-card {
-        width: 360px;
+        width: 380px;
         padding: 32px;
+        border-top: 3px solid transparent;
+        border-image: linear-gradient(90deg, #81c4ff 0 33.4%, #0653b6 33.4% 66.7%, #e7222e 66.7% 100%) 1;
+      }
+      .login-head {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .login-head h1 {
+        margin: 0;
+        letter-spacing: 0.14em;
+        font-weight: 700;
+        font-size: 28px;
       }
       .subtitle {
         color: var(--amx-text-secondary);
-        margin-top: -8px;
+        margin: 2px 0 0;
+        font-size: 13px;
       }
       .full-width {
         width: 100%;

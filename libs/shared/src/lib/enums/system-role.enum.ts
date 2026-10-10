@@ -14,7 +14,7 @@ export enum SystemRole {
 }
 
 export const SYSTEM_ROLE_LABELS: Record<SystemRole, string> = {
-  [SystemRole.DEALER_PRINCIPAL]: 'Dealer Principal',
+  [SystemRole.DEALER_PRINCIPAL]: 'Agent Principal',
   [SystemRole.GENERAL_MANAGER]: 'General Manager',
   [SystemRole.SALES_MANAGER]: 'Sales Manager',
   [SystemRole.SALES_EXECUTIVE]: 'Sales Executive',
@@ -39,8 +39,8 @@ function grant(
 
 /**
  * Default permission matrix per Feature Spec §7.2 (Predefined system roles). Seeded onto each
- * dealer's Role rows at dealer setup and used to render the granular permission-matrix editor
- * when a dealer principal builds a custom role.
+ * agent's Role rows at agent setup and used to render the granular permission-matrix editor
+ * when an agent principal builds a custom role.
  */
 export const SYSTEM_ROLE_PERMISSIONS: Record<
   SystemRole,

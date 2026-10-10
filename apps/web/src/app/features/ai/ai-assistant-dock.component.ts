@@ -72,7 +72,7 @@ import { AiAssistantService } from './ai-assistant.service';
         backdrop-filter: var(--amx-material-blur, blur(20px) saturate(180%));
         -webkit-backdrop-filter: var(--amx-material-blur, blur(20px) saturate(180%));
         border-top: 1px solid var(--amx-material-edge, rgba(255, 255, 255, 0.55));
-        border-radius: 20px;
+        border-radius: var(--mat-sys-corner-large);
         box-shadow: var(--amx-shadow-large, 0 8px 32px rgba(0, 0, 0, 0.14));
         /* Anchored to its trigger (bottom-right FAB): grows out of it, with a touch of bounce since it
            is a physical, button-launched object. */
@@ -87,7 +87,7 @@ import { AiAssistantService } from './ai-assistant.service';
         align-items: center;
         gap: 4px;
         padding: 8px 12px;
-        background: #0066b1;
+        background: var(--bmw-blue);
         color: white;
         font-weight: 600;
       }
@@ -148,7 +148,7 @@ import { AiAssistantService } from './ai-assistant.service';
       }
       .bubble.user {
         align-self: flex-end;
-        background: #0066b1;
+        background: var(--bmw-blue);
         color: white;
       }
       .hint {

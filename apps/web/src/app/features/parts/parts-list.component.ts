@@ -147,7 +147,7 @@ interface Part {
         background: var(--amx-danger-bg-strong);
       }
       a {
-        color: #0066b1;
+        color: var(--bmw-blue-text);
         text-decoration: none;
       }
     `,

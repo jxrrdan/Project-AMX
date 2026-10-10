@@ -198,7 +198,7 @@ interface ClaimDetail {
         width: 100%;
       }
       .line-card {
-        border-left: 4px solid #0066b1;
+        border-left: 4px solid var(--bmw-blue);
       }
       .line-header {
         display: flex;

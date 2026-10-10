@@ -40,7 +40,7 @@ const STARTER_BODY = `<html>
   </div>
 
   <h2>Document title</h2>
-  <p>Write your document content here, using the "Insert variable" menu to pull in dealer/document data.</p>
+  <p>Write your document content here, using the "Insert variable" menu to pull in agent/document data.</p>
 
   <div class="footer">{{dealerInvoiceFooterNote}}</div>
 </body>

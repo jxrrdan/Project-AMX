@@ -18,7 +18,7 @@ interface DashboardKpis {
   selector: 'app-dashboard',
   imports: [MatCardModule, MatIconModule, MatProgressSpinnerModule],
   template: `
-    <h1>Dealer Dashboard</h1>
+    <h1>Agent Dashboard</h1>
 
     @if (briefing()) {
       <mat-card class="briefing">
@@ -73,6 +73,10 @@ interface DashboardKpis {
         margin-bottom: 24px;
         padding: 16px;
         background: var(--amx-info-bg);
+      }
+      .briefing p {
+        margin: 0;
+        white-space: pre-line;
       }
       .grid {
         display: grid;

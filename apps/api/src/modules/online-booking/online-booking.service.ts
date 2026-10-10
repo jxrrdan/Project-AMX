@@ -26,7 +26,7 @@ export class OnlineBookingService {
   async createPublic(dealerId: string, dto: CreateOnlineBookingDto) {
     const dealer = await this.prisma.dealer.findUnique({ where: { id: dealerId }, select: { id: true, name: true } });
     if (!dealer) {
-      throw new NotFoundException('Dealer not found');
+      throw new NotFoundException('Agent not found');
     }
     await this.prisma.onlineBookingRequest.create({
       data: {

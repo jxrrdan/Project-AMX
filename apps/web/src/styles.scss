@@ -26,10 +26,31 @@ html {
     )
   );
 
-  // Softer, rounder shapes.
-  --mat-sys-corner-medium: 12px;
-  --mat-sys-corner-large: 16px;
-  --mat-sys-corner-extra-large: 24px;
+  // BMW colour scheme. Blue is the single action colour; black and white carry the structure;
+  // the M tricolour is reserved for a thin accent line, never for UI states.
+  --bmw-blue: #1c69d4;
+  --bmw-blue-dark: #0653b6;
+  --bmw-blue-light: #81c4ff;
+  --bmw-red: #e7222e;
+  --bmw-black: #1a1a1a;
+  --bmw-blue-text: #1c69d4;
+  --mat-sys-primary: #1c69d4;
+  --mat-sys-on-primary: #ffffff;
+  --mat-sys-primary-container: #d6e4fa;
+  --mat-sys-on-primary-container: #0a2a5c;
+  --mat-sys-surface-tint: #1c69d4;
+  --mat-sys-secondary: #0653b6;
+  --mat-sys-on-secondary: #ffffff;
+  --mat-sys-secondary-container: #e3ebf7;
+  --mat-sys-on-secondary-container: #0a2a5c;
+  --mat-sys-tertiary: #262626;
+  --mat-sys-on-tertiary: #ffffff;
+
+  // Crisp, architectural shapes (BMW favours near-square corners over pills).
+  --mat-sys-corner-medium: 4px;
+  --mat-sys-corner-large: 6px;
+  --mat-sys-corner-extra-large: 8px;
+  --mat-sys-corner-full: 4px;
 
   // Motion tokens. UI that the user touches uses a critically damped curve (no overshoot);
   // `--amx-ease-spring` is the slightly under-damped one, reserved for momentum-like moments.
@@ -91,6 +112,16 @@ body {
 // Dark surfaces get lighter as they rise, and shadows give way to material and edge light.
 @media screen and (prefers-color-scheme: dark) {
   html {
+    --bmw-blue-text: #7fb0ff;
+    --mat-sys-primary: #6aa5ff;
+    --mat-sys-on-primary: #00214d;
+    --mat-sys-primary-container: #0653b6;
+    --mat-sys-on-primary-container: #d6e4fa;
+    --mat-sys-surface-tint: #6aa5ff;
+    --mat-sys-secondary: #81c4ff;
+    --mat-sys-on-secondary: #00214d;
+    --mat-sys-secondary-container: #1a3a66;
+    --mat-sys-on-secondary-container: #d6e4fa;
     --amx-material-light: rgba(30, 33, 38, 0.72);
     --amx-material-thick: rgba(36, 39, 45, 0.82);
     --amx-material-edge: rgba(255, 255, 255, 0.12);
@@ -137,6 +168,7 @@ h1 {
   font-size: clamp(1.75rem, 1.2rem + 1.6vw, 2.25rem);
   line-height: 1.1;
   letter-spacing: -0.022em;
+  font-weight: 300; /* BMW's headlines are light and large */
 }
 h2 {
   font-size: 1.5rem;
@@ -359,4 +391,23 @@ body.amx-dragging {
   .amx-pressed {
     transform: none;
   }
+}
+
+// BMW buttons: rectangular, uppercase-free, confident. Filled = BMW blue, outlined = black rule.
+.mat-mdc-unelevated-button.mat-primary,
+.mat-mdc-raised-button.mat-primary,
+.mat-mdc-unelevated-button:not(:disabled):not([disabled]) {
+  --mat-button-filled-container-shape: 2px;
+}
+.mat-mdc-outlined-button {
+  --mat-button-outlined-container-shape: 2px;
+  --mat-button-outlined-outline-color: currentColor;
+}
+.mat-mdc-button {
+  --mat-button-text-container-shape: 2px;
+}
+// The M stripe: a 3px tricolour accent used under the app bar and on the sign-in card.
+.bmw-stripe {
+  height: 3px;
+  background: linear-gradient(90deg, var(--bmw-blue-light) 0 33.4%, var(--bmw-blue-dark) 33.4% 66.7%, var(--bmw-red) 66.7% 100%);
 }

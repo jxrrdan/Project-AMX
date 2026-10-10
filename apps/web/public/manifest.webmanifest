@@ -1,13 +1,13 @@
 {
   "name": "AMS — Agent Management System",
   "short_name": "AMS",
-  "description": "Dealer management for the agency sales model — PDI, workshop, parts, CRM.",
+  "description": "Agent management for the BMW agency sales model — PDI, workshop, parts, CRM.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#ffffff",
-  "theme_color": "#0653b6",
+  "theme_color": "#1a1a1a",
   "icons": [
     {
       "src": "icons/icon.svg",

@@ -12,7 +12,7 @@ interface ScreenField {
 
 /**
  * Renders whatever fields a business systems manager has laid out for this entity in the Screen
- * Designer (standard AMX fields and/or dealer-defined custom fields), fetching the record fresh
+ * Designer (standard AMX fields and/or agent-defined custom fields), fetching the record fresh
  * so it reflects the latest OEM/DMS integration data. Read-only — custom field values are written
  * by the integration ingest engine, not edited here.
  */

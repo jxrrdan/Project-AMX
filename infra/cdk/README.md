@@ -12,7 +12,7 @@ than guessed at.
 | `Ams-Network` | VPC — public / private-with-egress / private-isolated subnets across 2 AZs |
 | `Ams-Data` | Aurora PostgreSQL Serverless v2 (writer + reader), ElastiCache Redis replication group |
 | `Ams-Auth` | Cognito user pool with a `dealerId` custom attribute, email sign-in, optional MFA |
-| `Ams-Storage` | S3 bucket for dealer files (photos, PDFs, documents), versioned, Glacier lifecycle rule |
+| `Ams-Storage` | S3 bucket for agent files (photos, PDFs, documents), versioned, Glacier lifecycle rule |
 | `Ams-Queue` | SQS queue + DLQ for the BMW RIS vehicle-update pipeline, EventBridge bus, DLQ-depth alarm |
 | `Ams-Compute` | ECS Fargate cluster: the NestJS API behind an ALB, and the always-on MQTT Subscriber service |
 | `Ams-Observability` | CloudWatch dashboard (`ams-operations`) + P1/P2 alarms (ALB 5xx, p95 latency, no healthy hosts, Aurora CPU, queue age) → one SNS ops topic |

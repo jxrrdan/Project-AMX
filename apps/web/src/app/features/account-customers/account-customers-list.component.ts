@@ -77,7 +77,7 @@ interface AgedDebtors {
     .form-card, .aged { padding: 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
     .form-card { max-width: 420px; }
     table { width: 100%; }
-    a { color: #0066b1; text-decoration: none; }
+    a { color: var(--bmw-blue-text); text-decoration: none; }
     .owing { font-weight: 600; color: var(--amx-danger-fg); }
     .empty { color: var(--amx-text-tertiary); margin-top: 16px; }
   `],

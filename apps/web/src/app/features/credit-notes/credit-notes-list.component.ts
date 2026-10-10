@@ -172,7 +172,7 @@ interface DraftLine {
         width: 100%;
       }
       a {
-        color: #0066b1;
+        color: var(--bmw-blue-text);
         text-decoration: none;
       }
       .status-DRAFT {

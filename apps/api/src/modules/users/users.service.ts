@@ -36,7 +36,7 @@ export class UsersService {
       where: { dealerId_email: { dealerId, email: dto.email } },
     });
     if (existing) {
-      throw new BadRequestException('A user with this email already exists for this dealer');
+      throw new BadRequestException('A user with this email already exists for this agent');
     }
 
     const invitation = await this.prisma.invitation.create({
@@ -52,7 +52,7 @@ export class UsersService {
     await this.email.send({
       to: dto.email,
       subject: 'You have been invited to AMS',
-      html: `<p>Hi ${dto.firstName},</p><p>You've been invited to join your dealer's AMS workspace. Use invitation code <b>${invitation.token}</b> to set your password (expires in 48 hours).</p>`,
+      html: `<p>Hi ${dto.firstName},</p><p>You've been invited to join your agent's AMS workspace. Use invitation code <b>${invitation.token}</b> to set your password (expires in 48 hours).</p>`,
     });
 
     return invitation;
@@ -129,7 +129,7 @@ export class UsersService {
         include: { permissions: true },
       });
       if (roles.length !== roleIds.length) {
-        throw new NotFoundException('One or more roles were not found for this dealer');
+        throw new NotFoundException('One or more roles were not found for this agent');
       }
       for (const role of roles) {
         for (const permission of role.permissions) {

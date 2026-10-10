@@ -11,7 +11,7 @@ import { environment } from '../../../environments/environment';
 import { CaptchaComponent } from './captcha.component';
 
 /**
- * The public, embeddable enquiry form (Feature Spec §8.1) — no login, dealer-scoped by the
+ * The public, embeddable enquiry form (Feature Spec §8.1) — no login, agent-scoped by the
  * `:dealerId` in the URL, posting to the same unauthenticated endpoint a dealer's own website
  * would embed this against. Try it at /enquiry/<dealerId> without logging in.
  */

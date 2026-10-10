@@ -97,7 +97,7 @@ interface Backorder { id: string; quantity: number; status: BackorderStatus; exp
     .form-row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
     .form-row mat-form-field { flex: 1; }
     table { width: 100%; }
-    a { color: #0066b1; text-decoration: none; }
+    a { color: var(--bmw-blue-text); text-decoration: none; }
     .status-select { width: 150px; }
     .empty { color: var(--amx-text-tertiary); }
   `],

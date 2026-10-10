@@ -1,7 +1,7 @@
 # Runbook: ECS Task Scaling Manual Override
 
 **Alarms that lead here:** `ECS CPU` (P3, Slack, >70% sustained), `API P99 latency` (P2, >3s),
-or a scheduled traffic spike a dealer has warned about in advance (e.g. a stock clearance event).
+or a scheduled traffic spike an agent has warned about in advance (e.g. a stock clearance event).
 
 ## What this means
 

@@ -400,7 +400,7 @@ export class UsedCarDetailComponent implements OnInit {
   publishListing(): void {
     this.http.post(`${environment.apiUrl}/listings/vehicles/${this.vehicleId}/publish`, {}).subscribe({
       next: () => this.snackBar.open('Published to all enabled listing platforms', 'Dismiss', { duration: 3000 }),
-      error: () => this.snackBar.open('No listing platforms are enabled for this dealer yet', 'Dismiss', { duration: 3000 }),
+      error: () => this.snackBar.open('No listing platforms are enabled for this agent yet', 'Dismiss', { duration: 3000 }),
     });
   }
 

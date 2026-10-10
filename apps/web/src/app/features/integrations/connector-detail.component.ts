@@ -400,7 +400,7 @@ interface ConnectionForm {
               </mat-form-field>
               <mat-form-field appearance="outline">
                 <mat-label>Label</mat-label>
-                <input matInput [(ngModel)]="customFieldForm.label" placeholder="OEM Dealer Net Code" />
+                <input matInput [(ngModel)]="customFieldForm.label" placeholder="OEM Agent Net Code" />
               </mat-form-field>
               <mat-form-field appearance="outline">
                 <mat-label>Type</mat-label>

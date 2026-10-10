@@ -59,7 +59,7 @@ import { AiAssistantService } from './ai-assistant.service';
       }
       .bubble.user {
         align-self: flex-end;
-        background: #0066b1;
+        background: var(--bmw-blue);
         color: white;
       }
       .composer {

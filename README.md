@@ -1,6 +1,6 @@
 # AMS — Agent Management System
 
-A modular SaaS system for BMW dealers operating under the agency sales model, implementing the
+A modular SaaS system for BMW agents operating under the agency sales model, implementing the
 16 modules of the **AMS Feature Specification v3.1**: PDI scheduling, workshop management, parts
 stock, used car sales, warranty, CRM, VHC, third-party listings, accounting, courtesy fleet, F&I,
 and AI insights.
@@ -104,7 +104,7 @@ for what each local adapter driver does and how to point it at a real AWS servic
 
 ```bash
 npx prisma migrate deploy   # applies the committed migration in apps/api/prisma/migrations
-npx prisma db seed          # creates a demo dealer, users, and sample data across every module
+npx prisma db seed          # creates a demo agent, users, and sample data across every module
 ```
 
 The seed prints demo login credentials — the short version:
@@ -126,9 +126,9 @@ Log in with the credentials above. The sidebar shows every module the logged-in 
 `VIEW` permission on (Module 7's RBAC in action — try logging in as `tech@...` to see a much
 shorter menu than `principal@...`).
 
-To see the public, embeddable enquiry form (§8.1) — the thing a dealer's own website would embed
+To see the public, embeddable enquiry form (§8.1) — the thing an agent's own website would embed
 against — visit `http://localhost:4200/enquiry/<dealerId>` in a private/incognito window (no
-login). Get the demo dealer's ID from `GET /api/dealers/me` while logged in, or from Prisma
+login). Get the demo agent's ID from `GET /api/dealers/me` while logged in, or from Prisma
 Studio. Submitting it creates a real contact + lead you'll see land in the CRM contacts list and
 lead pipeline.
 
@@ -139,7 +139,7 @@ Postgres standing in for Aurora, Redis for ElastiCache — without needing an AW
 
 ```bash
 docker compose -f docker-compose.prod.yml up --build
-# (optional) load the demo dealer/users/data once it's up:
+# (optional) load the demo agent/users/data once it's up:
 docker compose -f docker-compose.prod.yml --profile tools run --rm seed
 ```
 
@@ -189,7 +189,7 @@ can wire up a manufacturer/DMS feed without writing code — `/integrations`:
   connector; a shared-secret header for inbound webhooks. Saved credentials are never round-tripped
   back to the browser (redact-on-read, merge-preserve-on-write, in `rest-auth.util.ts`).
 - **Drag-and-drop field mapping** — paste a sample payload, discover its fields, then drag each one
-  onto an AMX column or a dealer-defined **custom field** (stored per-record in a `customFields`
+  onto an AMX column or an agent-defined **custom field** (stored per-record in a `customFields`
   JSON column), with optional transforms (uppercase/lowercase/trim/parse number/parse date) and a
   "match on" column to decide create-vs-update.
 - **Screen Designer** (`/integrations/screens`) — lets a business systems manager choose which
@@ -203,28 +203,28 @@ can wire up a manufacturer/DMS feed without writing code — `/integrations`:
 
 ## Settings, batch jobs, and document templates (beyond the original spec)
 
-`/admin/settings` — dealer master data and scheduled maintenance, mirroring gaps a real
+`/admin/settings` — agent master data and scheduled maintenance, mirroring gaps a real
 multi-tenant SaaS product needs before go-live:
 
-- **Dealer profile & branding** — name, address, VAT number, invoice footer note, a logo upload
+- **Agent profile & branding** — name, address, VAT number, invoice footer note, a logo upload
   (base64 data URL → `StorageService`, no multipart pipeline needed), and primary/secondary
   colours applied live across the app shell (toolbar, sidenav active state) via a `ThemeService`
   that binds them as plain inline styles rather than fighting Angular Material's internal M3
   design tokens.
-- **Document numbering** — per-dealer, per-document-type, per-year incrementing sequences (e.g.
+- **Document numbering** — per-agent, per-document-type, per-year incrementing sequences (e.g.
   `DS-2026-00001`), reserved atomically in a transaction (`DocumentSequenceService`).
 - **Batch jobs** — nightly stale-lead escalation and parts reorder alerts, plus a monthly courtesy
-  fleet expiry sweep, each run per-dealer via `@nestjs/schedule` and logged to `BatchJobRun` (same
+  fleet expiry sweep, each run per-agent via `@nestjs/schedule` and logged to `BatchJobRun` (same
   audit-trail pattern as the Integration Hub's run logs). A "Run now" button demonstrates each job
   without waiting for its schedule. Output lands in a new in-app **notification centre** (bell icon
   in the toolbar) — the `Notification` table existed in the original schema but nothing wrote to
   it until now.
-- **Document templates** — a dealer-authored HTML/CSS editor with an "insert variable" picker
-  (mail-merge-style `{{placeholders}}` for dealer/document data, `{{#each}}`/`{{#if}}` for line
+- **Document templates** — an agent-authored HTML/CSS editor with an "insert variable" picker
+  (mail-merge-style `{{placeholders}}` for agent/document data, `{{#each}}`/`{{#if}}` for line
   items) and an approximate live preview. Wired end-to-end into the used-car deal sheet: if a
-  dealer sets a template as default for that document type, it's used instead of the built-in
+  agent sets a template as default for that document type, it's used instead of the built-in
   fallback the next time a deal sheet is generated — proven with a real API call, not just UI.
-  Only `ModuleKey.ADMIN:EDIT` users (Dealer Principal / General Manager) can author these, which is
+  Only `ModuleKey.ADMIN:EDIT` users (Agent Principal / General Manager) can author these, which is
   why rendering uses full Handlebars (like every other document in this app) rather than the
   restricted placeholder substitution the CRM SMS free-text path uses — that fix (§ security
   review) was specifically about a much lower-trust `CRM:CREATE` user submitting arbitrary text.
@@ -232,20 +232,20 @@ multi-tenant SaaS product needs before go-live:
 ## Org hierarchy, Action Triggers, real notifications, and aftersales invoicing (beyond the original spec)
 
 A further wave on top of the two above, driven by "documents/APIs/settings should be configurable
-above the single-dealer level" and "let a business systems manager wire an API call into a user
+above the single-agent level" and "let a business systems manager wire an API call into a user
 function, not just a scheduled feed":
 
-- **Group → Franchise → Dealer hierarchy** — additive, nullable FKs (`Dealer.franchiseId`,
+- **Group → Franchise → Agent hierarchy** — additive, nullable FKs (`Dealer.franchiseId`,
   `Franchise.groupId`) so every existing single-tenant `dealerId`-scoped query keeps working
-  unchanged. `/admin/settings` → Organisation lets a dealer create a franchise/group or join an
-  existing one. Branding (logo, colours) cascades DEALER → FRANCHISE → GROUP → hardcoded default
+  unchanged. `/admin/settings` → Organisation lets an agent create a franchise/group or join an
+  existing one. Branding (logo, colours) cascades AGENT → FRANCHISE → GROUP → hardcoded default
   the same way Document Templates and Action Triggers now do, via a shared `TenancyScopeService`.
   There is no separate "group admin" identity in this app — a franchise/group-scoped row is
-  collaboratively owned by any `ADMIN:EDIT` user at any dealer already inside that franchise/group.
+  collaboratively owned by any `ADMIN:EDIT` user at any agent already inside that franchise/group.
   Joining an existing franchise/group requires its unguessable **join code** (shown only to a
-  dealer already inside it, to share with a sibling outlet out of band) rather than its raw id or a
+  agent already inside it, to share with a sibling outlet out of band) rather than its raw id or a
   browsable list of every org in the system — a security review of this feature found the original
-  id-based design let any `ADMIN:EDIT` user attach their dealer to any franchise/group by id and
+  id-based design let any `ADMIN:EDIT` user attach their agent to any franchise/group by id and
   inherit read/write access to its shared config, which the join-code redemption model closes.
 - **Action Triggers** (`/admin/settings` → Action triggers) — lets a business systems manager wire
   a user-facing lookup (currently: searching a used car by registration) to also call an external
@@ -276,7 +276,7 @@ function, not just a scheduled feed":
 - **Aftersales invoicing** (`/workshop/job-cards/:id`) — generates an invoice from actual clocked
   labour time (falling back to the estimate if nobody's clocked off yet) and allocated parts at
   cost, through the exact same `DocumentTemplateType`/`DocumentSequenceService` pattern as the
-  used-car deal sheet, so a dealer can override its layout the same way.
+  used-car deal sheet, so an agent can override its layout the same way.
 
 ## Deal sheet lifecycle, customer invoicing, model enrichment, and an AI assistant on every screen
 
@@ -292,7 +292,7 @@ function, not just a scheduled feed":
 - **Model metadata enrichment** (Integration Hub connector settings, for VEHICLE/USED_VEHICLE
   connectors) — when an inbound REST or MQTT payload's "model" isn't already known to AMX (e.g. a
   new derivative nobody's stored yet), the shared ingest engine looks it up in a small
-  franchise/dealer-scoped cache first and, on a miss, calls a configured OEM metadata API once,
+  franchise/agent-scoped cache first and, on a miss, calls a configured OEM metadata API once,
   caches the result, and merges it into that record's custom fields — later records for the same
   model reuse the cache instead of calling the API again. Never fails the ingest: an unreachable
   metadata API just means the record is stored without the extra metadata, the same
@@ -306,13 +306,13 @@ function, not just a scheduled feed":
 
 - **New-car sales, retail or agency** (`/vehicles/:id`) — a new `NewCarSale` record (same
   ACTIVE/SIGNED/INVALIDATED lifecycle as a used-car deal sheet) with a `SaleModel` of RETAIL (the
-  dealer buys/sells the vehicle and keeps its own margin — the traditional model) or AGENCY (the
-  OEM is the contracting seller; the dealer facilitates the order and earns a commission instead —
+  agent buys/sells the vehicle and keeps its own margin — the traditional model) or AGENCY (the
+  OEM is the contracting seller; the agent facilitates the order and earns a commission instead —
   the model several manufacturers, BMW included, have been rolling out for some markets). Marking
   the vehicle DELIVERED automatically flips its active sale to SIGNED, mirroring the used-car
   deal-sheet/SOLD behaviour.
 - **Trade-ins, unified across used and new-car sales** — a customer's incoming trade-in vehicle is
-  always the dealer's own purchase, whether they're buying a used car (a deal sheet) or a new one
+  always the agent's own purchase, whether they're buying a used car (a deal sheet) or a new one
   under either sale model (the OEM has no part in the trade-in even under agency). One shared
   `TradeInService` intakes it as new used stock (source: PART_EX) and a linked appraisal in a single
   step from either sale flow, replacing the old two-step "add the vehicle, then separately record
@@ -336,17 +336,17 @@ API and Angular Material screens:
   affected-vehicle list (`RecallVehicle`, optionally linked to a known `Vehicle`); each vehicle
   moves OUTSTANDING → BOOKED → COMPLETED independently, stamping the booked/completed dates as it
   advances. The list view shows per-campaign progress and a headline outstanding-work summary
-  across all open campaigns. Granted to the Workshop Controller role (and Dealer Principal / GM).
+  across all open campaigns. Granted to the Workshop Controller role (and Agent Principal / GM).
 - **Credit notes** (`/credit-notes`) — refunds/adjustments raised against a customer (goodwill
   credits, overcharge corrections, returned-part refunds). A note is editable while DRAFT, gets a
   document number on **issue** via the shared `DocumentSequenceService` ("CN-2026-00001", the same
   numbering engine as every other AMX document), then can be APPLIED against a balance or
   CANCELLED. Line-level tax means mixed VAT rates roll up correctly. Granted to the Accounts role
-  (and Dealer Principal / GM).
+  (and Agent Principal / GM).
 
 ## Traditional DMS operations (cashiering, AR, service plans, portal, parc, DOC, compliance, parts depth)
 
-Eight modules that round out the classic dealer-management-system feature set the dealer still
+Eight modules that round out the classic agent-management-system feature set the agent still
 owns under the agency model (the OEM keeps pricing/stock/ordering). Each has its own Prisma models,
 NestJS API, Angular Material screens and RBAC:
 
@@ -360,7 +360,7 @@ NestJS API, Angular Material screens and RBAC:
   emails/SMSes customers as those dates approach (stamped so each fires once). A "Run now" action
   triggers the sweep on demand.
 - **Customer portal / online booking** (`/book-service/:dealerId` public, `/online-bookings` staff)
-  — an unauthenticated service-booking page customers reach from the dealer's own site, and a staff
+  — an unauthenticated service-booking page customers reach from the agent's own site, and a staff
   triage queue (NEW → CONTACTED → SCHEDULED/DECLINED).
 - **Vehicle parc & service history** (`/parc`, `VEHICLE_PARC`) — a lifetime record per registration
   aggregating hand-entered/ingested service history with used-stock and recall involvement for that

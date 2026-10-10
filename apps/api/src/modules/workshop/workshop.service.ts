@@ -218,7 +218,7 @@ export class WorkshopService {
     // Public route: reject unknown dealers with a clean 404 rather than an FK 500.
     const dealer = await this.prisma.dealer.findUnique({ where: { id: dealerId }, select: { id: true } });
     if (!dealer) {
-      throw new NotFoundException('Dealer not found');
+      throw new NotFoundException('Agent not found');
     }
     return this.prisma.serviceBooking.create({
       data: {

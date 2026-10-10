@@ -7,12 +7,12 @@ shows repeated failed attempts for one account.
 ## What this means
 
 Production auth is AWS Cognito (`Ams-Auth/AmsUserPool`); this repo's local dev auth
-(`apps/api/src/modules/auth`) mirrors its behaviour (JWT, MFA, per-dealer scoping) without a real
+(`apps/api/src/modules/auth`) mirrors its behaviour (JWT, MFA, per-agent scoping) without a real
 Cognito dependency, so the diagnostic steps below apply to whichever is actually in front of you.
 
 Common lockout causes: too many failed password attempts (Cognito's default account-lockout
 policy), an expired temporary password, MFA device lost/reset, or the account was deliberately
-deactivated by the dealer principal (`user.active = false` — see §7.3).
+deactivated by the agent principal (`user.active = false` — see §7.3).
 
 ## Diagnose
 
@@ -36,7 +36,7 @@ select active, "mfaEnabled" from users where email = '<email>';
 - **Lost MFA device:** `aws cognito-idp admin-set-user-mfa-preference` to disable MFA temporarily,
   have the user re-enrol a new device, then re-enable enforcement if the role requires it
   (dealer_principal / general_manager mandate MFA per §7.4).
-- **Deliberately deactivated account:** confirm with the dealer principal before reactivating —
+- **Deliberately deactivated account:** confirm with the agent principal before reactivating —
   check `audit_logs` for the `user.update` entry that deactivated them and why. Reactivate via
   `PATCH /api/users/:id` with `{ "active": true }` (local) or `admin-enable-user` (Cognito).
 - **Forgotten password, account otherwise healthy:** direct the user through the standard

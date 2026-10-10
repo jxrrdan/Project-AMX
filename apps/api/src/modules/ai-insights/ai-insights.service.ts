@@ -34,7 +34,7 @@ export class AiInsightsService {
   /** §14.2 — plain-English question in, structured answer out (mocked: no real NL→SQL translation). */
   async nlQuery(dealerId: string, dto: NlQueryDto) {
     const answer = await this.ai.complete({
-      system: `You are answering operational questions for dealer ${dealerId} using AMS data. Explain what query you would run and give a plausible illustrative answer.`,
+      system: `You are answering operational questions for agent ${dealerId} using AMS data. Explain what query you would run and give a plausible illustrative answer.`,
       messages: [{ role: 'user', content: dto.question }],
       model: 'reasoning',
     });
@@ -138,7 +138,7 @@ export class AiInsightsService {
   async chatbotMessage(dealerId: string, dto: ChatbotMessageDto) {
     const dealer = await this.prisma.dealer.findUnique({ where: { id: dealerId }, select: { id: true } });
     if (!dealer) {
-      throw new NotFoundException('Dealer not found');
+      throw new NotFoundException('Agent not found');
     }
     // Scope to this dealer's customer-chatbot conversations only — a bare id lookup would let a
     // caller read/append to another tenant's (or a staff assistant) conversation.

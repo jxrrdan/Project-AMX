@@ -246,7 +246,7 @@ export class UsedCarsListComponent implements OnInit {
     });
   }
 
-  /** Searches this dealer's own stock AND any business-systems-manager-configured Action Trigger
+  /** Searches this agent's own stock AND any business-systems-manager-configured Action Trigger
    * for this lookup (Settings > Action Triggers) — the "search a reg, it also calls an OEM API"
    * capability, alongside the built-in DVLA lookup above. */
   lookupOem(): void {

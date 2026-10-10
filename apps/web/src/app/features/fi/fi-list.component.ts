@@ -148,7 +148,7 @@ interface DealFinanceProduct {
             <p>Commission: {{ d.commissionAmount | currency: 'GBP' }}</p>
             <h4>FCA disclosure (§13.3)</h4>
             <mat-checkbox [(ngModel)]="disclosureForm.commissionDisclosed">
-              Customer informed of dealer's commission
+              Customer informed of agent's commission
             </mat-checkbox>
             <mat-form-field appearance="outline" class="full-width">
               <mat-label>Customer signature reference</mat-label>

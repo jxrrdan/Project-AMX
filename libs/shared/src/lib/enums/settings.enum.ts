@@ -12,7 +12,7 @@ export enum ConfigScope {
 export const CONFIG_SCOPE_LABELS: Record<ConfigScope, string> = {
   [ConfigScope.DEALER]: 'This outlet only',
   [ConfigScope.FRANCHISE]: 'Whole franchise/brand',
-  [ConfigScope.GROUP]: 'Whole dealer group',
+  [ConfigScope.GROUP]: 'Whole agent group',
 };
 
 export const DOCUMENT_TEMPLATE_TYPE_LABELS: Record<DocumentTemplateType, string> = {
@@ -31,13 +31,13 @@ export interface DocumentTemplateVariable {
   label: string;
 }
 
-/** Every dealer/document template is rendered with this common set, regardless of type. */
+/** Every agent/document template is rendered with this common set, regardless of type. */
 export const COMMON_DOCUMENT_TEMPLATE_VARIABLES: DocumentTemplateVariable[] = [
-  { key: 'dealerName', label: 'Dealer name' },
-  { key: 'dealerAddress', label: 'Dealer address' },
-  { key: 'dealerLogoUrl', label: 'Dealer logo (image URL)' },
-  { key: 'dealerVatNumber', label: 'Dealer VAT number' },
-  { key: 'dealerInvoiceFooterNote', label: 'Dealer invoice footer note' },
+  { key: 'dealerName', label: 'Agent name' },
+  { key: 'dealerAddress', label: 'Agent address' },
+  { key: 'dealerLogoUrl', label: 'Agent logo (image URL)' },
+  { key: 'dealerVatNumber', label: 'Agent VAT number' },
+  { key: 'dealerInvoiceFooterNote', label: 'Agent invoice footer note' },
   { key: 'documentDate', label: "Today's date" },
 ];
 

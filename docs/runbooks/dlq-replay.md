@@ -16,7 +16,7 @@ Every message here represents a vehicle record that is stale or missing an updat
    aws sqs receive-message --queue-url <VehicleUpdateDlq-url> --max-number-of-messages 1
    ```
 2. Cross-reference the VIN + event type in the message body against `/ams/api` logs and the
-   `vehicles` table — common causes: a VIN that doesn't match any dealer's expected pattern (bad
+   `vehicles` table — common causes: a VIN that doesn't match any agent's expected pattern (bad
    data from BMW), a malformed payload from a BMW API schema change, or a transient Aurora
    connection failure during a deploy/failover window (see `aurora-failover.md`).
 3. Check whether the failure is isolated to one message or a whole batch from the same time

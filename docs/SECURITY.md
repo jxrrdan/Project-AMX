@@ -4,16 +4,16 @@ This document covers how AMX handles its unauthenticated ("public") endpoints, w
 
 ## 1. Public endpoints
 
-A dealership SaaS needs a few routes that work without a login: website enquiry forms, customer booking widgets, the customer's health-check approval link, and machine-to-machine webhooks. Every route marked `@Public()` is listed here with its protection. **Anything new marked `@Public()` must be added to this table.**
+An agent SaaS needs a few routes that work without a login: website enquiry forms, customer booking widgets, the customer's health-check approval link, and machine-to-machine webhooks. Every route marked `@Public()` is listed here with its protection. **Anything new marked `@Public()` must be added to this table.**
 
 | Endpoint | Purpose | Protection |
 |---|---|---|
-| `POST /auth/login` | Sign in | Throttle 10/min/IP, generic "Invalid credentials" (no dealer enumeration), MFA |
+| `POST /auth/login` | Sign in | Throttle 10/min/IP, generic "Invalid credentials" (no agent enumeration), MFA |
 | `POST /auth/refresh`, `/auth/logout` | Token lifecycle | Throttle 30/min/IP, opaque single-use refresh token |
 | `POST /users/accept-invitation` | Invited user sets a password | Throttle 10/min/IP, random single-use expiring token, 12+ char password, response no longer echoes the user record |
 | `GET /public/captcha` | Issue a CAPTCHA challenge | Global throttle |
 | `POST /dealers/:id/enquiries` | Website enquiry form | CAPTCHA, throttle 5/min/IP, dealer must exist |
-| `POST /public/booking/:id` | Online booking portal | CAPTCHA, throttle 5/min/IP, dealer must exist |
+| `POST /public/booking/:id` | Online booking portal | CAPTCHA, throttle 5/min/IP, agent must exist |
 | `POST /dealers/:id/service-bookings` | Booking widget | CAPTCHA, throttle 5/min/IP, dealer must exist, field length limits |
 | `POST /dealers/:id/chatbot` | Customer chatbot (billable AI) | CAPTCHA, throttle 10/min/IP, 1,000-char message cap, conversations scoped to the dealer and chatbot channel |
 | `GET /vhc/inspections/:id/report` | Customer health-check report | Signed HMAC token in the link, throttle, internal ids stripped from the response |
@@ -22,19 +22,19 @@ A dealership SaaS needs a few routes that work without a login: website enquiry 
 | `POST /integrations/webhooks/:token` | OEM / DMS webhooks | Random token, optional shared-secret header (timing-safe comparison), throttle |
 | `GET /integrations/_sample-oem-feed/vehicles` | Demo fixture | Returns 404 when `NODE_ENV=production` |
 
-Dealer IDs are not secret (they appear in widget URLs), so they are never treated as authorisation. Every authenticated route is dealer-scoped from the JWT, not from client input.
+Agent IDs are not secret (they appear in widget URLs), so they are never treated as authorisation. Every authenticated route is agent-scoped from the JWT, not from client input.
 
 ### Changes made in the latest review
 
 1. Global rate limiting with `@nestjs/throttler` (300 requests/min/IP), with stricter per-route limits above. Previously there was none.
 2. CAPTCHA added to the service-booking widget and chatbot.
 3. VHC links now carry an HMAC token. A bare UUID is an identifier, not a secret. `respondToItem` also checks the token against the item's own inspection, and an item can only be answered once.
-4. Chatbot conversation lookup is scoped to the dealer and channel (it was a bare id lookup, so a conversation id from another tenant could be read or appended to).
+4. Chatbot conversation lookup is scoped to the agent and channel (it was a bare id lookup, so a conversation id from another tenant could be read or appended to).
 5. Webhook shared-secret header compared with `timingSafeEqual`.
 6. Sample OEM feed disabled in production.
-7. Login no longer reveals whether a dealer subdomain exists.
+7. Login no longer reveals whether an agent subdomain exists.
 8. `accept-invitation` no longer returns the user entity (it contained `passwordHash`), and enforces a minimum password length.
-9. Public endpoints return 404 for unknown dealers instead of a database error.
+9. Public endpoints return 404 for unknown agents instead of a database error.
 
 ## 2. Already in place
 
@@ -74,7 +74,7 @@ Helmet security headers, CORS restricted to `CORS_ORIGIN`, a global `ValidationP
 
 ### Verified against a running server
 
-Beyond unit tests, the built API was run in production mode against a real PostgreSQL database (migrations applied, dealer created with the bootstrap script) and exercised over HTTP and WebSocket: health and readiness probes; CAPTCHA required on the chatbot and service-booking widgets (400) and accepted when solved on the enquiry form (201); forged VHC report token rejected (404); sample feed hidden in production (404); WebSocket accepts a valid token and rejects a forged `alg: none` token; five failed sign-ins lock the account (429) even for the correct password, an administrator unlock restores access; login bursts are rate limited (429); `X-Powered-By` removed and `nosniff` set. A 17-screen browser sweep against the same stack produced no console or API errors.
+Beyond unit tests, the built API was run in production mode against a real PostgreSQL database (migrations applied, agent created with the bootstrap script) and exercised over HTTP and WebSocket: health and readiness probes; CAPTCHA required on the chatbot and service-booking widgets (400) and accepted when solved on the enquiry form (201); forged VHC report token rejected (404); sample feed hidden in production (404); WebSocket accepts a valid token and rejects a forged `alg: none` token; five failed sign-ins lock the account (429) even for the correct password, an administrator unlock restores access; login bursts are rate limited (429); `X-Powered-By` removed and `nosniff` set. A 17-screen browser sweep against the same stack produced no console or API errors.
 
 ### Still open
 

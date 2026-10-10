@@ -20,11 +20,11 @@ export interface DealerBranding {
   workshopBoardToken: string;
 }
 
-const DEFAULT_PRIMARY = '#0066B1';
-const DEFAULT_SECONDARY = '#1C69D4';
+const DEFAULT_PRIMARY = '#1C69D4'; // BMW blue
+const DEFAULT_SECONDARY = '#0653B6';
 
 /**
- * Fetches the dealer's branding (Settings > Branding) once per session and exposes it as
+ * Fetches the agent's branding (Settings > Branding) once per session and exposes it as
  * signals the shell/other components bind to directly (toolbar colour, sidenav active-link tint,
  * logo) — deliberately plain inline-style bindings rather than trying to override Angular
  * Material's internal M3 design tokens, which is far more reliable to reason about and verify.

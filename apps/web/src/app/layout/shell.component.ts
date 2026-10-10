@@ -11,6 +11,7 @@ import { ModuleKey, PermissionAction } from '@project-amx/shared';
 import { AuthService } from '../core/auth.service';
 import { ConnectivityService } from '../core/connectivity.service';
 import { ThemeService } from '../core/theme.service';
+import { BmwRoundelComponent } from '../shared/bmw-roundel.component';
 import { AiAssistantDockComponent } from '../features/ai/ai-assistant-dock.component';
 import { NotificationsBellComponent } from '../features/notifications/notifications-bell.component';
 
@@ -65,13 +66,17 @@ const NAV_ITEMS: NavItem[] = [
     MatBadgeModule,
     NotificationsBellComponent,
     AiAssistantDockComponent,
+    BmwRoundelComponent,
   ],
   template: `
-    <mat-toolbar class="toolbar" [style.--amx-brand]="theme.primaryColour()">
+    <mat-toolbar class="toolbar">
+      <app-bmw-roundel [size]="36" />
+      <span class="brand">
+        <span class="brand-product">AMS</span>
+        <span class="brand-agent">{{ theme.dealerName() }}</span>
+      </span>
       @if (theme.logoUrl(); as logo) {
-        <img [src]="logo" alt="Dealer logo" class="brand-logo" />
-      } @else {
-        <span class="brand">AMS — {{ theme.dealerName() }}</span>
+        <img [src]="logo" alt="Agent logo" class="brand-logo" />
       }
       <span class="spacer"></span>
       @if (!connectivity.online()) {
@@ -124,34 +129,51 @@ const NAV_ITEMS: NavItem[] = [
   `,
   styles: [
     `
-      /* Floating, translucent chrome: the brand colour as a material, content scrolls beneath it. */
+      /* BMW chrome: near-black translucent bar, the roundel, and a thin M-colour accent line. */
       .toolbar {
         position: sticky;
         top: 0;
         z-index: 10;
+        gap: 14px;
         color: #fff;
-        background: color-mix(in srgb, var(--amx-brand, #0066b1) 82%, transparent);
+        background: rgba(20, 20, 20, 0.96);
+        --mat-icon-button-icon-color: #fff;
+        --mat-toolbar-container-text-color: #fff;
+        --mat-sys-on-surface-variant: #fff;
         backdrop-filter: blur(20px) saturate(180%);
         -webkit-backdrop-filter: blur(20px) saturate(180%);
-        border-top: 1px solid rgba(255, 255, 255, 0.35);
-        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
-        letter-spacing: 0.005em;
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
       }
-      /* In dark appearance the brand colour is deepened so white text keeps its contrast and the bar
-         does not glare against the dark content. */
-      @media screen and (prefers-color-scheme: dark) {
-        .toolbar {
-          background: color-mix(in srgb, var(--amx-brand, #0066b1) 58%, #000 42%);
-          border-top-color: rgba(255, 255, 255, 0.18);
-        }
+      .toolbar::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #81c4ff 0 33.4%, #0653b6 33.4% 66.7%, #e7222e 66.7% 100%);
       }
       .brand {
-        font-weight: 600;
-        letter-spacing: -0.012em;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 12px;
+      }
+      .brand-product {
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        font-size: 15px;
+      }
+      .brand-agent {
+        font-weight: 300;
+        letter-spacing: 0.02em;
+        font-size: 15px;
+        opacity: 0.85;
+        padding-left: 12px;
+        border-left: 1px solid rgba(255, 255, 255, 0.28);
       }
       .brand-logo {
-        height: 32px;
-        max-width: 160px;
+        height: 28px;
+        max-width: 140px;
         object-fit: contain;
       }
       .spacer {
@@ -178,12 +200,13 @@ const NAV_ITEMS: NavItem[] = [
         -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
       }
       .active-link {
-        background: var(--amx-active-bg, rgba(0, 102, 177, 0.08));
-        border-radius: 12px;
+        background: var(--amx-active-bg, rgba(28, 105, 212, 0.1));
+        border-radius: var(--mat-sys-corner-medium);
         font-weight: 600;
+        box-shadow: inset 3px 0 0 var(--bmw-blue);
       }
       .sidenav a[mat-list-item] {
-        border-radius: 12px;
+        border-radius: var(--mat-sys-corner-medium);
         margin: 1px 8px;
         transition:
           background-color 280ms var(--amx-ease, ease),
@@ -237,7 +260,7 @@ export class ShellComponent implements OnInit {
 
 function hexToRgba(hex: string, alpha: number): string {
   const match = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
-  if (!match) return `rgba(0, 102, 177, ${alpha})`;
+  if (!match) return `rgba(28, 105, 212, ${alpha})`;
   const [, r, g, b] = match;
   return `rgba(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}, ${alpha})`;
 }

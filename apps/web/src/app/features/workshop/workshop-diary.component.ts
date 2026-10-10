@@ -161,7 +161,7 @@ interface JobCard {
       .drop-list {
         min-height: 100px;
         background: var(--amx-surface-sunken);
-        border-radius: 16px;
+        border-radius: var(--mat-sys-corner-large);
         padding: 8px;
         display: flex;
         flex-direction: column;
@@ -175,7 +175,7 @@ interface JobCard {
       .job-card {
         padding: 12px;
         cursor: grab;
-        border-left: 4px solid #0066b1;
+        border-left: 4px solid var(--bmw-blue);
       }
       .card-actions {
         display: inline-flex;

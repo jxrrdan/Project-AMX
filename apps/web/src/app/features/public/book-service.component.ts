@@ -10,7 +10,7 @@ import { environment } from '../../../environments/environment';
 import { CaptchaComponent } from './captcha.component';
 
 /**
- * Public customer portal page (#4) — a dealer's own website or a QR code links here so a customer
+ * Public customer portal page (#4) — an agent's own website or a QR code links here so a customer
  * can request a service booking with no login. Mirrors the public enquiry-form (§8.1) pattern.
  */
 @Component({
