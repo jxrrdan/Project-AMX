@@ -39,7 +39,7 @@ import { AiAssistantService } from './ai-assistant.service';
   styles: [
     `
       .hint {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         max-width: 640px;
       }
       .chat {
@@ -52,7 +52,7 @@ import { AiAssistantService } from './ai-assistant.service';
       }
       .bubble {
         align-self: flex-start;
-        background: #eceff1;
+        background: var(--amx-surface-sunken);
         padding: 8px 12px;
         border-radius: 12px;
         max-width: 70%;

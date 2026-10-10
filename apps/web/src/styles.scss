@@ -7,10 +7,11 @@ $amx-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable 
   Roboto, 'Helvetica Neue', sans-serif;
 
 html {
+  color-scheme: light dark;
   @include mat.theme(
     (
       color: (
-        theme-type: light,
+        theme-type: color-scheme,
         primary: mat.$azure-palette,
         tertiary: mat.$blue-palette,
       ),
@@ -42,6 +43,28 @@ html {
   --amx-material-thick: rgba(255, 255, 255, 0.82);
   --amx-material-edge: rgba(255, 255, 255, 0.55);
   --amx-material-blur: blur(20px) saturate(180%);
+
+  // Semantic colour tokens: components use these, never raw hex, so light/dark stay in step.
+  --amx-bg: #f5f6f8;
+  --amx-surface: #fff;
+  --amx-surface-raised: #fafafa;
+  --amx-surface-sunken: #eceff1;
+  --amx-border: #e0e0e0;
+  --amx-border-subtle: #eee;
+  --amx-text-secondary: rgba(0, 0, 0, 0.6);
+  --amx-text-tertiary: rgba(0, 0, 0, 0.5);
+  --amx-info-bg: #e3f2fd;
+  --amx-info-fg: #0d47a1;
+  --amx-success-bg: #e8f5e9;
+  --amx-success-bg-strong: #c8e6c9;
+  --amx-success-fg: #2e7d32;
+  --amx-danger-bg: #fbe9e7;
+  --amx-danger-bg-strong: #ffcdd2;
+  --amx-danger-fg: #c62828;
+  --amx-warning-bg: #fff3e0;
+  --amx-warning-bg-strong: #ffe0b2;
+  --amx-warning-bg-soft: #fff8e1;
+  --amx-warning-fg: #e65100;
   --amx-hairline: rgba(0, 0, 0, 0.08);
   --amx-shadow-small: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 8px rgba(0, 0, 0, 0.04);
   --amx-shadow-large: 0 8px 32px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -62,6 +85,42 @@ body {
 
 * {
   box-sizing: border-box;
+}
+
+// Dark appearance follows the system setting (screen only: printed invoices and reports stay light).
+// Dark surfaces get lighter as they rise, and shadows give way to material and edge light.
+@media screen and (prefers-color-scheme: dark) {
+  html {
+    --amx-material-light: rgba(30, 33, 38, 0.72);
+    --amx-material-thick: rgba(36, 39, 45, 0.82);
+    --amx-material-edge: rgba(255, 255, 255, 0.12);
+    --amx-hairline: rgba(255, 255, 255, 0.1);
+    --amx-shadow-small: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --amx-shadow-large: 0 8px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+    --amx-bg: #0f1114;
+    --amx-surface: #1b1e23;
+    --amx-surface-raised: #22262c;
+    --amx-surface-sunken: #15181c;
+    --amx-border: #343a42;
+    --amx-border-subtle: #2a2f36;
+    --amx-text-secondary: rgba(255, 255, 255, 0.68);
+    --amx-text-tertiary: rgba(255, 255, 255, 0.52);
+    --amx-info-bg: #12283d;
+    --amx-info-fg: #90caf9;
+    --amx-success-bg: #13301a;
+    --amx-success-bg-strong: #1d4a28;
+    --amx-success-fg: #81c784;
+    --amx-danger-bg: #3a1e1a;
+    --amx-danger-bg-strong: #4a1a1d;
+    --amx-danger-fg: #ef9a9a;
+    --amx-warning-bg: #3d2a0f;
+    --amx-warning-bg-strong: #4d3512;
+    --amx-warning-bg-soft: #35290c;
+    --amx-warning-fg: #ffb74d;
+  }
+  body {
+    background: var(--amx-bg);
+  }
 }
 
 // --- Type: size-specific tracking and leading, never one value for all sizes (§15) -----------------
@@ -234,8 +293,8 @@ a.mat-mdc-card:active,
 
 @media (prefers-reduced-transparency: reduce) {
   html {
-    --amx-material-light: #fff;
-    --amx-material-thick: #fff;
+    --amx-material-light: var(--amx-surface);
+    --amx-material-thick: var(--amx-surface);
     --amx-material-blur: none;
   }
   .cdk-overlay-dark-backdrop {
@@ -246,14 +305,14 @@ a.mat-mdc-card:active,
 
 @media (prefers-contrast: more) {
   html {
-    --amx-material-light: #fff;
-    --amx-material-thick: #fff;
+    --amx-material-light: var(--amx-surface);
+    --amx-material-thick: var(--amx-surface);
     --amx-material-blur: none;
-    --amx-hairline: rgba(0, 0, 0, 0.5);
+    --amx-hairline: CanvasText;
   }
   .mat-mdc-card,
   .mat-mdc-dialog-surface,
   .mat-mdc-menu-panel {
-    border: 1px solid rgba(0, 0, 0, 0.6);
+    border: 1px solid CanvasText;
   }
 }

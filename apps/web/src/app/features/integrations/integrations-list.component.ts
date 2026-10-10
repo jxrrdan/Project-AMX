@@ -123,7 +123,7 @@ const TYPE_LABELS: Record<IntegrationType, string> = {
         flex-shrink: 0;
       }
       .subtitle {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         max-width: 640px;
         margin: 4px 0 0;
       }
@@ -168,32 +168,32 @@ const TYPE_LABELS: Record<IntegrationType, string> = {
       }
       .type {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
       }
       .target {
         font-size: 12px;
       }
       .last-run {
         font-size: 11px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         margin-top: 8px;
       }
       .last-error {
         font-size: 11px;
-        color: #c62828;
+        color: var(--amx-danger-fg);
       }
       .status-active {
-        background: #c8e6c9;
+        background: var(--amx-success-bg-strong);
       }
       .status-error {
-        background: #ffcdd2;
+        background: var(--amx-danger-bg-strong);
       }
       .status-paused,
       .status-draft {
-        background: #eeeeee;
+        background: var(--amx-border-subtle);
       }
       .empty {
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
     `,
   ],

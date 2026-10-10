@@ -65,19 +65,19 @@ interface Lead {
       }
       .column h3 {
         font-size: 13px;
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         display: flex;
         justify-content: space-between;
       }
       .count {
-        background: #e0e0e0;
+        background: var(--amx-border);
         border-radius: 10px;
         padding: 0 8px;
         font-size: 11px;
       }
       .drop-list {
         min-height: 100px;
-        background: #eceff1;
+        background: var(--amx-surface-sunken);
         border-radius: 8px;
         padding: 8px;
         display: flex;
@@ -95,7 +95,7 @@ interface Lead {
       .source {
         font-size: 12px;
         margin-top: 4px;
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
       }
     `,
   ],

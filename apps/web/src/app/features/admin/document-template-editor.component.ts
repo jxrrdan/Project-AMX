@@ -195,20 +195,20 @@ const PREVIEW_SAMPLES: Record<string, string> = {
         font-size: 12px;
         line-height: 1.4;
         padding: 8px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--amx-border);
         border-radius: 4px;
         resize: vertical;
       }
       .hint {
         font-size: 11px;
-        color: rgba(0, 0, 0, 0.55);
+        color: var(--amx-text-tertiary);
       }
       .preview-frame {
         width: 100%;
         min-height: 480px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--amx-border);
         border-radius: 4px;
-        background: #fff;
+        background: var(--amx-surface);
       }
     `,
   ],

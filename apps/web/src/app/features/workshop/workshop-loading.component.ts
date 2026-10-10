@@ -157,10 +157,10 @@ interface UnmatchedRequirement {
       }
       .hint {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.55);
+        color: var(--amx-text-tertiary);
       }
       .over {
-        color: #c62828;
+        color: var(--amx-danger-fg);
         font-weight: 600;
       }
       .unmatched-row {

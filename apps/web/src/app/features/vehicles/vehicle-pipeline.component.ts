@@ -101,19 +101,19 @@ const COLUMN_LABELS: Record<VehiclePipelineStatus, string> = {
       }
       .column h3 {
         font-size: 13px;
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         display: flex;
         justify-content: space-between;
       }
       .count {
-        background: #e0e0e0;
+        background: var(--amx-border);
         border-radius: 10px;
         padding: 0 8px;
         font-size: 11px;
       }
       .drop-list {
         min-height: 60px;
-        background: #eceff1;
+        background: var(--amx-surface-sunken);
         border-radius: 8px;
         padding: 8px;
         display: flex;
@@ -141,7 +141,7 @@ const COLUMN_LABELS: Record<VehiclePipelineStatus, string> = {
       }
       .vin {
         font-size: 11px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .model {
         font-weight: 600;

@@ -202,7 +202,7 @@ interface Invoice {
         font-weight: 600;
       }
       .subtitle {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         margin: 0 0 16px 40px;
       }
       .columns {
@@ -211,7 +211,7 @@ interface Invoice {
         gap: 16px;
       }
       .condition-report {
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--amx-border-subtle);
         padding-bottom: 8px;
         margin-bottom: 4px;
       }
@@ -230,13 +230,13 @@ interface Invoice {
       .line-item {
         display: flex;
         justify-content: space-between;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--amx-border-subtle);
         padding: 6px 0;
         font-size: 13px;
       }
       .hint {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .row {
         display: flex;

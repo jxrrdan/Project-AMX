@@ -103,7 +103,7 @@ interface PurchaseOrder {
         justify-content: space-between;
         align-items: center;
         gap: 12px;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--amx-border-subtle);
         padding: 8px 0;
         font-size: 13px;
       }

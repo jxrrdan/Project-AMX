@@ -156,7 +156,7 @@ interface InspectionDetail {
         margin-bottom: 16px;
       }
       .meta {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
       }
       mat-card {
         padding: 16px;
@@ -177,7 +177,7 @@ interface InspectionDetail {
       }
       .hint {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         word-break: break-all;
       }
       .items-grid {
@@ -186,16 +186,16 @@ interface InspectionDetail {
         gap: 16px;
       }
       .item-card {
-        border-left: 4px solid #ccc;
+        border-left: 4px solid var(--amx-border);
       }
       .item-card.rating-green {
-        border-left-color: #2e7d32;
+        border-left-color: var(--amx-success-fg);
       }
       .item-card.rating-amber {
-        border-left-color: #ef6c00;
+        border-left-color: var(--amx-warning-fg);
       }
       .item-card.rating-red {
-        border-left-color: #c62828;
+        border-left-color: var(--amx-danger-fg);
       }
       .item-header {
         display: flex;
@@ -204,7 +204,7 @@ interface InspectionDetail {
       }
       .category {
         font-size: 11px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         text-transform: uppercase;
       }
       .label {
@@ -212,7 +212,7 @@ interface InspectionDetail {
       }
       .estimate {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
       }
     `,
   ],

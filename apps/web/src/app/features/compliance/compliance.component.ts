@@ -89,10 +89,10 @@ interface Signature { id: string; documentType: SignatureDocType; documentRef: s
     .col { flex: 1; min-width: 380px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
     .full { width: 100%; }
     .grant { margin-bottom: 8px; }
-    .pad { border: 1px dashed #999; border-radius: 6px; touch-action: none; background: #fafafa; }
+    .pad { border: 1px dashed #999; border-radius: 6px; touch-action: none; background: var(--amx-surface-raised); }
     .pad-actions { display: flex; gap: 8px; }
     table { width: 100%; margin-top: 8px; }
-    .ok { background: #e8f5e9; } .no { background: #fbe9e7; }
+    .ok { background: var(--amx-success-bg); } .no { background: var(--amx-danger-bg); }
     h4 { margin: 12px 0 4px; }
   `],
 })

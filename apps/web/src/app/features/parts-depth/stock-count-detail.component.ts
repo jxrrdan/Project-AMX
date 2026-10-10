@@ -67,9 +67,9 @@ interface StockCount { id: string; reference: string; status: string; lines: Lin
     .section { padding: 16px; margin-top: 16px; }
     table { width: 100%; }
     .qty { width: 90px; }
-    .neg { color: #c62828; font-weight: 600; }
-    .pos { color: #2e7d32; font-weight: 600; }
-    .empty { color: rgba(0,0,0,0.5); }
+    .neg { color: var(--amx-danger-fg); font-weight: 600; }
+    .pos { color: var(--amx-success-fg); font-weight: 600; }
+    .empty { color: var(--amx-text-tertiary); }
   `],
 })
 export class StockCountDetailComponent implements OnInit {

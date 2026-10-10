@@ -73,7 +73,7 @@ import { CaptchaComponent } from './captcha.component';
         justify-content: center;
         padding: 48px 16px;
         min-height: 100vh;
-        background: #f5f6f8;
+        background: var(--amx-bg);
       }
       .card {
         width: 100%;
@@ -81,7 +81,7 @@ import { CaptchaComponent } from './captcha.component';
         padding: 32px;
       }
       .subtitle {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         margin-top: -8px;
       }
       .row {
@@ -95,7 +95,7 @@ import { CaptchaComponent } from './captcha.component';
         margin-top: 8px;
       }
       .error {
-        color: #c62828;
+        color: var(--amx-danger-fg);
         font-size: 13px;
       }
     `,

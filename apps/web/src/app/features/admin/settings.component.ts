@@ -436,7 +436,7 @@ interface ActionTriggerSummary {
       }
       .hint {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.55);
+        color: var(--amx-text-tertiary);
       }
       .logo-row {
         align-items: center;
@@ -445,7 +445,7 @@ interface ActionTriggerSummary {
         height: 48px;
         max-width: 200px;
         object-fit: contain;
-        border: 1px solid #e0e0e0;
+        border: 1px solid var(--amx-border);
         border-radius: 4px;
         padding: 4px;
       }
@@ -454,7 +454,7 @@ interface ActionTriggerSummary {
         flex-direction: column;
         gap: 4px;
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
       }
       .colour-field input[type='color'] {
         width: 60px;
@@ -478,13 +478,13 @@ interface ActionTriggerSummary {
       }
       .status-success,
       .status-active {
-        background: #c8e6c9;
+        background: var(--amx-success-bg-strong);
       }
       .status-error {
-        background: #ffcdd2;
+        background: var(--amx-danger-bg-strong);
       }
       .status-running {
-        background: #fff9c4;
+        background: var(--amx-warning-bg-soft);
       }
     `,
   ],

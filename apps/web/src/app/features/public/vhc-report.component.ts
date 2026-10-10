@@ -85,29 +85,29 @@ interface VhcInspectionPublic {
         justify-content: center;
         padding: 32px 16px;
         min-height: 100vh;
-        background: #f5f6f8;
+        background: var(--amx-bg);
       }
       .content {
         width: 100%;
         max-width: 560px;
       }
       .subtitle {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         margin-top: -8px;
       }
       mat-card {
         padding: 16px;
         margin-bottom: 16px;
-        border-left: 4px solid #ccc;
+        border-left: 4px solid var(--amx-border);
       }
       .item-card.rating-green {
-        border-left-color: #2e7d32;
+        border-left-color: var(--amx-success-fg);
       }
       .item-card.rating-amber {
-        border-left-color: #ef6c00;
+        border-left-color: var(--amx-warning-fg);
       }
       .item-card.rating-red {
-        border-left-color: #c62828;
+        border-left-color: var(--amx-danger-fg);
       }
       .item-header {
         display: flex;
@@ -116,7 +116,7 @@ interface VhcInspectionPublic {
       }
       .category {
         font-size: 11px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         text-transform: uppercase;
       }
       .label {
@@ -129,7 +129,7 @@ interface VhcInspectionPublic {
       }
       .estimate {
         font-size: 13px;
-        color: rgba(0, 0, 0, 0.7);
+        color: var(--amx-text-secondary);
       }
       .actions {
         display: flex;
@@ -138,7 +138,7 @@ interface VhcInspectionPublic {
       }
       .responded {
         font-size: 13px;
-        color: #2e7d32;
+        color: var(--amx-success-fg);
         font-weight: 600;
       }
     `,

@@ -172,7 +172,7 @@ interface RegLookupResult {
       }
       .dvla-hint {
         font-size: 12px;
-        color: #2e7d32;
+        color: var(--amx-success-fg);
         margin: 0;
       }
       .grid {
@@ -188,7 +188,7 @@ interface RegLookupResult {
       }
       .reg {
         font-size: 11px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .model {
         font-weight: 600;

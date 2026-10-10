@@ -167,7 +167,7 @@ interface ClaimDetail {
         margin-bottom: 16px;
       }
       .meta {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
       }
       mat-card {
         padding: 16px;
@@ -180,7 +180,7 @@ interface ClaimDetail {
         flex-wrap: wrap;
       }
       .rejection {
-        color: #c62828;
+        color: var(--amx-danger-fg);
         width: 100%;
         margin: 0;
       }
@@ -211,7 +211,7 @@ interface ClaimDetail {
         font-weight: 600;
       }
       .minutes {
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         font-size: 12px;
       }
       .clock-row {
@@ -222,7 +222,7 @@ interface ClaimDetail {
       }
       .clock-count {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
     `,
   ],

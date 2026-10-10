@@ -127,7 +127,7 @@ interface TargetFieldOptions {
   styles: [
     `
       .subtitle {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         max-width: 720px;
       }
       .entity-picker {
@@ -145,7 +145,7 @@ interface TargetFieldOptions {
       }
       .list {
         min-height: 200px;
-        background: #eceff1;
+        background: var(--amx-surface-sunken);
         border-radius: 8px;
         padding: 8px;
         display: flex;
@@ -153,7 +153,7 @@ interface TargetFieldOptions {
         gap: 8px;
       }
       .field-pill {
-        background: #fff;
+        background: var(--amx-surface);
         border: 1px solid #90a4ae;
         border-radius: 8px;
         padding: 8px 12px;
@@ -168,7 +168,7 @@ interface TargetFieldOptions {
       }
       .drag-handle {
         cursor: grab;
-        color: rgba(0, 0, 0, 0.4);
+        color: var(--amx-text-tertiary);
       }
       .label-input {
         flex: 1;
@@ -184,13 +184,13 @@ interface TargetFieldOptions {
       }
       .badge {
         font-size: 10px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         border: 1px solid rgba(0, 0, 0, 0.2);
         border-radius: 4px;
         padding: 0 4px;
       }
       .empty {
-        color: rgba(0, 0, 0, 0.4);
+        color: var(--amx-text-tertiary);
         font-size: 13px;
       }
       .section {
@@ -209,7 +209,7 @@ interface TargetFieldOptions {
       }
       .hint {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.55);
+        color: var(--amx-text-tertiary);
       }
       .preview-fields {
         display: grid;

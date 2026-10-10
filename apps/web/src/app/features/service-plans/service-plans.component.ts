@@ -92,18 +92,18 @@ interface DueSummary { motDue: number; serviceDue: number; }
   styles: [`
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
     .header .actions { display: flex; gap: 8px; }
-    .hint { color: rgba(0,0,0,0.6); margin: 0 0 16px; font-size: 13px; }
+    .hint { color: var(--amx-text-secondary); margin: 0 0 16px; font-size: 13px; }
     .tiles { display: flex; gap: 12px; margin-bottom: 16px; }
     .tile { flex: 0 0 220px; padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; }
     .tile .num { font-size: 26px; font-weight: 600; }
-    .tile.warn .num { color: #e65100; } .tile.info .num { color: #0d47a1; }
+    .tile.warn .num { color: var(--amx-warning-fg); } .tile.info .num { color: var(--amx-info-fg); }
     .cols { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
     .col { flex: 1; min-width: 360px; padding: 16px; }
     .col-head { display: flex; justify-content: space-between; align-items: center; }
     .form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-    .line { padding: 6px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+    .line { padding: 6px 0; border-bottom: 1px solid var(--amx-border-subtle); display: flex; justify-content: space-between; }
     table { width: 100%; }
-    .empty { color: rgba(0,0,0,0.5); }
+    .empty { color: var(--amx-text-tertiary); }
   `],
 })
 export class ServicePlansComponent implements OnInit {

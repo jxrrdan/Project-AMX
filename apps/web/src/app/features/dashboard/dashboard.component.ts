@@ -72,7 +72,7 @@ interface DashboardKpis {
         gap: 12px;
         margin-bottom: 24px;
         padding: 16px;
-        background: #eef4fb;
+        background: var(--amx-info-bg);
       }
       .grid {
         display: grid;
@@ -84,7 +84,7 @@ interface DashboardKpis {
       }
       .label {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         margin-top: 8px;
       }
       .value {

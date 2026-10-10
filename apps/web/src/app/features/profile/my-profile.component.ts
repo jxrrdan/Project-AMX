@@ -51,7 +51,7 @@ import { environment } from '../../../environments/environment';
       }
       .hint {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.55);
+        color: var(--amx-text-tertiary);
       }
     `,
   ],

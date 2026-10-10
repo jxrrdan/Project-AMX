@@ -174,27 +174,27 @@ interface CategoryGroup {
         padding: 8px 12px;
         border-radius: 8px;
         font-size: 13px;
-        background: #e8f5e9;
+        background: var(--amx-success-bg);
         color: #1b5e20;
         margin: 8px 0 16px;
       }
       .sync-bar.offline {
-        background: #fff3e0;
-        color: #e65100;
+        background: var(--amx-warning-bg);
+        color: var(--amx-warning-fg);
       }
       .sync-bar.pending {
-        background: #e3f2fd;
-        color: #0d47a1;
+        background: var(--amx-info-bg);
+        color: var(--amx-info-fg);
       }
       .meta {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         margin: 0 0 8px;
       }
       .status {
         font-weight: 600;
       }
       .status-COMPLETE {
-        color: #2e7d32;
+        color: var(--amx-success-fg);
       }
       .cache-note {
         font-style: italic;
@@ -212,7 +212,7 @@ interface CategoryGroup {
       }
       .item {
         padding: 10px 0;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--amx-border-subtle);
       }
       .item:last-child {
         border-bottom: none;
@@ -226,7 +226,7 @@ interface CategoryGroup {
         flex-wrap: wrap;
       }
       .rate.selected.pass {
-        background: #2e7d32;
+        background: var(--amx-success-fg);
         color: #fff;
       }
       .rate.selected.advisory {
@@ -234,7 +234,7 @@ interface CategoryGroup {
         color: #000;
       }
       .rate.selected.fail {
-        background: #c62828;
+        background: var(--amx-danger-fg);
         color: #fff;
       }
       .notes {
@@ -254,11 +254,11 @@ interface CategoryGroup {
         display: flex;
         align-items: center;
         gap: 12px;
-        background: #e8f5e9;
+        background: var(--amx-success-bg);
       }
       .hint {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
     `,
   ],

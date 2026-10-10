@@ -244,7 +244,7 @@ interface CourtesyVehicle {
         display: flex;
         align-items: center;
         gap: 8px;
-        background: #fff3e0;
+        background: var(--amx-warning-bg);
         padding: 12px 16px;
         margin-bottom: 16px;
       }
@@ -277,7 +277,7 @@ interface CourtesyVehicle {
       }
       .reg {
         font-size: 11px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .model {
         font-weight: 600;
@@ -292,11 +292,11 @@ interface CourtesyVehicle {
         margin-top: 8px;
       }
       .date {
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .hint {
         font-size: 11px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         margin: 2px 0 0;
       }
       .markers-label {

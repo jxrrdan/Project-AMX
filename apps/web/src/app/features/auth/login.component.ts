@@ -64,7 +64,7 @@ import { AuthService } from '../../core/auth.service';
         padding: 32px;
       }
       .subtitle {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         margin-top: -8px;
       }
       .full-width {
@@ -72,12 +72,12 @@ import { AuthService } from '../../core/auth.service';
         margin-bottom: 8px;
       }
       .error {
-        color: #c62828;
+        color: var(--amx-danger-fg);
         font-size: 13px;
       }
       .hint {
         font-size: 11px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         margin-top: 16px;
       }
     `,

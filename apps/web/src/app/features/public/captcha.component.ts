@@ -72,7 +72,7 @@ function loadTurnstileScript(): Promise<void> {
   styles: [`
     .captcha { display: flex; align-items: center; gap: 8px; }
     .answer { width: 200px; }
-    .note { color: rgba(0,0,0,0.6); font-size: 13px; }
+    .note { color: var(--amx-text-secondary); font-size: 13px; }
   `],
 })
 export class CaptchaComponent implements OnInit, OnDestroy {

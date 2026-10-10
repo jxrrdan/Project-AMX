@@ -281,7 +281,7 @@ interface UsedVehicleDetail {
         margin-bottom: 16px;
       }
       .meta {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
       }
       .columns {
         display: grid;
@@ -312,7 +312,7 @@ interface UsedVehicleDetail {
       }
       .hint {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .accessories-label {
         font-weight: 600;
@@ -322,18 +322,18 @@ interface UsedVehicleDetail {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--amx-border-subtle);
         padding: 6px 0;
         font-size: 13px;
       }
       .status-ACTIVE {
-        background: #e3f2fd;
+        background: var(--amx-info-bg);
       }
       .status-SIGNED {
-        background: #e8f5e9;
+        background: var(--amx-success-bg);
       }
       .status-INVALIDATED {
-        background: #fbe9e7;
+        background: var(--amx-danger-bg);
         text-decoration: line-through;
       }
     `,

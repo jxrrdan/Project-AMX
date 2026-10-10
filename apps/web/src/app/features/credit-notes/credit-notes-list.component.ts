@@ -176,20 +176,20 @@ interface DraftLine {
         text-decoration: none;
       }
       .status-DRAFT {
-        background: #eceff1;
+        background: var(--amx-surface-sunken);
       }
       .status-ISSUED {
-        background: #e3f2fd;
+        background: var(--amx-info-bg);
       }
       .status-APPLIED {
-        background: #e8f5e9;
+        background: var(--amx-success-bg);
       }
       .status-CANCELLED {
-        background: #fbe9e7;
+        background: var(--amx-danger-bg);
         text-decoration: line-through;
       }
       .empty {
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         margin-top: 16px;
       }
     `,

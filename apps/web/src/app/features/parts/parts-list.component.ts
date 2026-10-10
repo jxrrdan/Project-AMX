@@ -144,7 +144,7 @@ interface Part {
         width: 100%;
       }
       .low {
-        background: #ffcdd2;
+        background: var(--amx-danger-bg-strong);
       }
       a {
         color: #0066b1;

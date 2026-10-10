@@ -70,18 +70,18 @@ interface Statement {
     .header { display: flex; align-items: center; gap: 8px; }
     .title { font-size: 18px; font-weight: 600; }
     .spacer { flex: 1 1 auto; }
-    .balance.owing { color: #c62828; font-weight: 600; }
-    .subtitle { color: rgba(0,0,0,0.6); margin: 4px 0 16px 40px; }
+    .balance.owing { color: var(--amx-danger-fg); font-weight: 600; }
+    .subtitle { color: var(--amx-text-secondary); margin: 4px 0 16px 40px; }
     .form-card, .section { padding: 16px; margin-bottom: 16px; }
     .form-card { max-width: 520px; display: flex; flex-direction: column; gap: 8px; }
     .row { display: flex; gap: 12px; }
     .row mat-form-field { flex: 1; }
     .full { width: 100%; }
     table { width: 100%; }
-    .muted { color: rgba(0,0,0,0.5); }
-    .credit { color: #2e7d32; }
-    .opening { color: rgba(0,0,0,0.6); }
-    .empty { color: rgba(0,0,0,0.5); }
+    .muted { color: var(--amx-text-tertiary); }
+    .credit { color: var(--amx-success-fg); }
+    .opening { color: var(--amx-text-secondary); }
+    .empty { color: var(--amx-text-tertiary); }
   `],
 })
 export class AccountCustomerDetailComponent implements OnInit {

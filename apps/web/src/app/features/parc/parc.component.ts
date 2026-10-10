@@ -81,7 +81,7 @@ interface ParcRow { vehicleReg: string; entries: number; lastActivity: string | 
     .search .reg { width: 240px; }
     .section { padding: 16px; margin-bottom: 16px; }
     .rec-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .recall { background: #fff3e0; }
+    .recall { background: var(--amx-warning-bg); }
     table { width: 100%; }
     .add { margin-top: 16px; }
     .row { display: flex; gap: 12px; }
@@ -89,7 +89,7 @@ interface ParcRow { vehicleReg: string; entries: number; lastActivity: string | 
     .full { width: 100%; }
     a { color: #0066b1; cursor: pointer; }
     .linkbtn { background: none; border: none; padding: 0; color: #0066b1; cursor: pointer; font: inherit; }
-    .empty { color: rgba(0,0,0,0.5); }
+    .empty { color: var(--amx-text-tertiary); }
   `],
 })
 export class ParcComponent implements OnInit {

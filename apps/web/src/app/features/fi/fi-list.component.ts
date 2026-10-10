@@ -189,7 +189,7 @@ interface DealFinanceProduct {
       }
       .label {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
       }
       .value {
         font-size: 22px;
@@ -199,12 +199,12 @@ interface DealFinanceProduct {
         display: flex;
         gap: 8px;
         align-items: center;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--amx-border-subtle);
         padding: 6px 0;
         font-size: 13px;
       }
       .provider {
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .row {
         display: flex;
@@ -217,7 +217,7 @@ interface DealFinanceProduct {
         width: 100%;
       }
       .disclosure {
-        border-top: 1px solid #eee;
+        border-top: 1px solid var(--amx-border-subtle);
         padding-top: 12px;
         margin-top: 8px;
         display: flex;

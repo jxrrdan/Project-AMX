@@ -51,11 +51,11 @@ interface BookingRequest {
     @if (!requests().length) { <p class="empty">No booking requests yet.</p> }
   `,
   styles: [`
-    .hint { color: rgba(0,0,0,0.6); }
+    .hint { color: var(--amx-text-secondary); }
     table { width: 100%; }
-    .muted { color: rgba(0,0,0,0.5); font-size: 12px; }
+    .muted { color: var(--amx-text-tertiary); font-size: 12px; }
     .status-select { width: 150px; }
-    .empty { color: rgba(0,0,0,0.5); margin-top: 16px; }
+    .empty { color: var(--amx-text-tertiary); margin-top: 16px; }
   `],
 })
 export class OnlineBookingsComponent implements OnInit {

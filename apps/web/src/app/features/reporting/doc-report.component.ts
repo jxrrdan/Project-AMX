@@ -58,12 +58,12 @@ interface Doc {
   `,
   styles: [`
     .header { display: flex; justify-content: space-between; align-items: center; }
-    .ts { color: rgba(0,0,0,0.6); margin-top: 0; }
+    .ts { color: var(--amx-text-secondary); margin-top: 0; }
     h3 { margin: 20px 0 8px; }
     .tiles { display: flex; gap: 12px; flex-wrap: wrap; }
     .tile { flex: 1; min-width: 150px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
     .tile .num { font-size: 24px; font-weight: 600; }
-    .tile.warn .num { color: #e65100; } .tile.ok .num { color: #2e7d32; }
+    .tile.warn .num { color: var(--amx-warning-fg); } .tile.ok .num { color: var(--amx-success-fg); }
   `],
 })
 export class DocReportComponent implements OnInit {

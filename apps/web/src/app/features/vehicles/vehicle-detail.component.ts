@@ -217,7 +217,7 @@ interface VehicleDetail {
         font-weight: 600;
       }
       .subtitle {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         margin: 0 0 16px 40px;
       }
       .section {
@@ -239,34 +239,34 @@ interface VehicleDetail {
       }
       .hint {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .line-item {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--amx-border-subtle);
         padding: 6px 0;
         font-size: 13px;
       }
       .status-ACTIVE {
-        background: #e3f2fd;
+        background: var(--amx-info-bg);
       }
       .status-SIGNED {
-        background: #e8f5e9;
+        background: var(--amx-success-bg);
       }
       .status-INVALIDATED {
-        background: #fbe9e7;
+        background: var(--amx-danger-bg);
         text-decoration: line-through;
       }
       .pdi-SCHEDULED {
-        background: #e3f2fd;
+        background: var(--amx-info-bg);
       }
       .pdi-IN_PROGRESS {
-        background: #fff8e1;
+        background: var(--amx-warning-bg-soft);
       }
       .pdi-COMPLETE {
-        background: #e8f5e9;
+        background: var(--amx-success-bg);
       }
     `,
   ],

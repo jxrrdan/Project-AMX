@@ -145,22 +145,22 @@ interface JobCardOption {
       }
       .date {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         margin-bottom: 8px;
       }
       .sent {
         font-size: 11px;
-        color: #2e7d32;
+        color: var(--amx-success-fg);
         margin-top: 8px;
       }
       .rating-green {
-        background: #c8e6c9;
+        background: var(--amx-success-bg-strong);
       }
       .rating-amber {
-        background: #ffe0b2;
+        background: var(--amx-warning-bg-strong);
       }
       .rating-red {
-        background: #ffcdd2;
+        background: var(--amx-danger-bg-strong);
       }
     `,
   ],

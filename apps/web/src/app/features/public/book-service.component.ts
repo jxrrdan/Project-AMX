@@ -43,7 +43,7 @@ import { CaptchaComponent } from './captcha.component';
     .wrap { display: flex; justify-content: center; padding: 32px 16px; }
     .card { width: 100%; max-width: 480px; padding: 24px; display: flex; flex-direction: column; gap: 8px; }
     .full { width: 100%; }
-    .error { color: #c62828; }
+    .error { color: var(--amx-danger-fg); }
   `],
 })
 export class BookServiceComponent implements OnInit {

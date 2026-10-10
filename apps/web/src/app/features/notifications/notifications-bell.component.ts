@@ -52,7 +52,7 @@ interface Notification {
         padding: 8px 16px;
         font-weight: 600;
         font-size: 13px;
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
       }
       .item {
         display: flex;
@@ -68,11 +68,11 @@ interface Notification {
       }
       .body {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.7);
+        color: var(--amx-text-secondary);
       }
       .date {
         font-size: 11px;
-        color: rgba(0, 0, 0, 0.45);
+        color: var(--amx-text-tertiary);
       }
       .unread {
         background: rgba(0, 102, 177, 0.06);
@@ -80,7 +80,7 @@ interface Notification {
       .empty {
         padding: 12px 16px;
         font-size: 13px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
     `,
   ],

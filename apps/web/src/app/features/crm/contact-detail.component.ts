@@ -215,7 +215,7 @@ interface EmailTemplate {
         margin-bottom: 16px;
       }
       .meta {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         display: flex;
         gap: 8px;
         align-items: center;
@@ -237,7 +237,7 @@ interface EmailTemplate {
         width: 100%;
       }
       .timeline-item {
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--amx-border-subtle);
         padding: 8px 0;
         display: flex;
         flex-wrap: wrap;
@@ -247,17 +247,17 @@ interface EmailTemplate {
       .timeline-item p {
         flex-basis: 100%;
         margin: 4px 0 0;
-        color: rgba(0, 0, 0, 0.7);
+        color: var(--amx-text-secondary);
       }
       .type {
         font-weight: 600;
       }
       .date {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .empty {
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         font-size: 13px;
       }
     `,

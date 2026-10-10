@@ -155,7 +155,7 @@ interface JobCardOption {
         margin-bottom: 16px;
       }
       .meta {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
       }
       .columns {
         display: grid;
@@ -185,10 +185,10 @@ interface JobCardOption {
         flex: 1;
       }
       .low {
-        background: #ffcdd2;
+        background: var(--amx-danger-bg-strong);
       }
       .line-item {
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--amx-border-subtle);
         padding: 8px 0;
         display: flex;
         justify-content: space-between;
@@ -198,10 +198,10 @@ interface JobCardOption {
         font-weight: 600;
       }
       .date {
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .empty {
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         font-size: 13px;
       }
     `,

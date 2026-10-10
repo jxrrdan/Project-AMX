@@ -20,7 +20,7 @@ import { AiAssistantService } from './ai-assistant.service';
   imports: [FormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule],
   template: `
     @if (open()) {
-      <div class="panel">
+      <div class="panel" animate.leave="dock-leave">
         <div class="panel-header">
           <span>AI Assistant</span>
           <a mat-icon-button routerLink="/ai" [attr.title]="'Open full assistant'" (click)="open.set(false)">
@@ -110,9 +110,24 @@ import { AiAssistantService } from './ai-assistant.service';
           filter: blur(0);
         }
       }
+      /* Closing retraces the opening path back into the button (symmetric, anchored to its source). */
+      .dock-leave {
+        animation: dock-close 240ms var(--amx-ease, ease) both;
+      }
+      @keyframes dock-close {
+        to {
+          opacity: 0;
+          transform: scale(0.6);
+          filter: blur(6px);
+        }
+      }
       @media (prefers-reduced-motion: reduce) {
         .panel {
           animation: none;
+        }
+        .dock-leave {
+          animation: none;
+          opacity: 0;
         }
       }
       .messages {
@@ -125,7 +140,7 @@ import { AiAssistantService } from './ai-assistant.service';
       }
       .bubble {
         align-self: flex-start;
-        background: #eceff1;
+        background: var(--amx-surface-sunken);
         padding: 6px 10px;
         border-radius: 10px;
         max-width: 85%;
@@ -138,14 +153,14 @@ import { AiAssistantService } from './ai-assistant.service';
       }
       .hint {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .composer {
         display: flex;
         align-items: center;
         gap: 4px;
         padding: 8px;
-        border-top: 1px solid #eee;
+        border-top: 1px solid var(--amx-border-subtle);
       }
       .full-width {
         flex: 1;

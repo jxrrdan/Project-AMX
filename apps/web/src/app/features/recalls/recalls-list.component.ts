@@ -137,13 +137,13 @@ interface RecallSummary {
         font-weight: 600;
       }
       .tile.warn .num {
-        color: #e65100;
+        color: var(--amx-warning-fg);
       }
       .tile.info .num {
-        color: #0d47a1;
+        color: var(--amx-info-fg);
       }
       .tile.ok .num {
-        color: #2e7d32;
+        color: var(--amx-success-fg);
       }
       .form-card {
         max-width: 560px;
@@ -164,13 +164,13 @@ interface RecallSummary {
         text-decoration: none;
       }
       .status-OPEN {
-        background: #e3f2fd;
+        background: var(--amx-info-bg);
       }
       .status-CLOSED {
-        background: #eceff1;
+        background: var(--amx-surface-sunken);
       }
       .empty {
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         margin-top: 16px;
       }
     `,

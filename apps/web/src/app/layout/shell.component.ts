@@ -151,7 +151,7 @@ const NAV_ITEMS: NavItem[] = [
       }
       .container {
         height: calc(100vh - 64px);
-        background: #f5f6f8;
+        background: var(--amx-bg);
       }
       /* Heavier material for the structural region; no 1px divider, a soft shadow separates it. */
       .sidenav {
@@ -164,7 +164,7 @@ const NAV_ITEMS: NavItem[] = [
       }
       .content {
         padding: 24px;
-        background: #f5f6f8;
+        background: var(--amx-bg);
         /* Scroll-edge effect instead of a hard divider where content meets the toolbar. */
         mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
         -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
@@ -184,7 +184,7 @@ const NAV_ITEMS: NavItem[] = [
       .menu-user {
         padding: 8px 16px;
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
       }
       .offline-chip {
         display: inline-flex;

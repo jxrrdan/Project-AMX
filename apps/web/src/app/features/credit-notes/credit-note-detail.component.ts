@@ -117,7 +117,7 @@ interface CreditNote {
         font-weight: 600;
       }
       .subtitle {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         margin: 4px 0 16px 40px;
       }
       .section {
@@ -140,7 +140,7 @@ interface CreditNote {
       }
       .totals .grand {
         font-weight: 600;
-        border-top: 1px solid #ddd;
+        border-top: 1px solid var(--amx-border);
         margin-top: 4px;
         padding-top: 8px;
       }
@@ -150,19 +150,19 @@ interface CreditNote {
         align-items: center;
       }
       .muted {
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .status-DRAFT {
-        background: #eceff1;
+        background: var(--amx-surface-sunken);
       }
       .status-ISSUED {
-        background: #e3f2fd;
+        background: var(--amx-info-bg);
       }
       .status-APPLIED {
-        background: #e8f5e9;
+        background: var(--amx-success-bg);
       }
       .status-CANCELLED {
-        background: #fbe9e7;
+        background: var(--amx-danger-bg);
         text-decoration: line-through;
       }
     `,

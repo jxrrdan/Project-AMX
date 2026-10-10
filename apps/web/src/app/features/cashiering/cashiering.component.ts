@@ -154,7 +154,7 @@ interface Reconciliation {
       .row { display: flex; gap: 12px; }
       .row mat-form-field { flex: 1; }
       table { width: 100%; }
-      .empty { color: rgba(0,0,0,0.5); margin-top: 16px; }
+      .empty { color: var(--amx-text-tertiary); margin-top: 16px; }
     `,
   ],
 })

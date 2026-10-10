@@ -478,7 +478,7 @@ interface ConnectionForm {
         font-weight: 600;
       }
       .subtitle {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         margin: 0 0 16px 40px;
       }
       .actions {
@@ -506,7 +506,7 @@ interface ConnectionForm {
       }
       .hint {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.55);
+        color: var(--amx-text-tertiary);
       }
       .mapper {
         display: grid;
@@ -516,7 +516,7 @@ interface ConnectionForm {
       }
       .source-list {
         min-height: 100px;
-        background: #eceff1;
+        background: var(--amx-surface-sunken);
         border-radius: 8px;
         padding: 8px;
         display: flex;
@@ -525,7 +525,7 @@ interface ConnectionForm {
         margin-bottom: 8px;
       }
       .source-pill {
-        background: #fff;
+        background: var(--amx-surface);
         border: 1px solid #90a4ae;
         border-radius: 16px;
         padding: 6px 12px;
@@ -545,7 +545,7 @@ interface ConnectionForm {
       }
       .type-badge {
         font-size: 10px;
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .drop-zone {
         flex: 1;
@@ -558,13 +558,13 @@ interface ConnectionForm {
       }
       .placeholder {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.4);
+        color: var(--amx-text-tertiary);
       }
       .mapped-pill {
         display: flex;
         align-items: center;
         gap: 8px;
-        background: #e3f2fd;
+        background: var(--amx-info-bg);
         border-radius: 14px;
         padding: 2px 8px;
         font-size: 12px;
@@ -581,7 +581,7 @@ interface ConnectionForm {
         margin-top: 12px;
       }
       .test-result {
-        background: #eceff1;
+        background: var(--amx-surface-sunken);
         padding: 12px;
         border-radius: 6px;
         font-size: 12px;
@@ -591,21 +591,21 @@ interface ConnectionForm {
         width: 100%;
       }
       .empty {
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
         font-size: 13px;
       }
       .status-active {
-        background: #c8e6c9;
+        background: var(--amx-success-bg-strong);
       }
       .status-error {
-        background: #ffcdd2;
+        background: var(--amx-danger-bg-strong);
       }
       .status-paused,
       .status-draft {
-        background: #eeeeee;
+        background: var(--amx-border-subtle);
       }
       .status-success {
-        background: #c8e6c9;
+        background: var(--amx-success-bg-strong);
       }
     `,
   ],

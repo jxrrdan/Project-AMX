@@ -159,7 +159,7 @@ interface Campaign {
       }
       .subtitle,
       .desc {
-        color: rgba(0, 0, 0, 0.6);
+        color: var(--amx-text-secondary);
         margin: 4px 0 0 40px;
       }
       .section {
@@ -180,16 +180,16 @@ interface Campaign {
         width: 150px;
       }
       .muted {
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .empty {
-        color: rgba(0, 0, 0, 0.5);
+        color: var(--amx-text-tertiary);
       }
       .status-OPEN {
-        background: #e3f2fd;
+        background: var(--amx-info-bg);
       }
       .status-CLOSED {
-        background: #eceff1;
+        background: var(--amx-surface-sunken);
       }
     `,
   ],

@@ -78,8 +78,8 @@ interface AgedDebtors {
     .form-card { max-width: 420px; }
     table { width: 100%; }
     a { color: #0066b1; text-decoration: none; }
-    .owing { font-weight: 600; color: #c62828; }
-    .empty { color: rgba(0,0,0,0.5); margin-top: 16px; }
+    .owing { font-weight: 600; color: var(--amx-danger-fg); }
+    .empty { color: var(--amx-text-tertiary); margin-top: 16px; }
   `],
 })
 export class AccountCustomersListComponent implements OnInit {

@@ -99,7 +99,7 @@ interface Backorder { id: string; quantity: number; status: BackorderStatus; exp
     table { width: 100%; }
     a { color: #0066b1; text-decoration: none; }
     .status-select { width: 150px; }
-    .empty { color: rgba(0,0,0,0.5); }
+    .empty { color: var(--amx-text-tertiary); }
   `],
 })
 export class PartsDepthComponent implements OnInit {

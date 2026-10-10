@@ -258,10 +258,10 @@ interface FieldMapping {
       }
       .hint {
         font-size: 12px;
-        color: rgba(0, 0, 0, 0.55);
+        color: var(--amx-text-tertiary);
       }
       .test-result {
-        background: #eceff1;
+        background: var(--amx-surface-sunken);
         padding: 12px;
         border-radius: 6px;
         font-size: 12px;
