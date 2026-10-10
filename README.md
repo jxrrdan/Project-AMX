@@ -164,15 +164,15 @@ locally and in production:
 | Spec dependency | Local adapter | Production target |
 |---|---|---|
 | AWS Cognito | JWT + TOTP in `apps/api/src/modules/auth` | Cognito user pool (`infra/cdk/lib/auth-stack.ts`) |
-| AWS S3 | Local filesystem (`StorageService`, `STORAGE_DRIVER=local`) | S3 bucket (`infra/cdk/lib/storage-stack.ts`) |
-| AWS SES | Console log (`EmailService`, `EMAIL_DRIVER=console`) | SES |
+| AWS S3 | Local filesystem (`StorageService`, `STORAGE_DRIVER=local`) | S3 bucket behind CloudFront (`STORAGE_DRIVER=s3`, implemented) |
+| AWS SES | Console log (`EmailService`, `EMAIL_DRIVER=console`) | SES (`EMAIL_DRIVER=ses`, implemented) |
 | AWS SNS / Twilio | Console log (`SmsService`, `SMS_DRIVER=console`) | SNS or Twilio |
-| Amazon Bedrock (Claude) | Deterministic mock (`AiService`, `AI_DRIVER=mock`) | Bedrock `InvokeModel`, per Module 14's spec |
+| Amazon Bedrock (Claude) | Deterministic mock (`AiService`, `AI_DRIVER=mock`) | Bedrock Converse API (`AI_DRIVER=bedrock`, implemented) |
 | Handlebars → Puppeteer → PDF | Handlebars → HTML file (`PdfService`, `PDF_DRIVER=html`) — open in a browser and print-to-PDF to see the real output | Same template, rendered to an actual PDF via Puppeteer |
 | BMW RIS MQTT ingest | A cron job that fabricates a plausible new order every 30 minutes (`RisImportService`) | Always-on MQTT subscriber (`infra/cdk/lib/compute-stack.ts`) → SQS → Lambda |
 | AWP webhook integration | Mocked job references (`AWP-MOCK-...`) generated on PDI scheduling | Real webhook exchange with AWP |
-| DVLA Vehicle Enquiry Service | Deterministic mock spec, seeded from the registration itself (`DvlaService`, `DVLA_DRIVER=mock`) — try the "Look up on DVLA" button on the Used Cars page | Real DVLA API (needs a government-issued API key) |
-| CAPTCHA on public forms | Dependency-free signed arithmetic challenge (`CaptchaService`, `CAPTCHA_DRIVER=local`) — works offline, protects the enquiry and service-booking forms | Cloudflare Turnstile (`CAPTCHA_DRIVER=turnstile`, verified server-side) or reCAPTCHA |
+| DVLA Vehicle Enquiry Service | Deterministic mock spec, seeded from the registration itself (`DvlaService`, `DVLA_DRIVER=mock`) — try the "Look up on DVLA" button on the Used Cars page | Real DVLA API (`DVLA_DRIVER=live`, implemented; needs a DVLA API key) |
+| CAPTCHA on public forms | Dependency-free signed arithmetic challenge (`CaptchaService`, `CAPTCHA_DRIVER=local`) — works offline, protects the enquiry and service-booking forms | Cloudflare Turnstile (`CAPTCHA_DRIVER=turnstile`, verified server-side; the web form renders the widget) |
 
 Every one of these is a small, isolated class — swapping the local branch for a real AWS call is
 a contained change, not a rewrite.
@@ -411,6 +411,10 @@ PWA and the PDI checklist is offline-first:
 - **Testable in dev** — the IndexedDB layer is plain app code, so offline capture works with
   `npm run dev:web` (toggle DevTools → Network → Offline). The service worker itself is
   production-gated, mirroring Angular's own PWA convention.
+
+## Production deployment
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full AWS runbook: one-off setup, the CI/CD pipeline, migrations, operations and the short list of items that depend on third parties.
 
 ## Security
 

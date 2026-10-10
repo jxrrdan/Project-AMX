@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
 
 export interface SendEmailInput {
   to: string;
@@ -16,6 +17,7 @@ export interface SendEmailInput {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly driver: string;
+  private ses?: SESv2Client;
 
   constructor(private readonly config: ConfigService) {
     this.driver = this.config.get<string>('EMAIL_DRIVER', 'console');
@@ -27,6 +29,23 @@ export class EmailService {
       return;
     }
 
-    this.logger.warn(`Email driver "${this.driver}" not implemented locally`);
+    if (this.driver === 'ses') {
+      this.ses ??= new SESv2Client({ region: this.config.get<string>('AWS_REGION', 'eu-west-2') });
+      await this.ses.send(
+        new SendEmailCommand({
+          FromEmailAddress: this.config.getOrThrow<string>('EMAIL_FROM'),
+          Destination: { ToAddresses: [input.to] },
+          Content: {
+            Simple: {
+              Subject: { Data: input.subject, Charset: 'UTF-8' },
+              Body: { Html: { Data: input.html, Charset: 'UTF-8' } },
+            },
+          },
+        }),
+      );
+      return;
+    }
+
+    throw new Error(`Unknown EMAIL_DRIVER "${this.driver}"`);
   }
 }

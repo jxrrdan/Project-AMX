@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
 
 export interface AiCompletionInput {
   system: string;
@@ -19,6 +20,7 @@ export interface AiCompletionInput {
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private readonly driver: string;
+  private bedrock?: BedrockRuntimeClient;
 
   constructor(private readonly config: ConfigService) {
     this.driver = this.config.get<string>('AI_DRIVER', 'mock');
@@ -31,7 +33,24 @@ export class AiService {
       return `(mock AI response — configure AI_DRIVER=bedrock in production) Based on the current dealer data, here is a placeholder answer to: "${lastUserMessage?.content ?? ''}"`;
     }
 
-    this.logger.warn(`AI driver "${this.driver}" not implemented locally`);
-    return '';
+    if (this.driver === 'bedrock') {
+      // IAM-authenticated, in-region: dealer PII stays inside AWS. Model ids are configuration
+      // (Bedrock inference-profile ids differ per region/account), not hard-coded.
+      const modelId = this.config.getOrThrow<string>(
+        input.model === 'lightweight' ? 'BEDROCK_MODEL_LIGHTWEIGHT' : 'BEDROCK_MODEL_REASONING',
+      );
+      this.bedrock ??= new BedrockRuntimeClient({ region: this.config.get<string>('AWS_REGION', 'eu-west-2') });
+      const response = await this.bedrock.send(
+        new ConverseCommand({
+          modelId,
+          system: [{ text: input.system }],
+          messages: input.messages.map((m) => ({ role: m.role, content: [{ text: m.content }] })),
+          inferenceConfig: { maxTokens: 1024, temperature: 0.3 },
+        }),
+      );
+      return response.output?.message?.content?.map((c) => c.text ?? '').join('') ?? '';
+    }
+
+    throw new Error(`Unknown AI_DRIVER "${this.driver}"`);
   }
 }

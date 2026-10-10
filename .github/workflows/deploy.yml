@@ -6,7 +6,8 @@ name: Deploy
 # It is NOT run by this repo yet — it requires an AWS account reachable via GitHub OIDC and the
 # secrets/variables listed below. Deploy steps are gated on the main branch.
 #
-# Required repository configuration:
+# Required repository configuration (see docs/DEPLOYMENT.md):
+#   vars.DOMAIN_NAME, vars.CERTIFICATE_ARN, vars.EMAIL_FROM, vars.BEDROCK_REASONING_MODEL, vars.BEDROCK_LIGHTWEIGHT_MODEL
 #   secrets.AWS_DEPLOY_ROLE_ARN   IAM role assumed via OIDC (permissions to ECR, CloudFormation, S3, CloudFront)
 #   vars.AWS_REGION               e.g. eu-west-2
 #   vars.WEB_BUCKET_NAME          S3 bucket from the Ams-Edge stack output (set after the first infra deploy)
@@ -40,6 +41,13 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
+      # Deployment-specific CDK context; see docs/DEPLOYMENT.md for what each value is.
+      CDK_CONTEXT: >-
+        -c domainName=${{ vars.DOMAIN_NAME }}
+        -c certificateArn=${{ vars.CERTIFICATE_ARN }}
+        -c emailFrom=${{ vars.EMAIL_FROM }}
+        -c bedrockReasoningModel=${{ vars.BEDROCK_REASONING_MODEL }}
+        -c bedrockLightweightModel=${{ vars.BEDROCK_LIGHTWEIGHT_MODEL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -57,20 +65,41 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push API image
+      - name: Ensure the API image repository exists
+        run: |
+          aws ecr describe-repositories --repository-names ams-api >/dev/null 2>&1 || \
+            aws ecr create-repository --repository-name ams-api \
+              --image-scanning-configuration scanOnPush=true --image-tag-mutability MUTABLE
+
+      - name: Build and push API and migration images
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
           IMAGE="$REGISTRY/ams-api"
-          docker build -f apps/api/Dockerfile -t "$IMAGE:$GITHUB_SHA" -t "$IMAGE:latest" .
-          docker push "$IMAGE:$GITHUB_SHA"
-          docker push "$IMAGE:latest"
+          docker build -f apps/api/Dockerfile --target runner  -t "$IMAGE:$GITHUB_SHA" -t "$IMAGE:latest"  .
+          docker build -f apps/api/Dockerfile --target migrate -t "$IMAGE:migrate-$GITHUB_SHA" -t "$IMAGE:migrate" .
+          docker push "$IMAGE" --all-tags
 
-      - name: Deploy infrastructure (CDK)
+      - name: Install CDK dependencies
         working-directory: infra/cdk
-        run: |
-          npm ci
-          npx cdk deploy --all --require-approval never
+        run: npm ci
+
+      # Data tier first, so the schema can be migrated before new API code rolls out.
+      - name: Deploy data tier (CDK)
+        working-directory: infra/cdk
+        run: npx cdk deploy Ams-Network Ams-Data Ams-Storage Ams-Queue Ams-Auth --require-approval never $CDK_CONTEXT
+
+      - name: Migrate database (pre-rollout)
+        run: ./.github/scripts/run-migration.sh optional
+
+      - name: Deploy compute, edge and observability (CDK)
+        working-directory: infra/cdk
+        run: npx cdk deploy Ams-Compute Ams-Edge Ams-Observability --require-approval never $CDK_CONTEXT
+
+      # Idempotent: a no-op when the pre-rollout run already applied everything, and the first-ever
+      # deploy's migration (the task definition did not exist before the compute stack deployed).
+      - name: Migrate database (post-rollout)
+        run: ./.github/scripts/run-migration.sh required
 
       - name: Build and publish the web SPA
         if: ${{ vars.WEB_BUCKET_NAME != '' }}

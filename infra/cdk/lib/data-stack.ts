@@ -18,6 +18,8 @@ export class DataStack extends Stack {
   readonly databaseSecret: secretsmanager.ISecret;
   readonly dbSecurityGroup: ec2.SecurityGroup;
   readonly cluster: rds.DatabaseCluster;
+  /** rediss:// URL (TLS in transit) for the API's Socket.IO Redis adapter. */
+  readonly redisUrl: string;
 
   constructor(scope: Construct, id: string, props: DataStackProps) {
     super(scope, id, props);
@@ -55,7 +57,9 @@ export class DataStack extends Stack {
 
     const redisSecurityGroup = new ec2.SecurityGroup(this, 'RedisSecurityGroup', { vpc: props.vpc });
 
-    new elasticache.CfnReplicationGroup(this, 'RedisReplicationGroup', {
+    redisSecurityGroup.addIngressRule(ec2.Peer.ipv4(props.vpc.vpcCidrBlock), ec2.Port.tcp(6379));
+
+    const redis = new elasticache.CfnReplicationGroup(this, 'RedisReplicationGroup', {
       replicationGroupDescription: 'AMS workshop board pub/sub + general cache',
       engine: 'redis',
       cacheNodeType: 'cache.t4g.micro',
@@ -66,5 +70,6 @@ export class DataStack extends Stack {
       atRestEncryptionEnabled: true,
       transitEncryptionEnabled: true,
     });
+    this.redisUrl = `rediss://${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}`;
   }
 }

@@ -1,0 +1,16 @@
+# Keep secrets and bulky local state out of every image build context.
+.git
+.github
+.nx
+.env
+.env.*
+!.env.example
+node_modules
+dist
+tmp
+coverage
+.data
+**/node_modules
+infra/cdk/cdk.out
+.claude
+.vscode

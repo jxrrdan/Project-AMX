@@ -7,10 +7,12 @@ import { AuditService } from './audit/audit.service';
 import { PdfService } from './pdf/pdf.service';
 import { DvlaService } from './dvla/dvla.service';
 import { TenancyScopeService } from './tenancy/tenancy-scope.service';
+import { HealthController } from './health/health.controller';
 import { CaptchaService } from './captcha/captcha.service';
 
 @Global()
 @Module({
+  controllers: [HealthController],
   providers: [StorageService, EmailService, SmsService, AiService, AuditService, PdfService, DvlaService, TenancyScopeService, CaptchaService],
   exports: [StorageService, EmailService, SmsService, AiService, AuditService, PdfService, DvlaService, TenancyScopeService, CaptchaService],
 })

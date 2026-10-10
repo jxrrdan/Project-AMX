@@ -11,10 +11,12 @@
 
 x-api-env: &api-env
   NODE_ENV: production
+  # Local production-shaped stack only: permits mock/console/local drivers. Never set in real deployments.
+  ALLOW_MOCK_DRIVERS: "true"
   DATABASE_URL: postgresql://ams:ams_local_password@postgres:5432/ams?schema=public
   REDIS_URL: redis://redis:6379
-  JWT_ACCESS_SECRET: local-prod-access-secret-change-me
-  JWT_REFRESH_SECRET: local-prod-refresh-secret-change-me
+  JWT_ACCESS_SECRET: local-prod-access-secret-0123456789abcdef0123456789abcdef-x
+  JWT_REFRESH_SECRET: local-prod-refresh-secret-0123456789abcdef0123456789abcdef-y
   JWT_ACCESS_EXPIRY: 15m
   JWT_REFRESH_EXPIRY: 7d
   API_PORT: "3000"
@@ -26,7 +28,7 @@ x-api-env: &api-env
   AI_DRIVER: mock
   DVLA_DRIVER: mock
   CAPTCHA_DRIVER: local
-  CAPTCHA_SECRET: local-prod-captcha-secret-change-me
+  CAPTCHA_SECRET: local-prod-captcha-secret-0123456789abcdef0123456789abcdef-z
 
 services:
   postgres:
@@ -60,9 +62,8 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-      target: build
+      target: migrate
     environment: *api-env
-    command: ["npx", "prisma", "migrate", "deploy", "--schema", "apps/api/prisma/schema.prisma"]
     depends_on:
       postgres:
         condition: service_healthy

@@ -16,7 +16,8 @@ import { Server, Socket } from 'socket.io';
  * instance and rooms are keyed by dealerId to preserve tenant isolation.
  */
 // CORS origin is applied centrally by CorsIoAdapter (main.ts) from CORS_ORIGIN — never '*'.
-@WebSocketGateway({ namespace: 'workshop' })
+// Served under /api so CloudFront/nginx route it to the API with the rest of the /api/* traffic.
+@WebSocketGateway({ namespace: 'workshop', path: '/api/socket.io' })
 export class WorkshopGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;

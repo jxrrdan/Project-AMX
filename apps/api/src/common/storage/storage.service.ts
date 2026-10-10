@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 /**
  * File storage abstraction. Production target is AWS S3 (paths prefixed
@@ -16,6 +17,7 @@ export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly driver: string;
   private readonly localPath: string;
+  private s3?: S3Client;
 
   constructor(private readonly config: ConfigService) {
     this.driver = this.config.get<string>('STORAGE_DRIVER', 'local');
@@ -33,7 +35,40 @@ export class StorageService {
       return `/storage/${key}`;
     }
 
-    this.logger.warn(`Storage driver "${this.driver}" not implemented locally; returning key only`);
-    return `s3://ams-files/${key}`;
+    if (this.driver === 's3') {
+      const bucket = this.config.getOrThrow<string>('STORAGE_S3_BUCKET');
+      // Credentials come from the ECS task role; objects are private and read through CloudFront
+      // (origin access control) at STORAGE_PUBLIC_BASE_URL, never via public S3 ACLs.
+      this.s3 ??= new S3Client({ region: this.config.get<string>('AWS_REGION', 'eu-west-2') });
+      await this.s3.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: data,
+          ContentType: contentTypeFor(filename),
+          ServerSideEncryption: 'AES256',
+        }),
+      );
+      const base = this.config.getOrThrow<string>('STORAGE_PUBLIC_BASE_URL').replace(/\/+$/, '');
+      return `${base}/${key}`;
+    }
+
+    throw new Error(`Unknown STORAGE_DRIVER "${this.driver}"`);
   }
+}
+
+const CONTENT_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  html: 'text/html; charset=utf-8',
+  csv: 'text/csv',
+  json: 'application/json',
+};
+
+function contentTypeFor(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  return CONTENT_TYPES[ext] ?? 'application/octet-stream';
 }

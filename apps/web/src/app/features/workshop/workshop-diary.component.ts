@@ -215,7 +215,12 @@ export class WorkshopDiaryComponent implements OnInit, OnDestroy {
   }
 
   private connectSocket(): void {
-    this.socket = io(environment.wsUrl, { auth: { token: this.auth.accessToken } });
+    this.socket = io(environment.wsUrl, {
+      path: '/api/socket.io',
+      // WebSocket only: with several API tasks behind the ALB, long-polling would need sticky sessions.
+      transports: ['websocket'],
+      auth: { token: this.auth.accessToken },
+    });
     this.socket.on('connect', () => this.wsConnected.set(true));
     this.socket.on('disconnect', () => this.wsConnected.set(false));
     this.socket.on('job-card.changed', () => this.load());

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 
 /**
  * SMS abstraction. Production target is AWS SNS or Twilio (Twilio recommended for inbound
@@ -20,6 +21,18 @@ export class SmsService {
       return;
     }
 
-    this.logger.warn(`SMS driver "${this.driver}" not implemented locally`);
+    if (this.driver === 'twilio') {
+      const sid = this.config.getOrThrow<string>('TWILIO_ACCOUNT_SID');
+      const token = this.config.getOrThrow<string>('TWILIO_AUTH_TOKEN');
+      const from = this.config.getOrThrow<string>('TWILIO_FROM_NUMBER');
+      await axios.post(
+        `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
+        new URLSearchParams({ To: to, From: from, Body: body }).toString(),
+        { auth: { username: sid, password: token }, timeout: 10_000, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+      );
+      return;
+    }
+
+    throw new Error(`Unknown SMS_DRIVER "${this.driver}"`);
   }
 }

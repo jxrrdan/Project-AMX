@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -14,11 +14,38 @@ interface Challenge {
   siteKey: string;
 }
 
+interface TurnstileApi {
+  render(host: HTMLElement, options: { sitekey: string; callback: (token: string) => void; 'expired-callback': () => void }): string;
+  remove(widgetId: string): void;
+}
+
+declare global {
+  interface Window {
+    turnstile?: TurnstileApi;
+  }
+}
+
+let turnstileScript: Promise<void> | undefined;
+
+/** Loads Cloudflare's Turnstile script once, on demand (only when the API reports the turnstile driver). */
+function loadTurnstileScript(): Promise<void> {
+  turnstileScript ??= new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Could not load the verification widget'));
+    document.head.appendChild(script);
+  });
+  return turnstileScript;
+}
+
 /**
  * Reusable CAPTCHA control for public forms. Fetches a challenge from the API's pluggable CAPTCHA
  * service and, for the local arithmetic driver, renders the question and an answer box. The parent
  * form reads `getResponse()` to include the token+answer in its submission and calls `reset()`
- * after an attempt. A Turnstile/reCAPTCHA driver would render its widget instead (production).
+ * after an attempt. The Cloudflare Turnstile driver (production) renders Cloudflare's widget and
+ * submits its token instead.
  */
 @Component({
   selector: 'app-captcha',
@@ -36,7 +63,7 @@ interface Challenge {
           </button>
         </div>
       } @else {
-        <p class="note">Verification widget ({{ c.driver }}) loads here.</p>
+        <div #widget class="widget"></div>
       }
     } @else {
       <p class="note">Loading verification…</p>
@@ -48,9 +75,12 @@ interface Challenge {
     .note { color: rgba(0,0,0,0.6); font-size: 13px; }
   `],
 })
-export class CaptchaComponent implements OnInit {
+export class CaptchaComponent implements OnInit, OnDestroy {
   readonly challenge = signal<Challenge | null>(null);
   answer = '';
+  private widgetToken = '';
+  private widgetId: string | undefined;
+  private readonly widgetHost = viewChild<ElementRef<HTMLElement>>('widget');
 
   private readonly http = inject(HttpClient);
 
@@ -58,18 +88,48 @@ export class CaptchaComponent implements OnInit {
 
   refresh(): void {
     this.answer = '';
-    this.http.get<Challenge>(`${environment.apiUrl}/public/captcha`).subscribe((c) => this.challenge.set(c));
+    this.widgetToken = '';
+    this.http.get<Challenge>(`${environment.apiUrl}/public/captcha`).subscribe((c) => {
+      this.challenge.set(c);
+      if (c.driver === 'turnstile') {
+        // Wait one tick so the @if has rendered the host element.
+        setTimeout(() => void this.renderTurnstile(c.siteKey));
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    if (this.widgetId) {
+      window.turnstile?.remove(this.widgetId);
+    }
+  }
+
+  private async renderTurnstile(siteKey: string): Promise<void> {
+    await loadTurnstileScript();
+    const host = this.widgetHost()?.nativeElement;
+    if (!host || !window.turnstile) return;
+    if (this.widgetId) {
+      window.turnstile.remove(this.widgetId);
+    }
+    this.widgetId = window.turnstile.render(host, {
+      sitekey: siteKey,
+      callback: (token: string) => (this.widgetToken = token),
+      'expired-callback': () => (this.widgetToken = ''),
+    });
   }
 
   /** Whether the control currently has something to submit (an answer, or a widget token). */
   valid(): boolean {
     const c = this.challenge();
     if (!c) return false;
-    return c.driver === 'local' ? `${this.answer}`.trim() !== '' : true;
+    return c.driver === 'local' ? `${this.answer}`.trim() !== '' : this.widgetToken !== '';
   }
 
   /** Values the parent form includes in its POST body. */
   getResponse(): { captchaToken: string; captchaAnswer: string } {
+    if (this.challenge()?.driver === 'turnstile') {
+      return { captchaToken: this.widgetToken, captchaAnswer: '' };
+    }
     return { captchaToken: this.challenge()?.challengeId ?? '', captchaAnswer: `${this.answer}`.trim() };
   }
 

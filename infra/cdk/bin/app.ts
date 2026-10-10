@@ -28,6 +28,8 @@ const compute = new ComputeStack(app, 'Ams-Compute', {
   databaseSecret: data.databaseSecret,
   filesBucket: storage.filesBucket,
   vehicleUpdateQueue: queue.vehicleUpdateQueue,
+  redisUrl: data.redisUrl,
+  filesBaseUrl: storage.filesBaseUrl,
 });
 
 new ObservabilityStack(app, 'Ams-Observability', {

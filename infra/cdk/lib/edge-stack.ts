@@ -92,6 +92,35 @@ export class EdgeStack extends Stack {
       protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
     });
 
+    // SPA client-side routing without distribution-wide errorResponses: those rewrite *every* 403/404,
+    // including the API's, into a 200 index.html and break API error handling. A viewer-request
+    // function on the SPA behaviour only rewrites extension-less paths, leaving /api/* untouched.
+    const spaRouting = new cloudfront.Function(this, 'SpaRouting', {
+      code: cloudfront.FunctionCode.fromInline(
+        `function handler(event) {
+  var request = event.request;
+  if (request.uri.indexOf('.') === -1) { request.uri = '/index.html'; }
+  return request;
+}`,
+      ),
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+    });
+
+    const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
+      securityHeadersBehavior: {
+        strictTransportSecurity: { accessControlMaxAge: Duration.days(365), includeSubdomains: true, preload: true, override: true },
+        contentTypeOptions: { override: true },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
+        contentSecurityPolicy: {
+          // Angular needs inline styles; Turnstile loads its widget from challenges.cloudflare.com.
+          contentSecurityPolicy:
+            "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' wss:; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+          override: true,
+        },
+      },
+    });
+
     this.distribution = new cloudfront.Distribution(this, 'Distribution', {
       comment: 'AMS — SPA + API',
       defaultRootObject: 'index.html',
@@ -100,6 +129,8 @@ export class EdgeStack extends Stack {
         origin: origins.S3BucketOrigin.withOriginAccessControl(this.webBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        responseHeadersPolicy: securityHeaders,
+        functionAssociations: [{ function: spaRouting, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
       },
       additionalBehaviors: {
         'api/*': {
@@ -108,13 +139,9 @@ export class EdgeStack extends Stack {
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
         },
       },
-      // SPA client-side routing: serve index.html for unmatched paths.
-      errorResponses: [
-        { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html', ttl: Duration.minutes(5) },
-        { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html', ttl: Duration.minutes(5) },
-      ],
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
     });
 

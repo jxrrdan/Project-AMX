@@ -1,5 +1,6 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 
 export interface DvlaVehicleSpec {
   registrationNumber: string;
@@ -59,7 +60,42 @@ export class DvlaService {
       };
     }
 
-    this.logger.warn(`DVLA driver "${this.driver}" not implemented locally`);
-    throw new NotFoundException('DVLA lookup is not configured for this environment');
+    if (this.driver === 'live') {
+      try {
+        const { data } = await axios.post<{
+          registrationNumber: string;
+          make?: string;
+          colour?: string;
+          fuelType?: string;
+          yearOfManufacture?: number;
+          engineCapacity?: number;
+          motStatus?: string;
+          taxStatus?: string;
+        }>(
+          this.config.get<string>('DVLA_API_URL', 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles'),
+          { registrationNumber: reg },
+          { headers: { 'x-api-key': this.config.getOrThrow<string>('DVLA_API_KEY') }, timeout: 10_000 },
+        );
+        return {
+          registrationNumber: data.registrationNumber,
+          make: data.make ?? 'Unknown',
+          colour: data.colour ?? 'Unknown',
+          fuelType: data.fuelType ?? 'Unknown',
+          transmission: 'Unknown', // not provided by the Vehicle Enquiry Service
+          yearOfManufacture: data.yearOfManufacture ?? 0,
+          engineCapacity: data.engineCapacity ?? 0,
+          motStatus: data.motStatus === 'Valid' ? 'Valid' : 'No details held by DVLA',
+          taxStatus: data.taxStatus === 'Taxed' ? 'Taxed' : 'SORN',
+        };
+      } catch (err) {
+        if (axios.isAxiosError(err) && err.response?.status === 404) {
+          throw new NotFoundException('Vehicle not found at DVLA');
+        }
+        this.logger.warn(`DVLA lookup failed: ${err instanceof Error ? err.message : err}`);
+        throw new ServiceUnavailableException('DVLA lookup is temporarily unavailable');
+      }
+    }
+
+    throw new Error(`Unknown DVLA_DRIVER "${this.driver}"`);
   }
 }
